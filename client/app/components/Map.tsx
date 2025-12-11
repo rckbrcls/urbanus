@@ -319,6 +319,14 @@ export default function Map({
     setActiveBbox(null);
     setStreetCount(undefined);
     setTopographyBlob(null);
+
+    // Resetar estágios de processamento e erros
+    setStages({
+      streets: "pending",
+      topography: "pending",
+    });
+    setErrors({});
+
     setIsCroppedView(false);
 
     // Voltar ao centro inicial
