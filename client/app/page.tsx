@@ -28,8 +28,6 @@ export default function Home() {
     setCurrentBbox(bbox);
     if (bbox) {
       console.log("Bounding Box selecionado:", bbox);
-      // Aqui você pode fazer uma requisição à API com as coordenadas
-      // Exemplo: fetchDataInBounds(bbox);
     }
   };
 
@@ -40,36 +38,17 @@ export default function Home() {
         <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
           URBANUS
         </h1>
-        <nav className="flex items-center gap-4">
-          <button className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
-            Explorar
-          </button>
-          <button className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
-            Camadas
-          </button>
-        </nav>
       </header>
 
       {/* Main Content - Map */}
       <main className="relative flex-1">
         <Map
-          center={[-23.5505, -46.6333]} // São Paulo
+          center={[-23.5505, -46.6333]}
           zoom={13}
           onBoundingBoxChange={handleBoundingBoxChange}
           enableBoundingBox={true}
         />
       </main>
-
-      {/* Footer com coordenadas do bbox atual */}
-      {currentBbox && (
-        <footer className="flex h-12 shrink-0 items-center justify-center border-t border-zinc-200 bg-white px-6 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-          <span>
-            Área selecionada: [{currentBbox.southWest.lat.toFixed(4)},{" "}
-            {currentBbox.southWest.lng.toFixed(4)}] até [{currentBbox.northEast.lat.toFixed(4)},{" "}
-            {currentBbox.northEast.lng.toFixed(4)}]
-          </span>
-        </footer>
-      )}
     </div>
   );
 }
