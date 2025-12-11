@@ -1,65 +1,75 @@
-import Image from "next/image";
+"use client";
+
+import dynamic from "next/dynamic";
+import { useState } from "react";
+
+// Importar o mapa dinamicamente para evitar erros de SSR
+const Map = dynamic(() => import("./components/Map"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center bg-zinc-100 dark:bg-zinc-900">
+      <div className="flex flex-col items-center gap-2">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">Carregando mapa...</p>
+      </div>
+    </div>
+  ),
+});
+
+interface BoundingBox {
+  southWest: { lat: number; lng: number };
+  northEast: { lat: number; lng: number };
+}
 
 export default function Home() {
+  const [currentBbox, setCurrentBbox] = useState<BoundingBox | null>(null);
+
+  const handleBoundingBoxChange = (bbox: BoundingBox | null) => {
+    setCurrentBbox(bbox);
+    if (bbox) {
+      console.log("Bounding Box selecionado:", bbox);
+      // Aqui você pode fazer uma requisição à API com as coordenadas
+      // Exemplo: fetchDataInBounds(bbox);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="flex h-screen w-screen flex-col bg-zinc-50 dark:bg-zinc-950">
+      {/* Header */}
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+          URBANUS
+        </h1>
+        <nav className="flex items-center gap-4">
+          <button className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+            Explorar
+          </button>
+          <button className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+            Camadas
+          </button>
+        </nav>
+      </header>
+
+      {/* Main Content - Map */}
+      <main className="relative flex-1">
+        <Map
+          center={[-23.5505, -46.6333]} // São Paulo
+          zoom={13}
+          onBoundingBoxChange={handleBoundingBoxChange}
+          enableBoundingBox={true}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
       </main>
+
+      {/* Footer com coordenadas do bbox atual */}
+      {currentBbox && (
+        <footer className="flex h-12 shrink-0 items-center justify-center border-t border-zinc-200 bg-white px-6 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+          <span>
+            Área selecionada: [{currentBbox.southWest.lat.toFixed(4)},{" "}
+            {currentBbox.southWest.lng.toFixed(4)}] até [{currentBbox.northEast.lat.toFixed(4)},{" "}
+            {currentBbox.northEast.lng.toFixed(4)}]
+          </span>
+        </footer>
+      )}
     </div>
   );
 }
