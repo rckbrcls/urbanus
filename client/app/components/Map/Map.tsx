@@ -27,6 +27,7 @@ export default function Map({
   // Store the center and zoom of the selection to restore view later
   const [lastCenter, setLastCenter] = useState<[number, number]>(center);
   const [lastZoom, setLastZoom] = useState<number>(zoom);
+  const [cropDimensions, setCropDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // Map Hooks
   const {
@@ -134,6 +135,36 @@ export default function Map({
 
       console.log("box locked.");
       setActiveBbox(pendingBbox);
+
+      // Calculate optimized dimensions
+      const latDiff = pendingBbox.northEast.lat - pendingBbox.southWest.lat;
+      const lonDiff = pendingBbox.northEast.lng - pendingBbox.southWest.lng;
+      const avgLat = (pendingBbox.northEast.lat + pendingBbox.southWest.lat) / 2;
+      const adjustedLonDiff = lonDiff * Math.cos((avgLat * Math.PI) / 180);
+      const ratio = adjustedLonDiff / latDiff;
+
+      const maxWidth = Math.min(window.innerWidth * 0.9, 900);
+      const maxHeight = Math.min(window.innerHeight * 0.8, 700);
+
+      let w, h;
+      if (ratio > 1) {
+        w = maxWidth;
+        h = maxWidth / ratio;
+        if (h > maxHeight) {
+          h = maxHeight;
+          w = maxHeight * ratio;
+        }
+      } else {
+        h = maxHeight;
+        w = maxHeight * ratio;
+        if (w > maxWidth) {
+          w = maxWidth;
+          h = maxWidth / ratio;
+        }
+      }
+      setCropDimensions({ width: w, height: h });
+      console.log("Calculated crop dimensions:", { width: w, height: h, ratio, maxWidth, maxHeight });
+
       setShowCropConfirm(false);
       setPendingBbox(null);
       setIsCropped(true);
@@ -162,38 +193,32 @@ export default function Map({
     // Only update state here, unlockMap will be called in useEffect after resize
     setActiveBbox(null);
     setIsCropped(false);
+    setCropDimensions(null);
     resetProcessing();
     onBoundingBoxChange?.(null);
   }, [resetProcessing, onBoundingBoxChange]);
 
-  // Calculate Aspect Ratio
-  const getAspectRatio = useCallback(() => {
-    if (!activeBbox) return 1;
-    const latDiff = activeBbox.northEast.lat - activeBbox.southWest.lat;
-    const lonDiff = activeBbox.northEast.lng - activeBbox.southWest.lng;
-    const avgLat = (activeBbox.northEast.lat + activeBbox.southWest.lat) / 2;
-    const adjustedLonDiff = lonDiff * Math.cos((avgLat * Math.PI) / 180);
-    return adjustedLonDiff / latDiff;
-  }, [activeBbox]);
-
-  const aspectRatio = getAspectRatio();
-  const cardStyle = isCropped ? {
-    aspectRatio,
-    maxWidth: 'min(90vw, 900px)',
-    maxHeight: 'min(80vh, 700px)',
-    width: aspectRatio > 1 ? 'min(90vw, 900px)' : 'auto',
-    height: aspectRatio <= 1 ? 'min(80vh, 700px)' : 'auto',
-  } : {};
-
   // Handle Resize and View Transitions
+  const cardStyle = (isCropped && cropDimensions) ? {
+    width: cropDimensions.width,
+    height: cropDimensions.height,
+  } : (isCropped ? { width: '500px', height: '400px' } : undefined); // Fallback
+
   useEffect(() => {
+    console.log('Map view effect:', { isCropped, activeBbox, cropDimensions });
+
+    // Force periodic invalidation during transition
+    const interval = setInterval(() => {
+      mapRef.current && mapInstanceRef.current?.invalidateSize();
+    }, 50);
+    setTimeout(() => clearInterval(interval), 500);
     // Transition TO Cropped View
     if (isCropped && activeBbox) {
       setTimeout(() => {
         invalidateSize();
         // Fix: Maintain current zoom and center when refitting bounds
         refitBounds(activeBbox, { keepZoom: true, currentZoom: lastZoom, center: lastCenter });
-      }, 150);
+      }, 50); // Reduced delay
     }
     // Transition TO Full View
     else if (!isCropped && !activeBbox) {
@@ -218,14 +243,14 @@ export default function Map({
         <div
           ref={mapRef}
           className={`${isCropped ? 'absolute left-1/2 top-1/2 z-[901] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 bg-zinc-200 dark:bg-zinc-800' : 'h-full w-full'}`}
-          style={isCropped ? cardStyle : undefined}
+          style={cardStyle}
         />
 
         {/* FULL VIEW OVERLAYS */}
         {!isCropped && (
           <>
             {/* Instructions */}
-            <div className="absolute left-4 top-4 z-[1000] rounded-lg bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm dark:bg-zinc-900/95">
+            <div className="absolute right-4 bottom-4 z-[1000] rounded-lg bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm dark:bg-zinc-900/95">
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 <kbd className="rounded bg-zinc-200 px-1.5 py-0.5 font-mono text-xs dark:bg-zinc-700">Shift</kbd> + drag to select (max {MAX_AREA_KM2} km²)
               </p>

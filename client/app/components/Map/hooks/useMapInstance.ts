@@ -26,6 +26,7 @@ export function useMapInstance(
   const mapInstanceRef = useRef<L.Map | null>(null);
   const rectangleRef = useRef<L.Rectangle | null>(null);
   const streetsLayerRef = useRef<L.GeoJSON | null>(null);
+  const zoomControlRef = useRef<L.Control.Zoom | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
   // Inicializar mapa
@@ -36,6 +37,7 @@ export function useMapInstance(
       center: options.center,
       zoom: options.zoom,
       boxZoom: false, // Desabilitar boxZoom nativo para usar seleção customizada
+      zoomControl: false, // Desabilitar controle de zoom padrão para gerenciar manualmente
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -86,7 +88,12 @@ export function useMapInstance(
       map.scrollWheelZoom.disable();
       map.boxZoom.disable();
       map.keyboard.disable();
-      map.zoomControl.remove();
+
+      // Remover controle de zoom via ref
+      if (zoomControlRef.current) {
+        zoomControlRef.current.remove();
+        zoomControlRef.current = null;
+      }
 
       // Remover retângulo de seleção
       if (rectangleRef.current) {
@@ -128,7 +135,12 @@ export function useMapInstance(
     map.boxZoom.disable(); // Manter desabilitado para seleção customizada
     map.keyboard.enable();
 
-    L.control.zoom({ position: "topleft" }).addTo(map);
+    // Adicionar controle de zoom se não existir
+    if (!zoomControlRef.current) {
+      zoomControlRef.current = L.control
+        .zoom({ position: "topleft" })
+        .addTo(map);
+    }
     map.setView(center, zoom);
   }, []);
 
