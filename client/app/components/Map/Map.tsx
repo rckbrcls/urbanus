@@ -29,6 +29,14 @@ export default function Map({
   const [lastZoom, setLastZoom] = useState<number>(zoom);
   const [cropDimensions, setCropDimensions] = useState<{ width: number; height: number } | null>(null);
 
+  // Dynamic Map Configuration
+  // We determine the initial center/zoom for the map instance based on the mode.
+  // This ensures that when we remount (due to the key change), the new map starts exactly where we want.
+  const mapConfig = {
+    center: isCropped ? lastCenter : center,
+    zoom: isCropped ? lastZoom : zoom
+  };
+
   // Map Hooks
   const {
     mapInstanceRef,
@@ -40,7 +48,7 @@ export default function Map({
     invalidateSize,
     refitBounds,
     isMapReady,
-  } = useMapInstance(mapRef, { center, zoom });
+  } = useMapInstance(mapRef, mapConfig);
 
   // Update store when map moves (only in full view)
   useEffect(() => {
@@ -196,50 +204,28 @@ export default function Map({
     height: cropDimensions.height,
   } : (isCropped ? { width: '500px', height: '400px' } : undefined); // Fallback
 
+  // Handle View State Changes
   useEffect(() => {
-    console.log('Map view effect:', { isCropped, activeBbox, cropDimensions });
+    // Strategy: FRESH INSTANCE
+    // When isCropped changes, the 'key' on the div changes, forcing a full remount.
+    // We simply wait for the new map to be ready and then apply our constraints.
 
-    // Transition TO Cropped View
+    if (!isMapReady) return;
+
     if (isCropped && activeBbox) {
-      console.log("Starting crop transition...", { activeBbox, lastCenter, lastZoom });
-
-      // 1. Force invalidate immediately
-      mapInstanceRef.current?.invalidateSize();
-
-      // 2. Schedule the view update
-      setTimeout(() => {
-        const map = mapInstanceRef.current;
-        if (!map) return;
-
-        console.log("Executing view update...", {
-          centerCache: lastCenter,
-          zoomCache: lastZoom,
-          mapCenter: map.getCenter(),
-          mapZoom: map.getZoom()
-        });
-
-        // Ensure proper size
-        map.invalidateSize();
-
-        // Set view explicitly
-        map.setView(lastCenter, lastZoom, { animate: false });
-
-        // Lock interaction
-        lockToBox(activeBbox, { keepZoom: true, currentZoom: lastZoom, center: lastCenter });
-
-        console.log("View updated and locked.");
-      }, 100);
+      // The map is new, but we still need to apply the specific bounds/locking
+      // to ensure it matches the bbox exactly and interactions are disabled.
+      lockToBox(activeBbox, {
+        keepZoom: true,
+        currentZoom: lastZoom,
+        center: lastCenter
+      });
+    } else if (!isCropped) {
+      // Full view restored. The map is fresh and interactive by default (from hook),
+      // but we ensure it's unlocked and pointing at the right place.
+      unlockMap(lastCenter, lastZoom);
     }
-    // Transition TO Full View
-    else if (!isCropped && !activeBbox) {
-      console.log("Restoring full view...");
-      setTimeout(() => {
-        invalidateSize();
-        unlockMap(lastCenter, lastZoom);
-        console.log("Full view restored.");
-      }, 100);
-    }
-  }, [isCropped, activeBbox, invalidateSize, refitBounds, unlockMap, lockToBox, lastCenter, lastZoom]);
+  }, [isCropped, activeBbox, isMapReady, lockToBox, unlockMap, lastCenter, lastZoom]);
 
   return (
     <div className="relative flex h-full w-full flex-col">
@@ -251,7 +237,10 @@ export default function Map({
         )}
 
         {/* Map Container - Dynamic Positioning */}
+        {/* KEY CHANGE: The 'key' prop forces React to destroy and recreate the DOM node (and thus the Leaflet instance)
+            whenever we switch modes. This is the "Nuclear Option" for reliability. */}
         <div
+          key={isCropped ? 'cropped' : 'full'}
           ref={mapRef}
           className={`${isCropped ? 'absolute left-1/2 top-1/2 z-[901] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 bg-zinc-200 dark:bg-zinc-800' : 'h-full w-full'}`}
           style={cardStyle}

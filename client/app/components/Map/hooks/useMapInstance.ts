@@ -29,15 +29,15 @@ export function useMapInstance(
   const zoomControlRef = useRef<L.Control.Zoom | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
-  // Inicializar mapa
+  // Initialize map
   useEffect(() => {
     if (!containerRef.current || mapInstanceRef.current) return;
 
     const map = L.map(containerRef.current, {
       center: options.center,
       zoom: options.zoom,
-      boxZoom: false, // Desabilitar boxZoom nativo para usar seleção customizada
-      zoomControl: false, // Desabilitar controle de zoom padrão para gerenciar manualmente
+      boxZoom: false, // Disable native boxZoom to use custom selection
+      zoomControl: false, // Disable default zoom control to manage manually
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -48,7 +48,14 @@ export function useMapInstance(
     mapInstanceRef.current = map;
     setIsMapReady(true);
 
+    // ResizeObserver to handle container size changes automatically
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(containerRef.current);
+
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapInstanceRef.current = null;
       setIsMapReady(false);
