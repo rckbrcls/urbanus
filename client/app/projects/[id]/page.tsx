@@ -2,11 +2,22 @@
 
 import { useProjectStore } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, use } from 'react';
+import { useRef, useState, use, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, Trash2, Download } from 'lucide-react';
 import { MapContainerProps } from '@/app/components/Map/types';
 import { HIGHWAY_COLORS } from '@/app/components/Map/constants';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 // Dynamic imports for Map components
 const MapContainer = dynamic(
@@ -29,6 +40,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const deleteProject = useProjectStore((state) => state.deleteProject);
   const project = getProject(id);
   const [activeTab, setActiveTab] = useState<'overview' | 'streets'>('overview');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="text-zinc-500">Loading project...</div>
+      </div>
+    );
+  }
 
   if (!project) {
     return (
@@ -45,10 +69,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this project?')) {
-      deleteProject(project.id);
-      router.push('/projects');
-    }
+    deleteProject(project.id);
+    router.push('/projects');
   };
 
   return (
@@ -77,13 +99,30 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <Download className="h-4 w-4" />
             Export
           </button>
-          <button
-            onClick={handleDelete}
-            className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete your project and remove your data from our servers.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-900 dark:text-white dark:hover:bg-red-800">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </header>
 
