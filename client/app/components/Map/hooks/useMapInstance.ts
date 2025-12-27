@@ -38,6 +38,7 @@ export function useMapInstance(
       zoom: options.zoom,
       boxZoom: false, // Disable native boxZoom to use custom selection
       zoomControl: false, // Disable default zoom control to manage manually
+      zoomSnap: 0, // CRITICAL: Allow fractional zoom levels for perfect bounding box fit
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -83,7 +84,12 @@ export function useMapInstance(
         const centerToUse = options.center || bounds.getCenter();
         map.setView(centerToUse, options.currentZoom, { animate: false });
       } else {
-        map.fitBounds(bounds, { padding: [0, 0], animate: false });
+        // Precise fit: NO padding, allow deep zoom
+        map.fitBounds(bounds, {
+          padding: [0, 0],
+          maxZoom: 24,
+          animate: false,
+        });
       }
 
       // Desabilitar TODAS as interações

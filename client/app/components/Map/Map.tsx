@@ -215,11 +215,11 @@ export default function Map({
     if (isCropped && activeBbox) {
       // The map is new, but we still need to apply the specific bounds/locking
       // to ensure it matches the bbox exactly and interactions are disabled.
-      lockToBox(activeBbox, {
-        keepZoom: true,
-        currentZoom: lastZoom,
-        center: lastCenter
-      });
+
+      // FIX: Use fitBounds (default behavior of lockToBox) instead of forcing a specific view.
+      // This ensures Leaflet calculates the precise center (handling Mercator projection)
+      // and zoom level to perfectly fill the new container size.
+      lockToBox(activeBbox);
     } else if (!isCropped) {
       // Full view restored. The map is fresh and interactive by default (from hook),
       // but we ensure it's unlocked and pointing at the right place.
