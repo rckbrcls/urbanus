@@ -30,14 +30,14 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <SidebarProvider className="h-svh">
+        <SidebarProvider>
           <AppSidebar />
-          <SidebarInset className="relative w-full overflow-hidden">
-            <div className="absolute left-4 top-4 z-[3000]">
-              <SidebarTrigger variant={"default"} />
+          <main className="relative w-full">
+            <div className="p-4">
+              <SidebarTrigger />
             </div>
             {children}
-          </SidebarInset>
+          </main>
         </SidebarProvider>
       </body>
     </html>

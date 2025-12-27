@@ -9,7 +9,7 @@ export default function ProjectsPage() {
   const projects = useProjectStore((state) => state.projects);
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-8">
+    <div className="flex flex-1 flex-col gap-8 p-4 pt-0">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
