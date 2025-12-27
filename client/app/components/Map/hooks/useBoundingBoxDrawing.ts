@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import L from "leaflet";
 import { BoundingBox } from "../types";
 import { MAX_AREA_KM2, MAP_STYLES } from "../constants";
@@ -8,8 +8,12 @@ interface UseBoundingBoxDrawingOptions {
   rectangleRef: React.MutableRefObject<L.Rectangle | null>;
   streetsLayerRef: React.MutableRefObject<L.GeoJSON | null>;
   enabled: boolean;
+  isMapReady?: boolean;
   onValidSelection: (bbox: BoundingBox, area: number) => void;
   onInvalidSelection: (error: string) => void;
+  // Props para cálculo seguro de projeção sem depender do estado do DOM do Leaflet
+  center: [number, number];
+  zoom: number;
 }
 
 // Calcular área em km²
@@ -27,59 +31,62 @@ export function useBoundingBoxDrawing({
   rectangleRef,
   streetsLayerRef,
   enabled,
+  isMapReady,
   onValidSelection,
   onInvalidSelection,
+  center,
+  zoom,
 }: UseBoundingBoxDrawingOptions) {
   const [isDrawing, setIsDrawing] = useState(false);
-  const [drawStart, setDrawStart] = useState<L.LatLng | null>(null);
+  const drawStartRef = useRef<L.LatLng | null>(null);
 
-  // Handler para início do desenho
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !enabled) return;
 
-    const handleMouseDown = (e: L.LeafletMouseEvent) => {
-      // Garantir que boxZoom está desabilitado
-      if (map.boxZoom.enabled()) {
-        map.boxZoom.disable();
-      }
+    const container = map.getContainer();
 
-      if (e.originalEvent.shiftKey) {
-        L.DomEvent.stopPropagation(e.originalEvent);
-        L.DomEvent.preventDefault(e.originalEvent);
+    // Helper robusto para obter LatLng, com fallback seguro usando props externas
+    const getLatLngSafe = (e: MouseEvent): L.LatLng | null => {
+      try {
+        // Tenta usar o método nativo do Leaflet primeiro
+        return map.mouseEventToLatLng(e);
+      } catch (err) {
+        // Fallback: Projeção manual usando props center/zoom (100% matemática, zero DOM interno do Leaflet)
+        try {
+          const rect = container.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
 
-        map.dragging.disable();
-        setIsDrawing(true);
-        setDrawStart(e.latlng);
+          // Usa os valores passados via prop em vez de pedir ao mapa (que pode falhar se o DOM estiver instável)
+          const [lat, lng] = center;
+          const latLngCenter = L.latLng(lat, lng);
 
-        // Limpar seleção anterior
-        if (rectangleRef.current) {
-          map.removeLayer(rectangleRef.current);
-          rectangleRef.current = null;
-        }
-        if (streetsLayerRef.current) {
-          map.removeLayer(streetsLayerRef.current);
-          streetsLayerRef.current = null;
+          const containerCenter = { x: rect.width / 2, y: rect.height / 2 };
+          const dx = x - containerCenter.x;
+          const dy = y - containerCenter.y;
+
+          // Projeta o centro para pixels, aplica o offset, e desprojeta
+          const centerPoint = map.project(latLngCenter, zoom);
+          const point = centerPoint.add(new L.Point(dx, dy));
+          return map.unproject(point, zoom);
+        } catch (fallbackErr) {
+          console.error(
+            "Falha fatal ao calcular coordenadas do mapa:",
+            fallbackErr
+          );
+          return null;
         }
       }
     };
 
-    map.on("mousedown", handleMouseDown);
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!drawStartRef.current) return;
 
-    return () => {
-      map.off("mousedown", handleMouseDown);
-    };
-  }, [mapInstanceRef, rectangleRef, streetsLayerRef, enabled]);
+      const currentLatLng = getLatLngSafe(e);
+      if (!currentLatLng) return;
 
-  // Handlers de desenho (mousemove e mouseup)
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map || !enabled) return;
-
-    const handleMouseMove = (e: L.LeafletMouseEvent) => {
-      if (!isDrawing || !drawStart) return;
-
-      const bounds = L.latLngBounds(drawStart, e.latlng);
+      const bounds = L.latLngBounds(drawStartRef.current, currentLatLng);
 
       // Calcular área em tempo real
       const southWest = {
@@ -105,13 +112,25 @@ export function useBoundingBoxDrawing({
       }
     };
 
-    const handleMouseUp = (e: L.LeafletMouseEvent) => {
-      if (!isDrawing || !drawStart) return;
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!drawStartRef.current) return;
 
-      map.dragging.enable();
+      const currentLatLng = getLatLngSafe(e);
+
       setIsDrawing(false);
 
-      const bounds = L.latLngBounds(drawStart, e.latlng);
+      // Cleanup document listeners
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+
+      // Se falhar o cálculo final, usa o último válido ou aborta se não tiver
+      if (!currentLatLng) {
+        drawStartRef.current = null;
+        return;
+      }
+
+      const bounds = L.latLngBounds(drawStartRef.current, currentLatLng);
+
       const bbox: BoundingBox = {
         southWest: {
           lat: bounds.getSouthWest().lat,
@@ -124,7 +143,7 @@ export function useBoundingBoxDrawing({
       };
 
       const area = calculateArea(bbox);
-      setDrawStart(null);
+      drawStartRef.current = null;
 
       if (area > MAX_AREA_KM2) {
         // Área muito grande
@@ -142,21 +161,52 @@ export function useBoundingBoxDrawing({
       }
     };
 
-    map.on("mousemove", handleMouseMove);
-    map.on("mouseup", handleMouseUp);
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.shiftKey) {
+        // Stop bubbling to Leaflet map controls
+        e.stopPropagation();
+        e.preventDefault();
+
+        const latLng = getLatLngSafe(e);
+        if (!latLng) return;
+
+        setIsDrawing(true);
+        drawStartRef.current = latLng;
+
+        // Limpar seleção anterior
+        if (rectangleRef.current) {
+          map.removeLayer(rectangleRef.current);
+          rectangleRef.current = null;
+        }
+        if (streetsLayerRef.current) {
+          map.removeLayer(streetsLayerRef.current);
+          streetsLayerRef.current = null;
+        }
+
+        // Add document listeners for drag
+        document.addEventListener("mousemove", handleMouseMove);
+        document.addEventListener("mouseup", handleMouseUp);
+      }
+    };
+
+    // Use capture to intercept before Leaflet
+    container.addEventListener("mousedown", handleMouseDown, true);
 
     return () => {
-      map.off("mousemove", handleMouseMove);
-      map.off("mouseup", handleMouseUp);
+      container.removeEventListener("mousedown", handleMouseDown, true);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [
     mapInstanceRef,
     rectangleRef,
-    isDrawing,
-    drawStart,
+    streetsLayerRef,
     enabled,
+    isMapReady,
     onValidSelection,
     onInvalidSelection,
+    center,
+    zoom,
   ]);
 
   // Limpar retângulo manualmente

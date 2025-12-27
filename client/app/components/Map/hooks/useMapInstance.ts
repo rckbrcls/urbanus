@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { BoundingBox } from "../types";
@@ -26,6 +26,7 @@ export function useMapInstance(
   const mapInstanceRef = useRef<L.Map | null>(null);
   const rectangleRef = useRef<L.Rectangle | null>(null);
   const streetsLayerRef = useRef<L.GeoJSON | null>(null);
+  const [isMapReady, setIsMapReady] = useState(false);
 
   // Inicializar mapa
   useEffect(() => {
@@ -43,45 +44,58 @@ export function useMapInstance(
     }).addTo(map);
 
     mapInstanceRef.current = map;
+    setIsMapReady(true);
 
     return () => {
       map.remove();
       mapInstanceRef.current = null;
+      setIsMapReady(false);
     };
   }, [containerRef, options.center, options.zoom]);
 
   // Travar o mapa em um bounding box específico
-  const lockToBox = useCallback((bbox: BoundingBox) => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
+  const lockToBox = useCallback(
+    (
+      bbox: BoundingBox,
+      options?: {
+        keepZoom?: boolean;
+        currentZoom?: number;
+        center?: [number, number];
+      }
+    ) => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
 
-    const bounds = L.latLngBounds(
-      [bbox.southWest.lat, bbox.southWest.lng],
-      [bbox.northEast.lat, bbox.northEast.lng]
-    );
+      const bounds = L.latLngBounds(
+        [bbox.southWest.lat, bbox.southWest.lng],
+        [bbox.northEast.lat, bbox.northEast.lng]
+      );
 
-    map.fitBounds(bounds, { padding: [0, 0], animate: false });
+      if (options?.keepZoom && options.currentZoom !== undefined) {
+        // Use provided center or fallback to bounds center (though center should be provided for "stay in place" behavior)
+        const centerToUse = options.center || bounds.getCenter();
+        map.setView(centerToUse, options.currentZoom, { animate: false });
+      } else {
+        map.fitBounds(bounds, { padding: [0, 0], animate: false });
+      }
 
-    const currentZoom = map.getZoom();
-    map.setMinZoom(currentZoom);
-    map.setMaxZoom(currentZoom);
-    map.setMaxBounds(bounds);
+      // Desabilitar TODAS as interações
+      map.dragging.disable();
+      map.touchZoom.disable();
+      map.doubleClickZoom.disable();
+      map.scrollWheelZoom.disable();
+      map.boxZoom.disable();
+      map.keyboard.disable();
+      map.zoomControl.remove();
 
-    // Desabilitar TODAS as interações
-    map.dragging.disable();
-    map.touchZoom.disable();
-    map.doubleClickZoom.disable();
-    map.scrollWheelZoom.disable();
-    map.boxZoom.disable();
-    map.keyboard.disable();
-    map.zoomControl.remove();
-
-    // Remover retângulo de seleção
-    if (rectangleRef.current) {
-      map.removeLayer(rectangleRef.current);
-      rectangleRef.current = null;
-    }
-  }, []);
+      // Remover retângulo de seleção
+      if (rectangleRef.current) {
+        map.removeLayer(rectangleRef.current);
+        rectangleRef.current = null;
+      }
+    },
+    []
+  );
 
   // Desbloquear o mapa para visualização completa
   const unlockMap = useCallback((center: [number, number], zoom: number) => {
@@ -166,16 +180,32 @@ export function useMapInstance(
   }, []);
 
   // Reajustar bounds
-  const refitBounds = useCallback((bbox: BoundingBox) => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
+  const refitBounds = useCallback(
+    (
+      bbox: BoundingBox,
+      options?: {
+        keepZoom?: boolean;
+        currentZoom?: number;
+        center?: [number, number];
+      }
+    ) => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
 
-    const bounds = L.latLngBounds(
-      [bbox.southWest.lat, bbox.southWest.lng],
-      [bbox.northEast.lat, bbox.northEast.lng]
-    );
-    map.fitBounds(bounds, { padding: [0, 0], animate: false });
-  }, []);
+      const bounds = L.latLngBounds(
+        [bbox.southWest.lat, bbox.southWest.lng],
+        [bbox.northEast.lat, bbox.northEast.lng]
+      );
+
+      if (options?.keepZoom && options.currentZoom !== undefined) {
+        const centerToUse = options.center || bounds.getCenter();
+        map.setView(centerToUse, options.currentZoom, { animate: false });
+      } else {
+        map.fitBounds(bounds, { padding: [0, 0], animate: false });
+      }
+    },
+    []
+  );
 
   return {
     mapInstanceRef,
@@ -186,5 +216,6 @@ export function useMapInstance(
     addStreetsLayer,
     invalidateSize,
     refitBounds,
+    isMapReady,
   };
 }

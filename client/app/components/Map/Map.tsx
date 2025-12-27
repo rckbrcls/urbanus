@@ -6,14 +6,16 @@ import { useMapInstance } from './hooks/useMapInstance';
 import { useBoundingBoxDrawing } from './hooks/useBoundingBoxDrawing';
 import { useDataProcessing } from './hooks/useDataProcessing';
 import { MAX_AREA_KM2, HIGHWAY_COLORS } from './constants';
+import { useMapStore } from '../../../stores/useMapStore';
 
 export default function Map({
-  center = [-23.5505, -46.6333],
-  zoom = 13,
   onBoundingBoxChange,
   enableBoundingBox = true,
 }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
+
+  // Persistent Store
+  const { center, zoom, setMapState, hasInitialized, setInitialized } = useMapStore();
 
   // States
   const [isCropped, setIsCropped] = useState(false);
@@ -22,8 +24,9 @@ export default function Map({
   const [areaKm2, setAreaKm2] = useState(0);
   const [showCropConfirm, setShowCropConfirm] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  // Store the center of the selection to restore view later
+  // Store the center and zoom of the selection to restore view later
   const [lastCenter, setLastCenter] = useState<[number, number]>(center);
+  const [lastZoom, setLastZoom] = useState<number>(zoom);
 
   // Map Hooks
   const {
@@ -35,7 +38,29 @@ export default function Map({
     addStreetsLayer,
     invalidateSize,
     refitBounds,
+    isMapReady,
   } = useMapInstance(mapRef, { center, zoom });
+
+  // Update store when map moves (only in full view)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const handleMoveEnd = () => {
+      if (!isCropped) {
+        const c = map.getCenter();
+        const z = map.getZoom();
+        setMapState([c.lat, c.lng], z);
+        if (!hasInitialized) setInitialized();
+      }
+    };
+
+    map.on('moveend', handleMoveEnd);
+    return () => {
+      map.off('moveend', handleMoveEnd);
+    };
+  }, [mapInstanceRef, isCropped, setMapState, hasInitialized, setInitialized, isMapReady]);
+
 
   // Data Processing Hook
   const {
@@ -70,27 +95,54 @@ export default function Map({
     rectangleRef,
     streetsLayerRef,
     enabled: enableBoundingBox && !isCropped,
+    isMapReady,
     onValidSelection: handleValidSelection,
     onInvalidSelection: handleInvalidSelection,
+    center,
+    zoom,
   });
 
   // Confirm Crop
   const handleConfirmCrop = useCallback(() => {
+    console.log("handleConfirmCrop called", { pendingBbox });
     if (!pendingBbox) return;
 
-    const bboxCenter: [number, number] = [
-      (pendingBbox.southWest.lat + pendingBbox.northEast.lat) / 2,
-      (pendingBbox.southWest.lng + pendingBbox.northEast.lng) / 2,
-    ];
-    setLastCenter(bboxCenter);
+    // Capture current map state before locking
+    if (mapInstanceRef.current) {
+      const currentCenter = mapInstanceRef.current.getCenter();
+      const currentZoom = mapInstanceRef.current.getZoom();
+      setLastCenter([currentCenter.lat, currentCenter.lng]);
+      setLastZoom(currentZoom);
+    } else {
+      // Fallback if map instance is not available (unlikely)
+      const bboxCenter: [number, number] = [
+        (pendingBbox.southWest.lat + pendingBbox.northEast.lat) / 2,
+        (pendingBbox.southWest.lng + pendingBbox.northEast.lng) / 2,
+      ];
+      setLastCenter(bboxCenter);
+      setLastZoom(zoom);
+    }
 
-    lockToBox(pendingBbox);
-    setActiveBbox(pendingBbox);
-    setShowCropConfirm(false);
-    setPendingBbox(null);
-    setIsCropped(true);
-    onBoundingBoxChange?.(pendingBbox);
-  }, [pendingBbox, lockToBox, onBoundingBoxChange]);
+    try {
+      console.log("locking to box...");
+      // Fix: Pass keepZoom: true and currentCenter to prevent ANY movement
+      const currentZoom = mapInstanceRef.current?.getZoom() || zoom;
+      const currentCenterObj = mapInstanceRef.current?.getCenter();
+      const currentCenter: [number, number] | undefined = currentCenterObj ? [currentCenterObj.lat, currentCenterObj.lng] : undefined;
+
+      lockToBox(pendingBbox, { keepZoom: true, currentZoom, center: currentCenter });
+
+      console.log("box locked.");
+      setActiveBbox(pendingBbox);
+      setShowCropConfirm(false);
+      setPendingBbox(null);
+      setIsCropped(true);
+      onBoundingBoxChange?.(pendingBbox);
+      console.log("crop confirmed and state updated.");
+    } catch (error) {
+      console.error("Error in handleConfirmCrop:", error);
+    }
+  }, [pendingBbox, lockToBox, onBoundingBoxChange, mapInstanceRef, zoom]);
 
   // Cancel Crop
   const handleCancelCrop = useCallback(() => {
@@ -107,12 +159,12 @@ export default function Map({
 
   // Back to Full View
   const handleBackToFullView = useCallback(() => {
-    unlockMap(lastCenter, zoom);
+    // Only update state here, unlockMap will be called in useEffect after resize
     setActiveBbox(null);
     setIsCropped(false);
     resetProcessing();
     onBoundingBoxChange?.(null);
-  }, [unlockMap, lastCenter, zoom, resetProcessing, onBoundingBoxChange]);
+  }, [resetProcessing, onBoundingBoxChange]);
 
   // Calculate Aspect Ratio
   const getAspectRatio = useCallback(() => {
@@ -133,15 +185,25 @@ export default function Map({
     height: aspectRatio <= 1 ? 'min(80vh, 700px)' : 'auto',
   } : {};
 
-  // Handle Resize on View Change
+  // Handle Resize and View Transitions
   useEffect(() => {
+    // Transition TO Cropped View
     if (isCropped && activeBbox) {
       setTimeout(() => {
         invalidateSize();
-        refitBounds(activeBbox);
+        // Fix: Maintain current zoom and center when refitting bounds
+        refitBounds(activeBbox, { keepZoom: true, currentZoom: lastZoom, center: lastCenter });
       }, 150);
     }
-  }, [isCropped, activeBbox, invalidateSize, refitBounds]);
+    // Transition TO Full View
+    else if (!isCropped && !activeBbox) {
+      // Wait for layout transition to complete
+      setTimeout(() => {
+        invalidateSize();
+        unlockMap(lastCenter, lastZoom);
+      }, 150);
+    }
+  }, [isCropped, activeBbox, invalidateSize, refitBounds, unlockMap, lastCenter, lastZoom]);
 
   return (
     <div className="relative flex h-full w-full flex-col">
@@ -155,7 +217,7 @@ export default function Map({
         {/* Map Container - Dynamic Positioning */}
         <div
           ref={mapRef}
-          className={`h-full w-full ${isCropped ? 'absolute left-1/2 top-1/2 z-[901] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800' : ''}`}
+          className={`${isCropped ? 'absolute left-1/2 top-1/2 z-[901] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 bg-zinc-200 dark:bg-zinc-800' : 'h-full w-full'}`}
           style={isCropped ? cardStyle : undefined}
         />
 

@@ -35,8 +35,6 @@ export default function Home() {
     <div className="flex flex-1 w-full flex-col bg-zinc-50 dark:bg-zinc-950">
       <div className="relative flex-1">
         <Map
-          center={[-23.5505, -46.6333]}
-          zoom={13}
           onBoundingBoxChange={handleBoundingBoxChange}
           enableBoundingBox={true}
         />
