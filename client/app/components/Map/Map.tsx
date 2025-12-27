@@ -89,6 +89,7 @@ export default function Map({
     stages,
     processData,
     resetProcessing,
+    errors,
   } = useDataProcessing({
     onStreetsLoaded: (geojson) => {
       addStreetsLayer(geojson);
@@ -311,14 +312,14 @@ export default function Map({
               </span>
 
               {/* Process Button */}
-              {!isProcessing && stages.streets === 'pending' && (
+              {!isProcessing && (stages.streets === 'pending' || stages.streets === 'error' || stages.topography === 'error') && (
                 <button onClick={handleProcessData} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-blue-700">
-                  Fetch Data
+                  {stages.streets === 'error' || stages.topography === 'error' ? 'Retry Fetch' : 'Fetch Data'}
                 </button>
               )}
 
               {/* Save Project Button */}
-              {stages.streets === 'success' && !isSaving && (
+              {stages.streets === 'success' && stages.topography === 'success' && !isSaving && (
                 <button
                   onClick={() => setShowSaveDialog(true)}
                   className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-emerald-700"
@@ -336,10 +337,26 @@ export default function Map({
               )}
 
               {/* Success Indicator */}
-              {stages.streets === 'success' && (
+              {stages.streets === 'success' && stages.topography === 'success' && (
                 <span className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white shadow-md">
                   ✓ Processed
                 </span>
+              )}
+
+              {/* Error Messages */}
+              {(stages.streets === 'error' || stages.topography === 'error') && (
+                <div className="absolute top-12 left-0 flex flex-col gap-2">
+                  {stages.streets === 'error' && (
+                    <span className="flex items-center gap-2 rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
+                      ⚠️ Streets: {errors.streets || 'Failed to load'}
+                    </span>
+                  )}
+                  {stages.topography === 'error' && (
+                    <span className="flex items-center gap-2 rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
+                      ⚠️ Topography: {errors.topography || 'Failed to load'}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
 
