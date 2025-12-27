@@ -108,32 +108,24 @@ export default function Map({
     console.log("handleConfirmCrop called", { pendingBbox });
     if (!pendingBbox) return;
 
-    // Capture current map state before locking
-    if (mapInstanceRef.current) {
-      const currentCenter = mapInstanceRef.current.getCenter();
-      const currentZoom = mapInstanceRef.current.getZoom();
-      setLastCenter([currentCenter.lat, currentCenter.lng]);
-      setLastZoom(currentZoom);
-    } else {
-      // Fallback if map instance is not available (unlikely)
-      const bboxCenter: [number, number] = [
-        (pendingBbox.southWest.lat + pendingBbox.northEast.lat) / 2,
-        (pendingBbox.southWest.lng + pendingBbox.northEast.lng) / 2,
-      ];
-      setLastCenter(bboxCenter);
-      setLastZoom(zoom);
-    }
+    // Calculate center of the selection to ensure it's visible in the cropped view
+    const bboxCenter: [number, number] = [
+      (pendingBbox.southWest.lat + pendingBbox.northEast.lat) / 2,
+      (pendingBbox.southWest.lng + pendingBbox.northEast.lng) / 2,
+    ];
+
+    // Capture current zoom
+    const currentZoom = mapInstanceRef.current?.getZoom() || zoom;
+
+    // Save state for restoration (and for the crop view)
+    setLastCenter(bboxCenter);
+    setLastZoom(currentZoom);
 
     try {
-      console.log("locking to box...");
-      // Fix: Pass keepZoom: true and currentCenter to prevent ANY movement
-      const currentZoom = mapInstanceRef.current?.getZoom() || zoom;
-      const currentCenterObj = mapInstanceRef.current?.getCenter();
-      const currentCenter: [number, number] | undefined = currentCenterObj ? [currentCenterObj.lat, currentCenterObj.lng] : undefined;
+      // Note: We don't call lockToBox here anymore.
+      // We wait for the useEffect to handle the view lock after the layout transition/resize
+      // to ensure the map centers correctly on the new container size.
 
-      lockToBox(pendingBbox, { keepZoom: true, currentZoom, center: currentCenter });
-
-      console.log("box locked.");
       setActiveBbox(pendingBbox);
 
       // Calculate optimized dimensions
@@ -207,28 +199,47 @@ export default function Map({
   useEffect(() => {
     console.log('Map view effect:', { isCropped, activeBbox, cropDimensions });
 
-    // Force periodic invalidation during transition
-    const interval = setInterval(() => {
-      mapRef.current && mapInstanceRef.current?.invalidateSize();
-    }, 50);
-    setTimeout(() => clearInterval(interval), 500);
     // Transition TO Cropped View
     if (isCropped && activeBbox) {
+      console.log("Starting crop transition...", { activeBbox, lastCenter, lastZoom });
+
+      // 1. Force invalidate immediately
+      mapInstanceRef.current?.invalidateSize();
+
+      // 2. Schedule the view update
       setTimeout(() => {
-        invalidateSize();
-        // Fix: Maintain current zoom and center when refitting bounds
-        refitBounds(activeBbox, { keepZoom: true, currentZoom: lastZoom, center: lastCenter });
-      }, 50); // Reduced delay
+        const map = mapInstanceRef.current;
+        if (!map) return;
+
+        console.log("Executing view update...", {
+          centerCache: lastCenter,
+          zoomCache: lastZoom,
+          mapCenter: map.getCenter(),
+          mapZoom: map.getZoom()
+        });
+
+        // Ensure proper size
+        map.invalidateSize();
+
+        // Set view explicitly
+        map.setView(lastCenter, lastZoom, { animate: false });
+
+        // Lock interaction
+        lockToBox(activeBbox, { keepZoom: true, currentZoom: lastZoom, center: lastCenter });
+
+        console.log("View updated and locked.");
+      }, 100);
     }
     // Transition TO Full View
     else if (!isCropped && !activeBbox) {
-      // Wait for layout transition to complete
+      console.log("Restoring full view...");
       setTimeout(() => {
         invalidateSize();
         unlockMap(lastCenter, lastZoom);
-      }, 150);
+        console.log("Full view restored.");
+      }, 100);
     }
-  }, [isCropped, activeBbox, invalidateSize, refitBounds, unlockMap, lastCenter, lastZoom]);
+  }, [isCropped, activeBbox, invalidateSize, refitBounds, unlockMap, lockToBox, lastCenter, lastZoom]);
 
   return (
     <div className="relative flex h-full w-full flex-col">

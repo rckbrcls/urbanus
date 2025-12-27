@@ -54,8 +54,6 @@ export function useMapInstance(
       setIsMapReady(false);
     };
   }, [containerRef, options.center, options.zoom]);
-
-  // Travar o mapa em um bounding box específico
   const lockToBox = useCallback(
     (
       bbox: BoundingBox,
