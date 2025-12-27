@@ -32,23 +32,15 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-zinc-50 dark:bg-zinc-950">
-      {/* Header */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-          URBANUS
-        </h1>
-      </header>
-
-      {/* Main Content - Map */}
-      <main className="relative flex-1">
+    <div className="flex flex-1 w-full flex-col bg-zinc-50 dark:bg-zinc-950">
+      <div className="relative flex-1">
         <Map
           center={[-23.5505, -46.6333]}
           zoom={13}
           onBoundingBoxChange={handleBoundingBoxChange}
           enableBoundingBox={true}
         />
-      </main>
+      </div>
     </div>
   );
 }
