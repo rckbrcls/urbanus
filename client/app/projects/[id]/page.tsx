@@ -2,7 +2,7 @@
 
 import { useProjectStore } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, use } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, Trash2, Download } from 'lucide-react';
 import { MapContainerProps } from '@/app/components/Map/types';
@@ -22,11 +22,12 @@ const Rectangle = dynamic(
   { ssr: false }
 );
 
-export default function ProjectDetailPage({ params }: { params: { id: string } }) {
+export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { id } = use(params);
   const getProject = useProjectStore((state) => state.getProject);
   const deleteProject = useProjectStore((state) => state.deleteProject);
-  const project = getProject(params.id);
+  const project = getProject(id);
   const [activeTab, setActiveTab] = useState<'overview' | 'streets'>('overview');
 
   if (!project) {
@@ -130,8 +131,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
             <button
               onClick={() => setActiveTab('overview')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'overview'
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
+                ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
                 }`}
             >
               Overview
@@ -139,8 +140,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
             <button
               onClick={() => setActiveTab('streets')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'streets'
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
+                ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
                 }`}
             >
               Streets
