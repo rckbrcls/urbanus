@@ -7,6 +7,9 @@ import { useBoundingBoxDrawing } from './hooks/useBoundingBoxDrawing';
 import { useDataProcessing } from './hooks/useDataProcessing';
 import { MAX_AREA_KM2, HIGHWAY_COLORS } from './constants';
 import { useMapStore } from '../../../stores/useMapStore';
+import { useProjectStore } from '../../../stores/useProjectStore';
+import { useRouter } from 'next/navigation';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function Map({
   onBoundingBoxChange,
@@ -28,6 +31,14 @@ export default function Map({
   const [lastCenter, setLastCenter] = useState<[number, number]>(center);
   const [lastZoom, setLastZoom] = useState<number>(zoom);
   const [cropDimensions, setCropDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  // Project Save State
+  const [isSaving, setIsSaving] = useState(false);
+  const [projectName, setProjectName] = useState('');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+
+  const router = useRouter();
+  const addProject = useProjectStore(state => state.addProject);
 
   // Dynamic Map Configuration
   // We determine the initial center/zoom for the map instance based on the mode.
@@ -306,6 +317,16 @@ export default function Map({
                 </button>
               )}
 
+              {/* Save Project Button */}
+              {stages.streets === 'success' && !isSaving && (
+                <button
+                  onClick={() => setShowSaveDialog(true)}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-emerald-700"
+                >
+                  Save Project
+                </button>
+              )}
+
               {/* Processing Indicator */}
               {isProcessing && (
                 <span className="flex items-center gap-2 rounded-lg bg-blue-600/80 px-3 py-1.5 text-sm font-medium text-white shadow-md">
@@ -321,6 +342,59 @@ export default function Map({
                 </span>
               )}
             </div>
+
+            {/* Save Project Dialog */}
+            {showSaveDialog && (
+              <div className="absolute top-16 left-3 z-[1100] w-72 rounded-xl bg-white p-4 shadow-xl ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800" style={{ pointerEvents: 'auto' }}>
+                <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Name your project</h3>
+                <input
+                  type="text"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="My Awesome Project"
+                  className="mb-3 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-500"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowSaveDialog(false);
+                      setProjectName('');
+                    }}
+                    className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!projectName.trim() || !activeBbox) return;
+
+                      const newProject = {
+                        id: uuidv4(),
+                        name: projectName.trim(),
+                        createdAt: Date.now(),
+                        bounds: activeBbox,
+                        areaKm2: areaKm2,
+                        center: lastCenter,
+                        zoom: lastZoom,
+                        stats: {
+                          streetCount: streetCount || 0,
+                        }
+                      };
+
+                      addProject(newProject);
+                      setIsSaving(true); // Show saving state briefly if needed
+                      router.push('/projects');
+                    }}
+                    disabled={!projectName.trim()}
+                    className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+
 
             {/* Legend */}
             {streetCount !== undefined && (

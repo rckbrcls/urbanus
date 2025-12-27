@@ -33,7 +33,7 @@ export default function RootLayout({
         <SidebarProvider className="h-svh">
           <AppSidebar />
           <SidebarInset className="relative w-full overflow-hidden">
-            <div className="absolute left-4 bottom-4 z-[3000]">
+            <div className="absolute left-4 top-4 z-[3000]">
               <SidebarTrigger variant={"default"} />
             </div>
             {children}
