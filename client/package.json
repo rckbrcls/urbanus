@@ -17,6 +17,7 @@
     "@types/leaflet": "^1.9.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "geotiff": "2.1.4-beta.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.556.0",
     "next": "16.0.8",

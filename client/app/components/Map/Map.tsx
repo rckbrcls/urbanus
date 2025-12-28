@@ -90,11 +90,26 @@ export default function Map({
     processData,
     resetProcessing,
     errors,
+    topographyBlob,
   } = useDataProcessing({
     onStreetsLoaded: (geojson) => {
-      addStreetsLayer(geojson);
+      setStreetsData(geojson);
+      // Pass null initially, will update when topography is ready
+      addStreetsLayer(geojson, null);
     },
   });
+
+  // Store streets data to allow re-rendering with topography
+  const [streetsData, setStreetsData] = useState<GeoJSON.FeatureCollection | null>(null);
+
+  // Re-add layer when topography blob is available to enrich tooltips
+  useEffect(() => {
+    if (stages.streets === 'success' && topographyBlob && streetsData) {
+      addStreetsLayer(streetsData, topographyBlob);
+    }
+  }, [topographyBlob, stages.streets, streetsData, addStreetsLayer]);
+
+
 
   // Selection Handlers
   const handleValidSelection = useCallback((bbox: BoundingBox, area: number) => {

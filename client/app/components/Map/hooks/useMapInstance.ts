@@ -156,46 +156,91 @@ export function useMapInstance(
   }, []);
 
   // Adicionar camada de ruas GeoJSON
-  const addStreetsLayer = useCallback((geojson: GeoJSON.FeatureCollection) => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
+  const addStreetsLayer = useCallback(
+    async (
+      geojson: GeoJSON.FeatureCollection,
+      topographyBlob?: Blob | null
+    ) => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
 
-    if (streetsLayerRef.current) {
-      map.removeLayer(streetsLayerRef.current);
-    }
+      if (streetsLayerRef.current) {
+        map.removeLayer(streetsLayerRef.current);
+      }
 
-    streetsLayerRef.current = L.geoJSON(geojson, {
-      style: (feature) => {
-        const highway = feature?.properties?.highway || "unclassified";
-        return {
-          color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.unclassified,
-          weight:
-            highway === "motorway" || highway === "trunk"
-              ? 4
-              : highway === "primary" || highway === "secondary"
-              ? 3
-              : 2,
-          opacity: 0.8,
-        };
-      },
-      onEachFeature: (feature, layer) => {
-        const props = feature.properties;
-        if (props) {
-          const name = props.name || "Sem nome";
-          const type = props.highway || "via";
-          layer.bindPopup(`
-            <strong>${name}</strong><br/>
-            <span style="color: ${
-              HIGHWAY_COLORS[type] || "#666"
-            }">${type}</span>
-            ${props.maxspeed ? `<br/>Velocidade: ${props.maxspeed}` : ""}
-            ${props.lanes ? `<br/>Faixas: ${props.lanes}` : ""}
-            ${props.oneway ? "<br/>Mão única" : ""}
-          `);
-        }
-      },
-    }).addTo(map);
-  }, []);
+      streetsLayerRef.current = L.geoJSON(geojson, {
+        style: (feature) => {
+          const highway = feature?.properties?.highway || "unclassified";
+          return {
+            color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.unclassified,
+            weight:
+              highway === "motorway" || highway === "trunk"
+                ? 4
+                : highway === "primary" || highway === "secondary"
+                ? 3
+                : 2,
+            opacity: 0.8,
+          };
+        },
+        onEachFeature: async (feature, layer) => {
+          const props = feature.properties;
+          if (props) {
+            const name = props.name || "Sem nome";
+            const type = props.highway || "via";
+
+            let elevationInfo = "";
+
+            // Se tivermos o blob da topografia e a geometria for LineString
+            if (topographyBlob && feature.geometry.type === "LineString") {
+              // Importação dinâmica para evitar erro de SSR se necessário, mas aqui estamos no client
+              try {
+                const { calculateElevationStats } = await import(
+                  "../utils/elevation"
+                );
+                const coordinates = feature.geometry.coordinates as number[][];
+                const stats = await calculateElevationStats(
+                  topographyBlob,
+                  coordinates
+                );
+
+                if (stats) {
+                  elevationInfo = `
+                      <br/><hr style="margin: 4px 0; border-color: #ddd"/>
+                      <div style="font-size: 0.9em; color: #444">
+                        <strong>Topografia:</strong><br/>
+                        Média: ${stats.avg.toFixed(1)}m<br/>
+                        Min: ${stats.min.toFixed(
+                          1
+                        )}m | Max: ${stats.max.toFixed(1)}m
+                      </div>
+                    `;
+                }
+              } catch (err) {
+                console.error("Erro calculando elevação:", err);
+              }
+            }
+
+            layer.bindTooltip(
+              `
+            <div style="font-family: system-ui; line-height: 1.4;">
+                <strong>${name}</strong><br/>
+                <span style="color: ${
+                  HIGHWAY_COLORS[type] || "#666"
+                }">${type}</span>
+                ${props.maxspeed ? `<br/>Velocidade: ${props.maxspeed}` : ""}
+                ${props.lanes ? `<br/>Faixas: ${props.lanes}` : ""}
+                ${props.oneway ? "<br/>Mão única" : ""}
+                ${elevationInfo}
+            </div>
+          `,
+              { sticky: true, className: "custom-tooltip" }
+            );
+          }
+        },
+      }).addTo(map);
+    },
+    []
+  );
 
   // Invalidar tamanho do mapa (útil após mudanças de container)
   const invalidateSize = useCallback(() => {
