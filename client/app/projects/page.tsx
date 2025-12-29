@@ -5,9 +5,16 @@ import { useProjectStore } from '../../stores/useProjectStore';
 
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect } from 'react';
 
 export default function ProjectsPage() {
   const projects = useProjectStore((state) => state.projects);
+  const fetchProjects = useProjectStore((state) => state.fetchProjects);
+  const isLoading = useProjectStore((state) => state.isLoading);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-4 pt-0">
@@ -29,7 +36,11 @@ export default function ProjectsPage() {
       </div>
 
       {/* Grid */}
-      {projects.length === 0 ? (
+      {isLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        </div>
+      ) : projects.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 py-20 dark:border-zinc-800 dark:bg-zinc-900/50">
           <div className="mb-4 rounded-full bg-zinc-100 p-4 dark:bg-zinc-800">
             <svg className="h-8 w-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

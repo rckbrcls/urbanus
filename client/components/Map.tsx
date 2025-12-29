@@ -428,9 +428,15 @@ export default function Map({
                         streets: finalStreets
                       };
 
-                      addProject(newProject);
-                      setIsSaving(true); // Show saving state briefly if needed
-                      router.push('/projects');
+                      setIsSaving(true);
+                      try {
+                        await addProject(newProject);
+                        router.push('/projects');
+                      } catch (error) {
+                        console.error("Failed to save project:", error);
+                        // Optional: Show error to user
+                        setIsSaving(false);
+                      }
                     }}
                     disabled={!projectName.trim() || isSaving}
                     className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"

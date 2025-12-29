@@ -48,9 +48,20 @@ const Tooltip = dynamic(
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
+
   const getProject = useProjectStore((state) => state.getProject);
+  const fetchProjects = useProjectStore((state) => state.fetchProjects);
+  const projects = useProjectStore((state) => state.projects);
+  const isLoading = useProjectStore((state) => state.isLoading);
   const deleteProject = useProjectStore((state) => state.deleteProject);
+
   const project = getProject(id);
+
+  useEffect(() => {
+    if (!project && projects.length === 0) {
+      fetchProjects();
+    }
+  }, [project, projects.length, fetchProjects]);
   const [activeTab, setActiveTab] = useState<'overview' | 'streets'>('overview');
   const [isMounted, setIsMounted] = useState(false);
 
@@ -76,18 +87,21 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     return hasElevation ? { min, max } : null;
   }, [project]);
 
-  if (!isMounted) {
+  if (!isMounted || isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <div className="text-zinc-500">Loading project...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+          <div className="text-zinc-500">{isLoading ? 'Loading project data...' : 'Initializing...'}</div>
+        </div>
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4">
-        <h1 className="text-2xl font-bold">Project not found</h1>
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-zinc-50 dark:bg-zinc-950">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Project not found</h1>
         <button
           onClick={() => router.push('/projects')}
           className="text-blue-600 hover:underline"
@@ -98,8 +112,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  const handleDelete = () => {
-    deleteProject(project.id);
+  const handleDelete = async () => {
+    await deleteProject(project.id);
     router.push('/projects');
   };
 
