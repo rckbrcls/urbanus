@@ -3,6 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { HIGHWAY_COLORS } from "@/constants/map-constants";
 import { BoundingBox } from "@/types/map-types";
+import { loadElevationData, lookupElevation } from "@/utils/elevation";
 
 // Fix para ícones do Leaflet no Next.js
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: () => void })
@@ -26,6 +27,7 @@ export function useMapInstance(
   const mapInstanceRef = useRef<L.Map | null>(null);
   const rectangleRef = useRef<L.Rectangle | null>(null);
   const streetsLayerRef = useRef<L.GeoJSON | null>(null);
+  const verticesLayerRef = useRef<L.LayerGroup | null>(null);
   const zoomControlRef = useRef<L.Control.Zoom | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
@@ -129,6 +131,10 @@ export function useMapInstance(
       map.removeLayer(streetsLayerRef.current);
       streetsLayerRef.current = null;
     }
+    if (verticesLayerRef.current) {
+      map.removeLayer(verticesLayerRef.current);
+      verticesLayerRef.current = null;
+    }
 
     // Resetar limites
     map.setMinZoom(1);
@@ -167,6 +173,22 @@ export function useMapInstance(
       if (streetsLayerRef.current) {
         map.removeLayer(streetsLayerRef.current);
       }
+      if (verticesLayerRef.current) {
+        map.removeLayer(verticesLayerRef.current);
+      }
+
+      // Carregar dados de elevação uma única vez
+      let elevationDataset = null;
+      if (topographyBlob) {
+        try {
+          elevationDataset = await loadElevationData(topographyBlob);
+        } catch (e) {
+          console.error("Failed to load elevation data", e);
+        }
+      }
+
+      const verticesGroup = L.layerGroup();
+      verticesLayerRef.current = verticesGroup;
 
       streetsLayerRef.current = L.geoJSON(geojson, {
         style: (feature) => {
@@ -182,7 +204,7 @@ export function useMapInstance(
             opacity: 0.8,
           };
         },
-        onEachFeature: async (feature, layer) => {
+        onEachFeature: (feature, layer) => {
           const props = feature.properties;
           if (props) {
             const name = props.name || "Sem nome";
@@ -190,33 +212,53 @@ export function useMapInstance(
 
             let elevationInfo = "";
 
-            // Se tivermos o blob da topografia e a geometria for LineString
-            if (topographyBlob && feature.geometry.type === "LineString") {
-              // Importação dinâmica para evitar erro de SSR se necessário, mas aqui estamos no client
-              try {
-                const { calculateElevationStats } = await import(
-                  "../utils/elevation"
-                );
-                const coordinates = feature.geometry.coordinates as number[][];
-                const stats = await calculateElevationStats(
-                  topographyBlob,
-                  coordinates
-                );
+            if (elevationDataset && feature.geometry.type === "LineString") {
+              const coordinates = feature.geometry.coordinates as number[][];
 
-                if (stats) {
-                  elevationInfo = `
+              // Calcular stats da rua usando os dados carregados
+              let min = Infinity;
+              let max = -Infinity;
+              let sum = 0;
+              let count = 0;
+
+              // Iterar vértices para criar pontos e calcular stats
+              coordinates.forEach(([lng, lat]) => {
+                const el = lookupElevation(elevationDataset!, lat, lng);
+
+                if (el !== null) {
+                  // Stats
+                  if (el < min) min = el;
+                  if (el > max) max = el;
+                  sum += el;
+                  count++;
+
+                  // Adicionar marcador no vértice
+                  L.circleMarker([lat, lng], {
+                    radius: 3,
+                    color: "#3388ff",
+                    fillColor: "#3388ff",
+                    fillOpacity: 0.8,
+                    weight: 1,
+                  })
+                    .bindTooltip(`Alt: ${el.toFixed(1)}m`, {
+                      direction: "top",
+                      offset: [0, -5],
+                      className: "vertex-tooltip", // Opcional para styling
+                    })
+                    .addTo(verticesGroup);
+                }
+              });
+
+              if (count > 0) {
+                const avg = sum / count;
+                elevationInfo = `
                       <br/><hr style="margin: 4px 0; border-color: #ddd"/>
                       <div style="font-size: 0.9em; color: #444">
                         <strong>Topografia:</strong><br/>
-                        Média: ${stats.avg.toFixed(1)}m<br/>
-                        Min: ${stats.min.toFixed(
-                          1
-                        )}m | Max: ${stats.max.toFixed(1)}m
+                        Média: ${avg.toFixed(1)}m<br/>
+                        Min: ${min.toFixed(1)}m | Max: ${max.toFixed(1)}m
                       </div>
                     `;
-                }
-              } catch (err) {
-                console.error("Erro calculando elevação:", err);
               }
             }
 
@@ -235,6 +277,8 @@ export function useMapInstance(
           }
         },
       }).addTo(map);
+
+      verticesGroup.addTo(map);
     },
     []
   );
@@ -276,6 +320,7 @@ export function useMapInstance(
     mapInstanceRef,
     rectangleRef,
     streetsLayerRef,
+    verticesLayerRef,
     lockToBox,
     unlockMap,
     addStreetsLayer,

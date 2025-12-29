@@ -36,6 +36,14 @@ const GeoJSON = dynamic(
   () => import('react-leaflet').then((mod) => mod.GeoJSON),
   { ssr: false }
 );
+const CircleMarker = dynamic(
+  () => import('react-leaflet').then((mod) => mod.CircleMarker),
+  { ssr: false }
+);
+const Tooltip = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Tooltip),
+  { ssr: false }
+);
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -175,52 +183,83 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               }}
             />
             {project.streets && (
-              <GeoJSON
-                data={project.streets}
-                style={(feature) => {
-                  const highway = feature?.properties?.highway || 'unclassified';
-                  return {
-                    color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.unclassified,
-                    weight:
-                      highway === 'motorway' || highway === 'trunk'
-                        ? 4
-                        : highway === 'primary' || highway === 'secondary'
-                          ? 3
-                          : 2,
-                    opacity: 0.8,
-                  };
-                }}
-                onEachFeature={(feature, layer) => {
-                  const props = feature.properties;
-                  if (props) {
-                    const name = props.name || 'Sem nome';
-                    const type = props.highway || 'via';
-                    let elevationInfo = '';
+              <>
+                <GeoJSON
+                  data={project.streets}
+                  style={(feature) => {
+                    const highway = feature?.properties?.highway || 'unclassified';
+                    return {
+                      color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.unclassified,
+                      weight:
+                        highway === 'motorway' || highway === 'trunk'
+                          ? 4
+                          : highway === 'primary' || highway === 'secondary'
+                            ? 3
+                            : 2,
+                      opacity: 0.8,
+                    };
+                  }}
+                  onEachFeature={(feature, layer) => {
+                    const props = feature.properties;
+                    if (props) {
+                      const name = props.name || 'Sem nome';
+                      const type = props.highway || 'via';
+                      let elevationInfo = '';
 
-                    if (props.elevation) {
-                      elevationInfo = `
-                        <br/><hr style="margin: 4px 0; border-color: #ddd"/>
-                        <div style="font-size: 0.9em; color: #444">
-                          <strong>Topografia:</strong><br/>
-                          Média: ${props.elevation.avg.toFixed(1)}m<br/>
-                          Min: ${props.elevation.min.toFixed(1)}m | Max: ${props.elevation.max.toFixed(1)}m
+                      if (props.elevation) {
+                        elevationInfo = `
+                          <br/><hr style="margin: 4px 0; border-color: #ddd"/>
+                          <div style="font-size: 0.9em; color: #444">
+                            <strong>Topografia:</strong><br/>
+                            Média: ${props.elevation.avg.toFixed(1)}m<br/>
+                            Min: ${props.elevation.min.toFixed(1)}m | Max: ${props.elevation.max.toFixed(1)}m
+                          </div>
+                        `;
+                      }
+
+                      layer.bindTooltip(
+                        `
+                        <div style="font-family: system-ui; line-height: 1.4;">
+                            <strong>${name}</strong><br/>
+                            <span style="color: ${HIGHWAY_COLORS[type] || '#666'}">${type}</span>
+                            ${elevationInfo}
                         </div>
-                      `;
+                      `,
+                        { sticky: true, className: 'custom-tooltip' }
+                      );
                     }
-
-                    layer.bindTooltip(
-                      `
-                      <div style="font-family: system-ui; line-height: 1.4;">
-                          <strong>${name}</strong><br/>
-                          <span style="color: ${HIGHWAY_COLORS[type] || '#666'}">${type}</span>
-                          ${elevationInfo}
-                      </div>
-                    `,
-                      { sticky: true, className: 'custom-tooltip' }
-                    );
+                  }}
+                />
+                {/* Render Vertices */}
+                {project.streets.features.map((feature: any, fIndex: number) => {
+                  if (feature.geometry.type === 'LineString' && feature.properties?.vertex_elevations) {
+                    return feature.geometry.coordinates.map((coord: number[], cIndex: number) => {
+                      const elevation = feature.properties.vertex_elevations[cIndex];
+                      if (elevation !== null && elevation !== undefined) {
+                        return (
+                          <CircleMarker
+                            key={`${fIndex}-${cIndex}`}
+                            center={[coord[1], coord[0]]}
+                            radius={3}
+                            pathOptions={{
+                              color: "#3388ff",
+                              fillColor: "#3388ff",
+                              fillOpacity: 0.8,
+                              weight: 1
+                            }}
+                          >
+                            <Tooltip direction="top" offset={[0, -5]} className="vertex-tooltip">
+                              Alt: {elevation.toFixed(1)}m
+                            </Tooltip>
+                          </CircleMarker>
+                        );
+                      }
+                      return null;
+                    });
                   }
-                }}
-              />
+                  return null;
+                })}
+              </>
             )}
             {/* Note: In a real implementation, we would reload the street/elev data here using the bounds */}
           </MapContainer>
