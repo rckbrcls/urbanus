@@ -1,6 +1,6 @@
+import { BoundingBox } from "@/types/map-types";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { BoundingBox } from "../app/components/Map/types";
 
 export interface ProjectStats {
   streetCount: number;
@@ -15,6 +15,7 @@ export interface Project {
   center: [number, number];
   zoom: number;
   stats: ProjectStats;
+  streets: GeoJSON.FeatureCollection;
 }
 
 interface ProjectState {

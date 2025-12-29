@@ -11,6 +11,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import { useBoundingBoxDrawing } from '@/hooks/useBoundingBoxDrawing';
 import { useDataProcessing } from '@/hooks/useDataProcessing';
 import { useMapInstance } from '@/hooks/useMapInstance';
+import { enrichStreetsWithElevation } from '../utils/elevation';
 
 export default function Map({
   onBoundingBoxChange,
@@ -399,8 +400,19 @@ export default function Map({
                     Cancel
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (!projectName.trim() || !activeBbox) return;
+
+                      let finalStreets = streetsData;
+                      if (streetsData && topographyBlob) {
+                        setIsSaving(true);
+                        finalStreets = await enrichStreetsWithElevation(streetsData, topographyBlob);
+                      }
+
+                      if (!finalStreets) {
+                        console.error("No streets data to save");
+                        return;
+                      }
 
                       const newProject = {
                         id: uuidv4(),
@@ -412,17 +424,18 @@ export default function Map({
                         zoom: lastZoom,
                         stats: {
                           streetCount: streetCount || 0,
-                        }
+                        },
+                        streets: finalStreets
                       };
 
                       addProject(newProject);
                       setIsSaving(true); // Show saving state briefly if needed
                       router.push('/projects');
                     }}
-                    disabled={!projectName.trim()}
+                    disabled={!projectName.trim() || isSaving}
                     className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    Save
+                    {isSaving ? 'Saving...' : 'Save'}
                   </button>
                 </div>
               </div>

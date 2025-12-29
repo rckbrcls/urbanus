@@ -2,7 +2,7 @@
 
 import { useProjectStore } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
-import { useState, use, useEffect } from 'react';
+import { useState, use, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, Trash2, Download } from 'lucide-react';
 
@@ -32,6 +32,10 @@ const Rectangle = dynamic(
   () => import('react-leaflet').then((mod) => mod.Rectangle),
   { ssr: false }
 );
+const GeoJSON = dynamic(
+  () => import('react-leaflet').then((mod) => mod.GeoJSON),
+  { ssr: false }
+);
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -45,6 +49,24 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const elevationStats = useMemo(() => {
+    if (!project?.streets) return null;
+    let min = Infinity;
+    let max = -Infinity;
+    let hasElevation = false;
+
+    project.streets.features.forEach((f: any) => {
+      const elev = f.properties?.elevation;
+      if (elev) {
+        if (elev.min < min) min = elev.min;
+        if (elev.max > max) max = elev.max;
+        hasElevation = true;
+      }
+    });
+
+    return hasElevation ? { min, max } : null;
+  }, [project]);
 
   if (!isMounted) {
     return (
@@ -72,6 +94,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     deleteProject(project.id);
     router.push('/projects');
   };
+
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
@@ -151,6 +174,57 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 weight: 2,
               }}
             />
+            {project.streets && (
+              <GeoJSON
+                data={project.streets}
+                style={(feature) => {
+                  const highway = feature?.properties?.highway || 'unclassified';
+                  return {
+                    color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.unclassified,
+                    weight:
+                      highway === 'motorway' || highway === 'trunk'
+                        ? 4
+                        : highway === 'primary' || highway === 'secondary'
+                          ? 3
+                          : 2,
+                    opacity: 0.8,
+                  };
+                }}
+                onEachFeature={(feature, layer) => {
+                  const props = feature.properties;
+                  if (props) {
+                    const name = props.name || 'Sem nome';
+                    const type = props.highway || 'via';
+                    let elevationInfo = '';
+
+                    if (props.elevation) {
+                      elevationInfo = `
+                        <br/><hr style="margin: 4px 0; border-color: #ddd"/>
+                        <div style="font-size: 0.9em; color: #444">
+                          <strong>Topografia:</strong><br/>
+                          Média: ${props.elevation.avg.toFixed(1)}m<br/>
+                          Min: ${props.elevation.min.toFixed(1)}m | Max: ${props.elevation.max.toFixed(1)}m
+                        </div>
+                      `;
+                    }
+
+                    layer.bindTooltip(
+                      `
+                      <div style="font-family: system-ui; line-height: 1.4;">
+                          <strong>${name}</strong><br/>
+                          <span style="color: ${HIGHWAY_COLORS[type] || '#666'}">${type}</span>
+                          ${props.maxspeed ? `<br/>Velocidade: ${props.maxspeed}` : ''}
+                          ${props.lanes ? `<br/>Faixas: ${props.lanes}` : ''}
+                          ${props.oneway ? '<br/>Mão única' : ''}
+                          ${elevationInfo}
+                      </div>
+                    `,
+                      { sticky: true, className: 'custom-tooltip' }
+                    );
+                  }
+                }}
+              />
+            )}
             {/* Note: In a real implementation, we would reload the street/elev data here using the bounds */}
           </MapContainer>
 
@@ -198,8 +272,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">{project.stats.streetCount}</p>
                     </div>
                     <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Topography</p>
-                      <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">-</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Topography (Min - Max)</p>
+                      <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                        {elevationStats ? `${elevationStats.min.toFixed(0)}m - ${elevationStats.max.toFixed(0)}m` : '-'}
+                      </p>
                     </div>
                   </div>
                 </div>

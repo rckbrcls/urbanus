@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { BoundingBox } from "../types";
-import { HIGHWAY_COLORS } from "../constants";
+import { HIGHWAY_COLORS } from "@/constants/map-constants";
+import { BoundingBox } from "@/types/map-types";
 
 // Fix para ícones do Leaflet no Next.js
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: () => void })

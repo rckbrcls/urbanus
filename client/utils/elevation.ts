@@ -104,3 +104,76 @@ export async function calculateElevationStats(
     return null;
   }
 }
+
+export async function enrichStreetsWithElevation(
+  geojson: GeoJSON.FeatureCollection,
+  blob: Blob
+): Promise<GeoJSON.FeatureCollection> {
+  try {
+    const tiff = await fromBlob(blob);
+    const image = await tiff.getImage();
+    const rasters = await image.readRasters();
+    const data = rasters[0] as unknown as Float32Array;
+
+    const bbox = image.getBoundingBox();
+    const width = image.getWidth();
+    const height = image.getHeight();
+    const [west, south, east, north] = bbox;
+
+    const enrichedFeatures = geojson.features.map((feature) => {
+      if (feature.geometry.type !== "LineString") return feature;
+
+      const coordinates = feature.geometry.coordinates as number[][];
+      let min = Infinity;
+      let max = -Infinity;
+      let sum = 0;
+      let count = 0;
+
+      for (const [lng, lat] of coordinates) {
+        if (lng < west || lng > east || lat < south || lat > north) continue;
+
+        const xPct = (lng - west) / (east - west);
+        const yPct = (north - lat) / (north - south);
+
+        const x = Math.floor(xPct * width);
+        const y = Math.floor(yPct * height);
+
+        const index = y * width + x;
+
+        if (index >= 0 && index < data.length) {
+          const val = data[index];
+          if (val > -9999) {
+            if (val < min) min = val;
+            if (val > max) max = val;
+            sum += val;
+            count++;
+          }
+        }
+      }
+
+      if (count > 0) {
+        return {
+          ...feature,
+          properties: {
+            ...feature.properties,
+            elevation: {
+              min,
+              max,
+              avg: sum / count,
+            },
+          },
+        };
+      }
+
+      return feature;
+    });
+
+    return {
+      ...geojson,
+      features: enrichedFeatures,
+    };
+  } catch (error) {
+    console.error("Error enriching streets with elevation:", error);
+    return geojson;
+  }
+}
