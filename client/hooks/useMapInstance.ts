@@ -227,9 +227,6 @@ export function useMapInstance(
                 <span style="color: ${
                   HIGHWAY_COLORS[type] || "#666"
                 }">${type}</span>
-                ${props.maxspeed ? `<br/>Velocidade: ${props.maxspeed}` : ""}
-                ${props.lanes ? `<br/>Faixas: ${props.lanes}` : ""}
-                ${props.oneway ? "<br/>Mão única" : ""}
                 ${elevationInfo}
             </div>
           `,

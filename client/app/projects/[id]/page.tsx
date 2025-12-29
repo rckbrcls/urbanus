@@ -213,9 +213,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       <div style="font-family: system-ui; line-height: 1.4;">
                           <strong>${name}</strong><br/>
                           <span style="color: ${HIGHWAY_COLORS[type] || '#666'}">${type}</span>
-                          ${props.maxspeed ? `<br/>Velocidade: ${props.maxspeed}` : ''}
-                          ${props.lanes ? `<br/>Faixas: ${props.lanes}` : ''}
-                          ${props.oneway ? '<br/>Mão única' : ''}
                           ${elevationInfo}
                       </div>
                     `,
