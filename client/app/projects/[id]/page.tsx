@@ -2,11 +2,10 @@
 
 import { useProjectStore } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, use, useEffect } from 'react';
+import { useState, use, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, Trash2, Download } from 'lucide-react';
-import { MapContainerProps } from '@/app/components/Map/types';
-import { HIGHWAY_COLORS } from '@/app/components/Map/constants';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { HIGHWAY_COLORS } from '@/constants/map-constants';
 
 // Dynamic imports for Map components
 const MapContainer = dynamic(

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 
 // Importar o mapa dinamicamente para evitar erros de SSR
-const Map = dynamic(() => import("./components/Map"), {
+const Map = dynamic(() => import("@/components/Map"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full w-full items-center justify-center bg-zinc-100 dark:bg-zinc-900">

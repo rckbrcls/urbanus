@@ -1,7 +1,8 @@
 'use client';
 
+import ProjectCard from '@/components/ProjectCard';
 import { useProjectStore } from '../../stores/useProjectStore';
-import ProjectCard from '../components/ProjectCard';
+
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 

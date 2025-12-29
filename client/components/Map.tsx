@@ -1,15 +1,16 @@
 'use client';
 
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { BoundingBox, MapContainerProps } from './types';
-import { useMapInstance } from './hooks/useMapInstance';
-import { useBoundingBoxDrawing } from './hooks/useBoundingBoxDrawing';
-import { useDataProcessing } from './hooks/useDataProcessing';
-import { MAX_AREA_KM2, HIGHWAY_COLORS } from './constants';
-import { useMapStore } from '../../../stores/useMapStore';
-import { useProjectStore } from '../../../stores/useProjectStore';
+import { BoundingBox, MapContainerProps } from '../types/map-types';
+
+import { MAX_AREA_KM2, HIGHWAY_COLORS } from '../constants/map-constants';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
+import { useMapStore } from '@/stores/useMapStore';
+import { useProjectStore } from '@/stores/useProjectStore';
+import { useBoundingBoxDrawing } from '@/hooks/useBoundingBoxDrawing';
+import { useDataProcessing } from '@/hooks/useDataProcessing';
+import { useMapInstance } from '@/hooks/useMapInstance';
 
 export default function Map({
   onBoundingBoxChange,

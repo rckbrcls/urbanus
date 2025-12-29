@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import L from "leaflet";
-import { BoundingBox } from "../types";
-import { MAX_AREA_KM2, MAP_STYLES } from "../constants";
+import { MAX_AREA_KM2, MAP_STYLES } from "@/constants/map-constants";
+import { BoundingBox } from "@/types/map-types";
 
 interface UseBoundingBoxDrawingOptions {
   mapInstanceRef: React.RefObject<L.Map | null>;
