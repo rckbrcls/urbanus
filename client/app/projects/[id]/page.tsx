@@ -1,6 +1,6 @@
 'use client';
 
-import { useProjectStore } from '../../../stores/useProjectStore';
+import { useProject, useDeleteProject } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
 import { useState, use, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
@@ -49,19 +49,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const { id } = use(params);
 
-  const getProject = useProjectStore((state) => state.getProject);
-  const fetchProjects = useProjectStore((state) => state.fetchProjects);
-  const projects = useProjectStore((state) => state.projects);
-  const isLoading = useProjectStore((state) => state.isLoading);
-  const deleteProject = useProjectStore((state) => state.deleteProject);
-
-  const project = getProject(id);
-
-  useEffect(() => {
-    if (!project && projects.length === 0) {
-      fetchProjects();
-    }
-  }, [project, projects.length, fetchProjects]);
+  const { data: project, isLoading } = useProject(id);
+  const { mutateAsync: deleteProject } = useDeleteProject();
   const [activeTab, setActiveTab] = useState<'overview' | 'streets'>('overview');
   const [isMounted, setIsMounted] = useState(false);
 

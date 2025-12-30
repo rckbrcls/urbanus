@@ -1,20 +1,14 @@
 'use client';
 
 import ProjectCard from '@/components/ProjectCard';
-import { useProjectStore } from '../../stores/useProjectStore';
+import { useProjects } from '../../stores/useProjectStore';
 
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect } from 'react';
 
 export default function ProjectsPage() {
-  const projects = useProjectStore((state) => state.projects);
-  const fetchProjects = useProjectStore((state) => state.fetchProjects);
-  const isLoading = useProjectStore((state) => state.isLoading);
-
-  useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
+  const { data: projects = [], isLoading } = useProjects();
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-4 pt-0">

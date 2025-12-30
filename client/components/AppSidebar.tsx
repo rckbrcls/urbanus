@@ -15,10 +15,15 @@ import {
 import { Folder, GalleryVerticalEnd, Map, Moon, Sun } from "lucide-react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
-import { Button } from "./ui/button"
+import { useEffect, useState } from "react"
 
 export function AppSidebar() {
   const { setTheme, theme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const toggleTheme = () => {
     if (theme === "dark") {
@@ -80,11 +85,11 @@ export function AppSidebar() {
               className="size-8 p-0 flex items-center justify-center"
               onClick={toggleTheme}
             >
-              {theme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
+              {mounted && (theme === "dark" ? <Moon size={20} /> : <Sun size={20} />)}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-    </Sidebar>
+    </Sidebar >
   )
 }

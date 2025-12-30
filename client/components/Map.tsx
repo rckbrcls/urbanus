@@ -7,7 +7,7 @@ import { MAX_AREA_KM2, HIGHWAY_COLORS } from '../constants/map-constants';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useMapStore } from '@/stores/useMapStore';
-import { useProjectStore } from '@/stores/useProjectStore';
+import { useCreateProject } from '@/stores/useProjectStore';
 import { useBoundingBoxDrawing } from '@/hooks/useBoundingBoxDrawing';
 import { useDataProcessing } from '@/hooks/useDataProcessing';
 import { useMapInstance } from '@/hooks/useMapInstance';
@@ -40,7 +40,7 @@ export default function Map({
   const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   const router = useRouter();
-  const addProject = useProjectStore(state => state.addProject);
+  const { mutateAsync: createProject } = useCreateProject();
 
   // Dynamic Map Configuration
   // We determine the initial center/zoom for the map instance based on the mode.
@@ -430,7 +430,7 @@ export default function Map({
 
                       setIsSaving(true);
                       try {
-                        await addProject(newProject);
+                        await createProject(newProject);
                         router.push('/projects');
                       } catch (error) {
                         console.error("Failed to save project:", error);

@@ -1,6 +1,6 @@
 'use client';
 
-import { Project } from '../../stores/useProjectStore';
+import { Project } from '@/stores/useProjectStore';
 import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
