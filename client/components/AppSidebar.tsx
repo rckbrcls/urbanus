@@ -1,3 +1,5 @@
+'use client'
+
 import {
   Sidebar,
   SidebarContent,
@@ -10,10 +12,22 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Folder, GalleryVerticalEnd, Map } from "lucide-react"
+import { Folder, GalleryVerticalEnd, Map, Moon, Sun } from "lucide-react"
 import Link from "next/link"
+import { useTheme } from "next-themes"
+import { Button } from "./ui/button"
 
 export function AppSidebar() {
+  const { setTheme, theme } = useTheme()
+
+  const toggleTheme = () => {
+    if (theme === "dark") {
+      setTheme("light")
+    } else {
+      setTheme("dark")
+    }
+  }
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -28,6 +42,7 @@ export function AppSidebar() {
                   <span className="font-semibold">Urbanus</span>
                   <span className="">v1.0.0</span>
                 </div>
+
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -58,7 +73,18 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter />
+      <SidebarFooter >
+        <SidebarMenu>
+          <SidebarMenuItem >
+            <SidebarMenuButton
+              className="size-8 p-0 flex items-center justify-center"
+              onClick={toggleTheme}
+            >
+              {theme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }
