@@ -19,10 +19,7 @@ import {
     useMapContext,
     useMapKeyboard,
     MapErrorBoundary,
-    MapLoading,
     CropConfirmDialog,
-    MapControls,
-    MapInfoPanel,
     HIGHWAY_COLORS,
     AREA_LIMITS,
     GeoCalculations,
@@ -56,6 +53,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     const mapInstanceRef = useRef<L.Map | null>(null);
     const rectangleRef = useRef<L.Rectangle | null>(null);
     const streetsLayerRef = useRef<L.GeoJSON | null>(null);
+    const isInitializedRef = useRef(false);
 
     const router = useRouter();
     const { mutateAsync: createProject } = useCreateProject();
@@ -65,9 +63,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
 
     // Context
     const {
-        map,
         setMap,
-        isReady,
         setIsReady,
         viewMode,
         pendingBbox,
@@ -99,28 +95,34 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     const [lastZoom, setLastZoom] = useState<number>(zoom);
     const [projectName, setProjectName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [mapKey, setMapKey] = useState(0); // Force remount
 
     const isCropped = viewMode === 'cropped' || viewMode === 'edit';
 
-    // ============ MAP INITIALIZATION ============
+    // ============ MAP INITIALIZATION (Single Instance) ============
 
     useEffect(() => {
-        if (!mapRef.current || mapInstanceRef.current) return;
+        if (!mapRef.current) return;
+
+        // Already initialized
+        if (mapInstanceRef.current) {
+            return;
+        }
 
         const mapConfig = {
-            center: isCropped ? lastCenter : center,
-            zoom: isCropped ? lastZoom : zoom,
+            center: center as [number, number],
+            zoom: zoom,
         };
 
         const mapInstance = L.map(mapRef.current, {
             center: mapConfig.center,
             zoom: mapConfig.zoom,
-            zoomControl: !isCropped,
-            dragging: !isCropped,
-            scrollWheelZoom: !isCropped,
-            doubleClickZoom: !isCropped,
+            zoomControl: true,
+            dragging: true,
+            scrollWheelZoom: true,
+            doubleClickZoom: true,
             boxZoom: false,
-            keyboard: !isCropped,
+            keyboard: true,
         });
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -130,16 +132,55 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         }).addTo(mapInstance);
 
         mapInstanceRef.current = mapInstance;
+        isInitializedRef.current = true;
         setMap(mapInstance);
         setIsReady(true);
 
         return () => {
-            mapInstance.remove();
-            mapInstanceRef.current = null;
-            setMap(null);
-            setIsReady(false);
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current.remove();
+                mapInstanceRef.current = null;
+                isInitializedRef.current = false;
+                setMap(null);
+                setIsReady(false);
+            }
         };
-    }, [isCropped, center, zoom, lastCenter, lastZoom, setMap, setIsReady]);
+    }, [mapKey]); // Only remount on explicit key change
+
+    // ============ UPDATE MAP STATE WHEN CROPPED CHANGES ============
+
+    useEffect(() => {
+        const mapInstance = mapInstanceRef.current;
+        if (!mapInstance) return;
+
+        if (isCropped && activeBbox) {
+            // Lock map to bbox
+            const bounds = L.latLngBounds(
+                [activeBbox.southWest.lat, activeBbox.southWest.lng],
+                [activeBbox.northEast.lat, activeBbox.northEast.lng]
+            );
+
+            mapInstance.fitBounds(bounds, { animate: false });
+            mapInstance.setMaxBounds(bounds);
+            mapInstance.dragging.disable();
+            mapInstance.scrollWheelZoom.disable();
+            mapInstance.doubleClickZoom.disable();
+            mapInstance.keyboard.disable();
+            mapInstance.zoomControl.remove();
+        } else {
+            // Unlock map
+            mapInstance.setMaxBounds(null as unknown as L.LatLngBoundsExpression);
+            mapInstance.dragging.enable();
+            mapInstance.scrollWheelZoom.enable();
+            mapInstance.doubleClickZoom.enable();
+            mapInstance.keyboard.enable();
+
+            // Add zoom control if not present
+            if (!mapInstance.zoomControl) {
+                L.control.zoom().addTo(mapInstance);
+            }
+        }
+    }, [isCropped, activeBbox]);
 
     // ============ STORE SYNC ============
 
@@ -148,10 +189,15 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         if (!mapInstance || isCropped) return;
 
         const handleMoveEnd = () => {
-            const c = mapInstance.getCenter();
-            const z = mapInstance.getZoom();
-            setMapState([c.lat, c.lng], z);
-            if (!hasInitialized) setInitialized();
+            if (!mapInstanceRef.current) return; // Guard against removed map
+            try {
+                const c = mapInstance.getCenter();
+                const z = mapInstance.getZoom();
+                setMapState([c.lat, c.lng], z);
+                if (!hasInitialized) setInitialized();
+            } catch {
+                // Map may have been removed
+            }
         };
 
         mapInstance.on('moveend', handleMoveEnd);
@@ -170,13 +216,15 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
 
         const handleMouseDown = (e: L.LeafletMouseEvent) => {
             if (!e.originalEvent.shiftKey) return;
+            if (!mapInstanceRef.current) return;
+
             startPoint = e.latlng;
             setIsDrawing(true);
             mapInstance.dragging.disable();
         };
 
         const handleMouseMove = (e: L.LeafletMouseEvent) => {
-            if (!startPoint) return;
+            if (!startPoint || !mapInstanceRef.current) return;
 
             const bounds = L.latLngBounds(startPoint, e.latlng);
 
@@ -192,7 +240,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         };
 
         const handleMouseUp = (e: L.LeafletMouseEvent) => {
-            if (!startPoint) return;
+            if (!startPoint || !mapInstanceRef.current) return;
 
             const bounds = L.latLngBounds(startPoint, e.latlng);
             const bbox: BoundingBox = {
@@ -208,6 +256,12 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                 if (rectangleRef.current) {
                     rectangleRef.current.setStyle({ color: '#ef4444' });
                 }
+            } else if (area < 0.001) {
+                // Too small, ignore
+                if (rectangleRef.current) {
+                    rectangleRef.current.remove();
+                    rectangleRef.current = null;
+                }
             } else {
                 setPendingBbox(bbox, area);
             }
@@ -222,16 +276,18 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         mapInstance.on('mouseup', handleMouseUp);
 
         return () => {
-            mapInstance.off('mousedown', handleMouseDown);
-            mapInstance.off('mousemove', handleMouseMove);
-            mapInstance.off('mouseup', handleMouseUp);
+            if (mapInstanceRef.current) {
+                mapInstance.off('mousedown', handleMouseDown);
+                mapInstance.off('mousemove', handleMouseMove);
+                mapInstance.off('mouseup', handleMouseUp);
+            }
         };
     }, [enableBoundingBox, isCropped, setPendingBbox, setValidationError]);
 
     // ============ CONFIRM BBOX ============
 
     const handleConfirmCrop = useCallback(() => {
-        if (!pendingBbox) return;
+        if (!pendingBbox || !mapInstanceRef.current) return;
 
         const bboxCenter: [number, number] = [
             (pendingBbox.southWest.lat + pendingBbox.northEast.lat) / 2,
@@ -239,7 +295,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         ];
 
         setLastCenter(bboxCenter);
-        setLastZoom(mapInstanceRef.current?.getZoom() || zoom);
+        setLastZoom(mapInstanceRef.current.getZoom());
 
         // Calculate dimensions
         const latDiff = pendingBbox.northEast.lat - pendingBbox.southWest.lat;
@@ -276,7 +332,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         }
 
         confirmBbox();
-    }, [pendingBbox, zoom, confirmBbox]);
+    }, [pendingBbox, confirmBbox]);
 
     // ============ CANCEL BBOX ============
 
@@ -285,19 +341,25 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
             rectangleRef.current.remove();
             rectangleRef.current = null;
         }
+        setValidationError(null);
         cancelBbox();
-    }, [cancelBbox]);
+    }, [cancelBbox, setValidationError]);
 
     // ============ BACK TO FULL VIEW ============
 
     const handleBack = useCallback(() => {
-        clearBbox();
-        setCropDimensions(null);
-        if (streetsLayerRef.current) {
+        if (streetsLayerRef.current && mapInstanceRef.current) {
             streetsLayerRef.current.remove();
             streetsLayerRef.current = null;
         }
-    }, [clearBbox]);
+        setCropDimensions(null);
+        clearBbox();
+
+        // Restore view
+        if (mapInstanceRef.current) {
+            mapInstanceRef.current.setView(lastCenter, lastZoom, { animate: false });
+        }
+    }, [clearBbox, lastCenter, lastZoom]);
 
     // ============ ADD STREETS LAYER ============
 
@@ -325,25 +387,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
             },
         }).addTo(mapInstance);
     }, [streetsData]);
-
-    // ============ LOCK TO BBOX ============
-
-    useEffect(() => {
-        const mapInstance = mapInstanceRef.current;
-        if (!mapInstance || !isCropped || !activeBbox) return;
-
-        const bounds = L.latLngBounds(
-            [activeBbox.southWest.lat, activeBbox.southWest.lng],
-            [activeBbox.northEast.lat, activeBbox.northEast.lng]
-        );
-
-        mapInstance.fitBounds(bounds, { animate: false });
-        mapInstance.setMaxBounds(bounds);
-        mapInstance.dragging.disable();
-        mapInstance.scrollWheelZoom.disable();
-        mapInstance.doubleClickZoom.disable();
-        mapInstance.keyboard.disable();
-    }, [isCropped, activeBbox]);
 
     // ============ SAVE PROJECT ============
 
@@ -391,7 +434,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
 
                 {/* Map Container */}
                 <div
-                    key={isCropped ? 'cropped' : 'full'}
                     ref={mapRef}
                     className={
                         isCropped
@@ -429,7 +471,32 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                         )}
 
                         {/* Crop Confirmation */}
-                        <CropConfirmDialog />
+                        {pendingBbox && (
+                            <div className="absolute right-4 top-4 z-[2000] w-80 rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
+                                <h3 className="mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                                    Crop to area?
+                                </h3>
+                                <div className="mb-4 space-y-2 text-xs">
+                                    <p className="text-zinc-600 dark:text-zinc-400">
+                                        Area: <strong className="text-zinc-900 dark:text-zinc-100">{bboxArea.toFixed(2)} km²</strong>
+                                    </p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleCancelCrop}
+                                        className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleConfirmCrop}
+                                        className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                                    >
+                                        Crop
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </>
                 )}
 
