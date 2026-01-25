@@ -2,11 +2,12 @@
  * Camada de Nós do Mapa
  *
  * Renderiza e gerencia interatividade com nós (vértices de ruas)
+ * Otimizado com React.memo para evitar re-renders desnecessários
  */
 
 'use client';
 
-import { useEffect, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import L from 'leaflet';
 import type { MapNode, LatLng, NodeEditMode } from '../types';
 import { NODE_STYLES } from '../constants';
@@ -29,7 +30,15 @@ interface NodesLayerProps {
     onDoubleClick?: (node: MapNode) => void;
 }
 
-export function NodesLayer({
+/**
+ * NodesLayer Component
+ *
+ * Optimized for performance with:
+ * - React.memo with custom comparison
+ * - Stable callbacks with useCallback
+ * - Efficient marker updates
+ */
+function NodesLayerComponent({
     mapInstance,
     nodes,
     selectedIds,
@@ -49,21 +58,20 @@ export function NodesLayer({
     const layerRef = useRef<L.LayerGroup | null>(null);
     const markersRef = useRef<Map<string, L.CircleMarker>>(new Map());
 
-    // Converter selectedIds para Set para lookup rápido
+    // Convert selectedIds to Set for fast lookup
     const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-    // Determina estilo do nó
+    // Determine node style
     const getNodeStyle = useCallback(
         (node: MapNode, isSelected: boolean, isHovered: boolean, isBeingDragged: boolean): L.CircleMarkerOptions => {
             let style = NODE_STYLES.default;
 
-            // Prioridade de estilos (do menor para o maior)
+            // Style priority (lowest to highest)
             if (node.isEndpoint && showEndpoints) {
                 style = NODE_STYLES.endpoint;
             }
 
             if (node.isIntersection && showIntersections) {
-                // Usar cor de endpoint para interseções também (ou criar estilo próprio)
                 style = NODE_STYLES.endpoint;
             }
 
@@ -80,7 +88,6 @@ export function NodesLayer({
             }
 
             if (node.isLocked) {
-                // Estilo para nós bloqueados - usar cor mais escura
                 return {
                     radius: style.radius,
                     color: '#374151', // gray-700
@@ -95,38 +102,37 @@ export function NodesLayer({
                 color: style.color,
                 fillColor: style.color,
                 fillOpacity: style.fillOpacity,
-                weight: 2,
+                weight: isSelected ? 3 : 2,
             };
         },
         [showEndpoints, showIntersections]
     );
 
-    // Cria/atualiza camada de nós
+    // Create/update nodes layer
     useEffect(() => {
         if (!mapInstance) return;
 
-        // Remove camada anterior
+        // Remove previous layer
         if (layerRef.current) {
             layerRef.current.remove();
         }
 
-        // Cria nova camada
+        // Create new layer
         layerRef.current = L.layerGroup().addTo(mapInstance);
         markersRef.current.clear();
 
-        // Adiciona marcadores para cada nó
-        nodes.forEach((node) => {
+        // Separate nodes: regular nodes vs dragged node
+        const regularNodes = nodes.filter((n) => n.id !== draggedNodeId);
+        const draggedNode = nodes.find((n) => n.id === draggedNodeId);
+
+        // Add markers for regular nodes first
+        regularNodes.forEach((node) => {
             const isSelected = selectedIdSet.has(node.id);
             const isHovered = node.id === hoveredId;
-            const isBeingDragged = node.id === draggedNodeId;
 
-            // Determina posição (usa posição de drag se estiver arrastando)
-            const position = isBeingDragged && dragPosition ? dragPosition : node.position;
+            const style = getNodeStyle(node, isSelected, isHovered, false);
 
-            // Determina estilo
-            const style = getNodeStyle(node, isSelected, isHovered, isBeingDragged);
-
-            const marker = L.circleMarker([position.lat, position.lng], style);
+            const marker = L.circleMarker([node.position.lat, node.position.lng], style);
 
             // Tooltip
             const tooltipContent = buildTooltipContent(node, showElevation);
@@ -139,7 +145,7 @@ export function NodesLayer({
                 });
             }
 
-            // Event handlers se editável
+            // Event handlers if editable
             if (editable && editMode !== 'none') {
                 marker.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
@@ -157,7 +163,7 @@ export function NodesLayer({
                 marker.on('mouseover', () => onNodeHover?.(node.id));
                 marker.on('mouseout', () => onNodeHover?.(null));
 
-                // Drag handlers (só inicia se já está selecionado e modo é 'move')
+                // Drag handlers (only start if already selected and mode is 'move')
                 if (editMode === 'move' || editMode === 'select') {
                     marker.on('mousedown', (e) => {
                         if (isSelected && !node.isLocked) {
@@ -167,7 +173,7 @@ export function NodesLayer({
                     });
                 }
 
-                // Cursor baseado no modo
+                // Cursor based on mode
                 const element = marker.getElement() as HTMLElement | undefined;
                 if (element) {
                     switch (editMode) {
@@ -189,6 +195,25 @@ export function NodesLayer({
             marker.addTo(layerRef.current!);
             markersRef.current.set(node.id, marker);
         });
+
+        // Add dragged node last (renders on top)
+        if (draggedNode && dragPosition) {
+            const isSelected = selectedIdSet.has(draggedNode.id);
+            const style = getNodeStyle(draggedNode, isSelected, false, true);
+
+            const marker = L.circleMarker([dragPosition.lat, dragPosition.lng], style);
+
+            // Dragging tooltip
+            marker.bindTooltip(`Moving...`, {
+                permanent: true,
+                direction: 'top',
+                offset: [0, -10],
+                className: 'node-tooltip dragging',
+            });
+
+            marker.addTo(layerRef.current!);
+            markersRef.current.set(draggedNode.id, marker);
+        }
 
         // Cleanup
         return () => {
@@ -215,17 +240,17 @@ export function NodesLayer({
 }
 
 /**
- * Constrói conteúdo do tooltip
+ * Build tooltip content
  */
 function buildTooltipContent(node: MapNode, showElevation: boolean): string {
     const parts: string[] = [];
 
-    // Elevação
+    // Elevation
     if (showElevation && node.elevation !== null) {
         parts.push(`${node.elevation.toFixed(1)}m`);
     }
 
-    // Nome da rua
+    // Street name
     if (node.streetName && node.streetName !== 'Unnamed') {
         parts.push(node.streetName);
     }
@@ -233,12 +258,76 @@ function buildTooltipContent(node: MapNode, showElevation: boolean): string {
     // Badges
     const badges: string[] = [];
     if (node.isEndpoint) badges.push('Endpoint');
-    if (node.isIntersection) badges.push('Interseção');
-    if (node.isLocked) badges.push('🔒');
+    if (node.isIntersection) badges.push('Intersection');
+    if (node.isLocked) badges.push('Locked');
 
     if (badges.length > 0) {
         parts.push(`[${badges.join(', ')}]`);
     }
 
-    return parts.join(' • ');
+    return parts.join(' | ');
 }
+
+/**
+ * Custom comparison function for React.memo
+ * Only re-render when relevant props change
+ */
+function arePropsEqual(prevProps: NodesLayerProps, nextProps: NodesLayerProps): boolean {
+    // Always re-render if map instance changes
+    if (prevProps.mapInstance !== nextProps.mapInstance) return false;
+
+    // Compare primitive values
+    if (prevProps.hoveredId !== nextProps.hoveredId) return false;
+    if (prevProps.draggedNodeId !== nextProps.draggedNodeId) return false;
+    if (prevProps.editMode !== nextProps.editMode) return false;
+    if (prevProps.editable !== nextProps.editable) return false;
+    if (prevProps.showElevation !== nextProps.showElevation) return false;
+    if (prevProps.showEndpoints !== nextProps.showEndpoints) return false;
+    if (prevProps.showIntersections !== nextProps.showIntersections) return false;
+
+    // Compare drag position
+    if (prevProps.dragPosition !== nextProps.dragPosition) {
+        if (!prevProps.dragPosition || !nextProps.dragPosition) return false;
+        if (
+            prevProps.dragPosition.lat !== nextProps.dragPosition.lat ||
+            prevProps.dragPosition.lng !== nextProps.dragPosition.lng
+        ) {
+            return false;
+        }
+    }
+
+    // Compare nodes array (reference equality first, then length)
+    if (prevProps.nodes !== nextProps.nodes) {
+        if (prevProps.nodes.length !== nextProps.nodes.length) return false;
+        // Deep comparison would be too expensive, rely on reference
+        return false;
+    }
+
+    // Compare selectedIds array
+    if (prevProps.selectedIds !== nextProps.selectedIds) {
+        if (prevProps.selectedIds.length !== nextProps.selectedIds.length) return false;
+        const prevSet = new Set(prevProps.selectedIds);
+        const nextSet = new Set(nextProps.selectedIds);
+        for (const id of prevSet) {
+            if (!nextSet.has(id)) return false;
+        }
+    }
+
+    // Callbacks comparison (by reference)
+    if (prevProps.onNodeClick !== nextProps.onNodeClick) return false;
+    if (prevProps.onNodeHover !== nextProps.onNodeHover) return false;
+    if (prevProps.onDragStart !== nextProps.onDragStart) return false;
+    if (prevProps.onDoubleClick !== nextProps.onDoubleClick) return false;
+
+    return true;
+}
+
+/**
+ * Memoized NodesLayer component
+ */
+export const NodesLayer = memo(NodesLayerComponent, arePropsEqual);
+
+/**
+ * Export the non-memoized version for cases where memo is not needed
+ */
+export { NodesLayerComponent };

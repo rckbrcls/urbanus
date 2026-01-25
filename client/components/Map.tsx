@@ -1,14 +1,16 @@
 /**
  * Componente Map
  *
- * Componente principal do mapa usando o módulo refatorado.
+ * Componente principal do mapa para seleção de área e carregamento de dados.
  * Usa MapProvider para gerenciar estado global.
- * Inclui sistema de edição de nós.
+ *
+ * NOTA: A edição completa de nós é feita na página de projeto (/projects/[id]).
+ * Este componente mostra nós apenas como visualização (pequenos, não interativos).
  */
 
 'use client';
 
-import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useRouter } from 'next/navigation';
@@ -18,19 +20,13 @@ import { v4 as uuidv4 } from 'uuid';
 import {
     MapProvider,
     useMapContext,
-    useMapKeyboard,
     MapErrorBoundary,
-    NodesLayer,
-    NodeEditor,
     HIGHWAY_COLORS,
     AREA_LIMITS,
-    NODE_STYLES,
     GeoCalculations,
     NodesService,
     type BoundingBox,
     type MapContainerProps,
-    type MapNode,
-    type NodeEditMode,
 } from '@/features/map';
 
 // Stores
@@ -81,20 +77,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         streetsData,
         streetCount,
         nodes,
-        nodeEditMode,
-        selectedNodeIds,
-        hoveredNodeId,
-        setNodes,
-        setNodeEditMode,
-        selectNode,
-        selectNodes,
-        clearSelection,
-        setHoveredNode,
-        moveNode,
-        deleteNode,
-        deleteSelected,
-        undo,
-        redo,
         showSaveDialog,
         setShowSaveDialog,
         validationError,
@@ -106,9 +88,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         setValidationError,
     } = useMapContext();
 
-    // Keyboard shortcuts
-    useMapKeyboard();
-
     // UI State
     const [isDrawing, setIsDrawing] = useState(false);
     const [cropDimensions, setCropDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -116,20 +95,11 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     const [lastZoom, setLastZoom] = useState<number>(zoom);
     const [projectName, setProjectName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    const [dragPosition, setDragPosition] = useState<{ lat: number; lng: number } | null>(null);
-    const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
 
     const isCropped = viewMode === 'cropped' || viewMode === 'edit';
 
-    // Selected nodes
-    const selectedNodes = useMemo(() => {
-        return nodes.filter((n) => selectedNodeIds.includes(n.id));
-    }, [nodes, selectedNodeIds]);
-
-    // NodesService for undo/redo status
+    // NodesService for applying nodes to streets
     const nodesService = NodesService.getInstance();
-    const canUndo = nodesService.canUndo();
-    const canRedo = nodesService.canRedo();
 
     // ============ MAP INITIALIZATION ============
 
@@ -279,7 +249,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
             const area = GeoCalculations.calculateArea(bbox);
 
             if (area > AREA_LIMITS.MAX_BBOX_AREA_KM2) {
-                setValidationError(`Área excede ${AREA_LIMITS.MAX_BBOX_AREA_KM2} km²`);
+                setValidationError(`Area exceeds ${AREA_LIMITS.MAX_BBOX_AREA_KM2} km²`);
                 if (rectangleRef.current) {
                     rectangleRef.current.setStyle({ color: '#ef4444' });
                 }
@@ -332,16 +302,19 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
             onEachFeature: (feature, layer) => {
                 const name = feature.properties?.name || 'Unnamed';
                 const highway = feature.properties?.highway || 'unknown';
-                layer.bindTooltip(`${name} (${highway})`, { sticky: true });
+                const elevation = feature.properties?.elevation;
+
+                let tooltipContent = `<strong>${name}</strong><br/>${highway}`;
+                if (elevation) {
+                    tooltipContent += `<br/><span style="color: #666">Elev: ${elevation.avg?.toFixed(1) ?? 'N/A'}m</span>`;
+                }
+
+                layer.bindTooltip(tooltipContent, { sticky: true });
             },
         }).addTo(mapInstance);
+    }, [streetsData, isCropped]);
 
-        // Extract nodes from streets
-        const extractedNodes = nodesService.extractNodesFromStreets(streetsData);
-        setNodes(extractedNodes);
-    }, [streetsData, isCropped, nodesService, setNodes]);
-
-    // ============ NODES LAYER ============
+    // ============ NODES LAYER (Read-only, small) ============
 
     useEffect(() => {
         const mapInstance = mapInstanceRef.current;
@@ -351,101 +324,27 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         // Clear existing nodes
         nodesLayer.clearLayers();
 
-        // Add nodes as circle markers
+        // Add nodes as small, read-only circle markers
         nodes.forEach((node) => {
-            const isSelected = selectedNodeIds.includes(node.id);
-            const isHovered = hoveredNodeId === node.id;
-            const isDragging = draggedNodeId === node.id;
-
-            // Determine style
-            let style = NODE_STYLES.default;
-            if (isDragging) {
-                style = NODE_STYLES.dragging;
-            } else if (isSelected) {
-                style = NODE_STYLES.selected;
-            } else if (isHovered) {
-                style = NODE_STYLES.hovered;
-            } else if (node.isEndpoint) {
-                style = NODE_STYLES.endpoint;
-            }
-
-            const position = isDragging && dragPosition
-                ? [dragPosition.lat, dragPosition.lng] as [number, number]
-                : [node.position.lat, node.position.lng] as [number, number];
-
-            const marker = L.circleMarker(position, {
-                radius: style.radius,
-                color: style.color,
-                fillColor: style.color,
-                fillOpacity: style.fillOpacity,
-                weight: isSelected ? 3 : 2,
+            const marker = L.circleMarker([node.position.lat, node.position.lng], {
+                radius: 3, // Small radius for preview
+                color: node.isEndpoint ? '#f59e0b' : '#6b7280', // amber for endpoints, gray for others
+                fillColor: node.isEndpoint ? '#f59e0b' : '#6b7280',
+                fillOpacity: 0.6,
+                weight: 1,
             });
 
-            // Tooltip
+            // Simple tooltip with elevation info
             const elevText = node.elevation !== null ? `${node.elevation.toFixed(1)}m` : 'N/A';
-            marker.bindTooltip(
-                `<div style="font-size: 11px;">
-          <strong>${node.streetName || 'Unnamed'}</strong><br/>
-          Elevation: ${elevText}<br/>
-          ${node.isEndpoint ? '🔷 Endpoint' : '⚪ Vertex'}
-        </div>`,
-                { direction: 'top', offset: [0, -10] }
-            );
-
-            // Event handlers
-            marker.on('click', (e: L.LeafletMouseEvent) => {
-                L.DomEvent.stopPropagation(e);
-
-                if (nodeEditMode === 'delete') {
-                    deleteNode(node.id);
-                } else {
-                    selectNode(node.id, e.originalEvent.ctrlKey || e.originalEvent.metaKey);
-                }
+            marker.bindTooltip(`${elevText}`, {
+                direction: 'top',
+                offset: [0, -5],
+                className: 'node-preview-tooltip',
             });
-
-            marker.on('mouseover', () => {
-                setHoveredNode(node.id);
-            });
-
-            marker.on('mouseout', () => {
-                setHoveredNode(null);
-            });
-
-            // Drag handling for move mode
-            if (nodeEditMode === 'move' && (isSelected || nodes.filter(n => selectedNodeIds.includes(n.id)).length === 0)) {
-                let isDraggingNode = false;
-
-                marker.on('mousedown', (e: L.LeafletMouseEvent) => {
-                    if (nodeEditMode !== 'move') return;
-                    L.DomEvent.stopPropagation(e);
-                    isDraggingNode = true;
-                    setDraggedNodeId(node.id);
-                    mapInstance.dragging.disable();
-                });
-
-                const handleDrag = (e: L.LeafletMouseEvent) => {
-                    if (!isDraggingNode) return;
-                    setDragPosition({ lat: e.latlng.lat, lng: e.latlng.lng });
-                };
-
-                const handleDragEnd = async (e: L.LeafletMouseEvent) => {
-                    if (!isDraggingNode) return;
-                    isDraggingNode = false;
-
-                    await moveNode(node.id, { lat: e.latlng.lat, lng: e.latlng.lng });
-
-                    setDraggedNodeId(null);
-                    setDragPosition(null);
-                    mapInstance.dragging.enable();
-                };
-
-                mapInstance.on('mousemove', handleDrag);
-                mapInstance.on('mouseup', handleDragEnd);
-            }
 
             nodesLayer.addLayer(marker);
         });
-    }, [nodes, selectedNodeIds, hoveredNodeId, nodeEditMode, draggedNodeId, dragPosition, isCropped, selectNode, setHoveredNode, deleteNode, moveNode]);
+    }, [nodes, isCropped]);
 
     // ============ CONFIRM BBOX ============
 
@@ -594,7 +493,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
 
                         {validationError && (
                             <div className="absolute left-1/2 top-20 z-[1100] -translate-x-1/2 rounded-lg bg-red-500/95 px-4 py-2 text-sm font-medium text-white shadow-lg backdrop-blur-sm">
-                                ⚠️ {validationError}
+                                {validationError}
                             </div>
                         )}
 
@@ -687,93 +586,15 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                             )}
                         </div>
 
-                        {/* Edit Mode Controls - show when data is loaded */}
-                        {stages.streets === 'success' && nodes.length > 0 && (
-                            <div className="absolute right-3 top-3 flex flex-col gap-2" style={{ pointerEvents: 'auto' }}>
-                                <div className="rounded-lg bg-white/95 p-2 shadow-md backdrop-blur-sm dark:bg-zinc-800/95">
-                                    <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">Edit Mode</p>
-                                    <div className="flex gap-1">
-                                        <EditModeButton
-                                            active={nodeEditMode === 'select'}
-                                            onClick={() => setNodeEditMode('select')}
-                                            title="Select (V)"
-                                        >
-                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                                            </svg>
-                                        </EditModeButton>
-                                        <EditModeButton
-                                            active={nodeEditMode === 'move'}
-                                            onClick={() => setNodeEditMode('move')}
-                                            title="Move (M)"
-                                        >
-                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                            </svg>
-                                        </EditModeButton>
-                                        <EditModeButton
-                                            active={nodeEditMode === 'delete'}
-                                            onClick={() => setNodeEditMode('delete')}
-                                            title="Delete (D)"
-                                        >
-                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </EditModeButton>
-                                    </div>
-
-                                    {/* Undo/Redo */}
-                                    <div className="mt-2 flex gap-1 border-t border-zinc-200 pt-2 dark:border-zinc-700">
-                                        <button
-                                            onClick={undo}
-                                            disabled={!canUndo}
-                                            className="flex-1 rounded p-1.5 text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                                            title="Undo (Ctrl+Z)"
-                                        >
-                                            <svg className="mx-auto h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={redo}
-                                            disabled={!canRedo}
-                                            className="flex-1 rounded p-1.5 text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                                            title="Redo (Ctrl+Shift+Z)"
-                                        >
-                                            <svg className="mx-auto h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Selection Info */}
-                                {selectedNodes.length > 0 && (
-                                    <div className="rounded-lg bg-white/95 p-2 shadow-md backdrop-blur-sm dark:bg-zinc-800/95">
-                                        <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                                            {selectedNodes.length} node{selectedNodes.length > 1 ? 's' : ''} selected
-                                        </p>
-                                        <div className="mt-2 flex gap-1">
-                                            <button
-                                                onClick={clearSelection}
-                                                className="flex-1 rounded bg-zinc-200 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300"
-                                            >
-                                                Clear
-                                            </button>
-                                            <button
-                                                onClick={deleteSelected}
-                                                className="flex-1 rounded bg-red-500 px-2 py-1 text-xs text-white hover:bg-red-600"
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Node count */}
+                        {/* Node count indicator */}
+                        {nodes.length > 0 && (
+                            <div className="absolute right-3 top-3" style={{ pointerEvents: 'auto' }}>
                                 <div className="rounded-lg bg-white/95 px-2 py-1.5 shadow-md backdrop-blur-sm dark:bg-zinc-800/95">
                                     <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                                        {nodes.length} nodes
+                                        {nodes.length} nodes (preview)
+                                    </p>
+                                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                                        Edit in project page
                                     </p>
                                 </div>
                             </div>
@@ -784,12 +605,12 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                             <div className="absolute left-3 top-14 flex flex-col gap-2" style={{ pointerEvents: 'auto' }}>
                                 {stages.streets === 'error' && (
                                     <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                                        ⚠️ Streets: {errors.streets || 'Failed'}
+                                        Streets: {errors.streets || 'Failed'}
                                     </span>
                                 )}
                                 {stages.topography === 'error' && (
                                     <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                                        ⚠️ Topography: {errors.topography || 'Failed'}
+                                        Topography: {errors.topography || 'Failed'}
                                     </span>
                                 )}
                             </div>
@@ -856,32 +677,5 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                 )}
             </div>
         </div>
-    );
-}
-
-// ============ EDIT MODE BUTTON ============
-
-function EditModeButton({
-    active,
-    onClick,
-    title,
-    children,
-}: {
-    active: boolean;
-    onClick: () => void;
-    title: string;
-    children: React.ReactNode;
-}) {
-    return (
-        <button
-            onClick={onClick}
-            title={title}
-            className={`rounded p-2 transition-colors ${active
-                    ? 'bg-blue-500 text-white'
-                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700'
-                }`}
-        >
-            {children}
-        </button>
     );
 }

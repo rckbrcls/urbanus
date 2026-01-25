@@ -49,6 +49,16 @@ const deleteProject = async (id: string): Promise<void> => {
   if (!response.ok) throw new Error("Failed to delete project");
 };
 
+const updateProject = async (project: Project): Promise<Project> => {
+  const response = await fetch(`${API_URL}/projects/${project.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(project),
+  });
+  if (!response.ok) throw new Error("Failed to update project");
+  return response.json();
+};
+
 // React Query Hooks
 export const useProjects = () => {
   return useQuery({
@@ -81,6 +91,17 @@ export const useDeleteProject = () => {
     mutationFn: deleteProject,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+};
+
+export const useUpdateProject = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateProject,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", data.id] });
     },
   });
 };

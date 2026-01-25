@@ -3,6 +3,7 @@
  */
 
 export * from "./NodesLayer";
+export * from "./EdgesLayer";
 export * from "./NodeEditor";
 export * from "./MapStatusBar";
 export * from "./ElevationLegend";
