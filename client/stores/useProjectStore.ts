@@ -50,8 +50,9 @@ const deleteProject = async (id: string): Promise<void> => {
 };
 
 const updateProject = async (project: Project): Promise<Project> => {
-  const response = await fetch(`${API_URL}/projects/${project.id}`, {
-    method: "PUT",
+  // Use POST with upsert (server uses replace_one with upsert=True)
+  const response = await fetch(`${API_URL}/projects`, {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(project),
   });
