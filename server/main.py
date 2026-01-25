@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
+from elevation import enrich_geojson as _enrich_geojson
+
 app = FastAPI()
 
 # CORS
@@ -45,6 +47,20 @@ class Project(BaseModel):
     stats: ProjectStats
     streets: Dict[str, Any]
 
+
+class ElevationEnrichBbox(BaseModel):
+    south: float
+    north: float
+    west: float
+    east: float
+
+
+class ElevationEnrichRequest(BaseModel):
+    geojson: Dict[str, Any]
+    bbox: ElevationEnrichBbox
+    demType: Optional[str] = "COP30"
+
+
 @app.get("/")
 def read_root():
     return {"status": "ok"}
@@ -74,3 +90,22 @@ async def delete_project(project_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"status": "deleted"}
+
+
+@app.post("/elevation/enrich")
+async def elevation_enrich(req: ElevationEnrichRequest):
+    """Enrich GeoJSON with elevation from GeoTIFF (OpenTopography)."""
+    try:
+        enriched = _enrich_geojson(
+            req.geojson,
+            south=req.bbox.south,
+            north=req.bbox.north,
+            west=req.bbox.west,
+            east=req.bbox.east,
+            dem_type=req.demType or "COP30",
+        )
+        return enriched
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

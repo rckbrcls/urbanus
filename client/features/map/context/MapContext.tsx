@@ -17,7 +17,7 @@ import {
 } from 'react';
 import type L from 'leaflet';
 import type { LatLng, BoundingBox, ViewMode, NodeEditMode, MapNode } from '../types';
-import { ElevationService, type ElevationData } from '../services/ElevationService';
+import { ElevationService } from '../services/ElevationService';
 import { NodesService } from '../services/NodesService';
 import { StreetsService } from '../services/StreetsService';
 import {
@@ -127,29 +127,24 @@ export function MapProvider({
         dispatch({ type: 'SET_STAGES', payload: { streets: 'loading' } });
 
         try {
-            // 1. Buscar ruas
+            // 1. Fetch streets
             const streetsResult = await streetsService.fetchStreets(activeBbox);
             dispatch({ type: 'SET_STREETS_DATA', payload: streetsResult.geojson });
             dispatch({ type: 'SET_STAGES', payload: { streets: 'success' } });
             onStreetsLoaded?.(streetsResult.geojson);
 
-            // 2. Buscar elevação
+            // 2. Enrich with elevation (server-side: Python + rasterio)
             dispatch({ type: 'SET_STAGES', payload: { topography: 'loading' } });
-            const elevationResult = await elevationService.fetchElevation(activeBbox);
-            dispatch({ type: 'SET_ELEVATION_DATA', payload: elevationResult.data });
-            dispatch({ type: 'SET_STAGES', payload: { topography: 'success' } });
-
-            // 3. Enriquecer ruas com elevação
-            const enrichedStreets = elevationService.enrichGeoJSON(
+            const enrichedStreets = await elevationService.fetchEnrichedGeoJSON(
                 streetsResult.geojson,
-                elevationResult.data
+                activeBbox,
             );
+            dispatch({ type: 'SET_STAGES', payload: { topography: 'success' } });
             dispatch({ type: 'SET_STREETS_DATA', payload: enrichedStreets });
 
-            // 4. Extrair nós
+            // 3. Extract nodes from enriched streets
             const extractedNodes = nodesService.extractNodesFromStreets(enrichedStreets);
             dispatch({ type: 'SET_NODES', payload: extractedNodes });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error('Erro desconhecido');
             onError?.(err);
@@ -306,15 +301,11 @@ export function MapProvider({
         dispatch({ type: 'SET_STREETS_DATA', payload: data });
     }, []);
 
-    const setElevationData = useCallback((data: ElevationData | null) => {
-        dispatch({ type: 'SET_ELEVATION_DATA', payload: data });
-    }, []);
-
     const enrichStreetsWithElevation = useCallback(async () => {
-        const { streetsData, elevationData } = stateRef.current;
-        if (!streetsData || !elevationData) return;
+        const { streetsData, activeBbox } = stateRef.current;
+        if (!streetsData || !activeBbox) return;
 
-        const enriched = elevationService.enrichGeoJSON(streetsData, elevationData);
+        const enriched = await elevationService.fetchEnrichedGeoJSON(streetsData, activeBbox);
         dispatch({ type: 'SET_STREETS_DATA', payload: enriched });
     }, [elevationService]);
 
@@ -376,7 +367,6 @@ export function MapProvider({
             undo,
             redo,
             setStreetsData,
-            setElevationData,
             enrichStreetsWithElevation,
             applyNodeChanges,
             setShowCropConfirm,
@@ -408,7 +398,6 @@ export function MapProvider({
             undo,
             redo,
             setStreetsData,
-            setElevationData,
             enrichStreetsWithElevation,
             applyNodeChanges,
             setShowCropConfirm,
@@ -451,7 +440,6 @@ export function useMapState() {
         stages: context.stages,
         errors: context.errors,
         streetsData: context.streetsData,
-        elevationData: context.elevationData,
         streetCount: context.streetCount,
         nodes: context.nodes,
         nodeEditMode: context.nodeEditMode,

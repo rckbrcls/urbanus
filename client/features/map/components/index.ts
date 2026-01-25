@@ -12,3 +12,4 @@ export * from "./MapInfoPanel";
 export * from "./CropConfirmDialog";
 export * from "./MapErrorBoundary";
 export * from "./MapLoading";
+export * from "./GraphProcessingPanel";

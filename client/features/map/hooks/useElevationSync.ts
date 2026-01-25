@@ -7,14 +7,15 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react';
-import { ElevationService, type ElevationData } from '../services/ElevationService';
+import { ElevationService } from '../services/ElevationService';
 import type { MapNode } from '../types';
 
 interface UseElevationSyncOptions {
     /**
-     * Dados de elevação carregados
+     * Elevation data for lookup (client-side lookup removed; server enriches only).
+     * Pass null to skip sync; hook no-ops when null.
      */
-    elevationData: ElevationData | null;
+    elevationData: unknown | null;
     /**
      * Se deve usar interpolação bilinear
      */

@@ -113,6 +113,11 @@ export const NODE_STYLES: Record<string, NodeStyleEntry> = {
     radius: 10,
     fillOpacity: 0.8,
   },
+  intermediate: {
+    color: "#22c55e", // green-500 (nós criados pelo algoritmo)
+    radius: 7,
+    fillOpacity: 0.8,
+  },
 };
 
 // ============ RESTRIÇÕES DE NÓS ============

@@ -4,20 +4,7 @@ import { Project } from '@/stores/useProjectStore';
 import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
-
-const MapContainer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const Rectangle = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Rectangle),
-  { ssr: false }
-);
+import { MapContainer, TileLayer, Rectangle } from '@/features/map/utils';
 
 interface ProjectCardProps {
   project: Project;

@@ -33,7 +33,6 @@ export function MapInfoPanel({
         nodes,
         stages,
         isProcessing,
-        elevationData,
     } = useMapContext();
 
     const isCropped = viewMode === 'cropped' || viewMode === 'edit';
@@ -49,23 +48,18 @@ export function MapInfoPanel({
         };
     }, [nodes]);
 
-    // Estatísticas de elevação
+    // Estatísticas de elevação (a partir dos nós)
     const elevationStats = useMemo(() => {
-        if (!elevationData) return null;
-
-        // Calcular min/max/avg das elevações dos nós
         const elevations = nodes
             .map((n) => n.elevation)
             .filter((e): e is number => e !== null);
-
         if (elevations.length === 0) return null;
-
         return {
             min: Math.min(...elevations),
             max: Math.max(...elevations),
             avg: elevations.reduce((a, b) => a + b, 0) / elevations.length,
         };
-    }, [elevationData, nodes]);
+    }, [nodes]);
 
     // Position classes
     const positionClasses = {

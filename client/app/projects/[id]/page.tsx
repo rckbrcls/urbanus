@@ -3,8 +3,7 @@
 import { useProject, useDeleteProject, useUpdateProject } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
 import { useState, use, useEffect, useMemo, useCallback, useRef } from 'react';
-import dynamic from 'next/dynamic';
-import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Plus } from 'lucide-react';
+import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Plus, Network } from 'lucide-react';
 
 import {
     AlertDialog,
@@ -23,35 +22,19 @@ import { useNodeDrag } from '@/features/map/hooks/useNodeDrag';
 import { useElevationSync } from '@/features/map/hooks/useElevationSync';
 import { MapNode, NodeEditMode } from '@/features/map/types/node.types';
 import { LatLng } from '@/features/map/types/map.types';
-import { useMapEvents, useMap } from 'react-leaflet';
+import { GraphProcessingPanel } from '@/features/map/components/GraphProcessingPanel';
+import {
+    MapContainer,
+    TileLayer,
+    Rectangle,
+    Polyline,
+    CircleMarker,
+    Tooltip,
+    useMapEvents,
+    useMap,
+} from '@/features/map/utils';
 import type L from 'leaflet';
 import { GeoCalculations } from '@/lib/geo/calculations';
-
-// Dynamic imports for Map components
-const MapContainer = dynamic(
-    () => import('react-leaflet').then((mod) => mod.MapContainer),
-    { ssr: false }
-);
-const TileLayer = dynamic(
-    () => import('react-leaflet').then((mod) => mod.TileLayer),
-    { ssr: false }
-);
-const Rectangle = dynamic(
-    () => import('react-leaflet').then((mod) => mod.Rectangle),
-    { ssr: false }
-);
-const Polyline = dynamic(
-    () => import('react-leaflet').then((mod) => mod.Polyline),
-    { ssr: false }
-);
-const CircleMarker = dynamic(
-    () => import('react-leaflet').then((mod) => mod.CircleMarker),
-    { ssr: false }
-);
-const Tooltip = dynamic(
-    () => import('react-leaflet').then((mod) => mod.Tooltip),
-    { ssr: false }
-);
 
 // ============ TYPES ============
 
@@ -464,6 +447,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     const [hoveredId, setHoveredId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+    const [isGraphProcessingOpen, setIsGraphProcessingOpen] = useState(false);
 
     // NodesService for undo/redo
     const nodesService = useRef(NodesService.getInstance()).current;
@@ -853,6 +837,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         {isSaving ? 'Saving...' : 'Save'}
                     </button>
 
+                    {/* Graph Processing Button */}
+                    <button
+                        onClick={() => setIsGraphProcessingOpen(true)}
+                        className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        title="Processar Grafo"
+                    >
+                        <Network className="h-4 w-4" />
+                        Processar
+                    </button>
+
                     {/* Export Button */}
                     <button
                         onClick={handleExport}
@@ -1088,6 +1082,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     </div>
                 </div>
             </div>
+
+            {/* Graph Processing Panel */}
+            <GraphProcessingPanel
+                nodes={nodes}
+                open={isGraphProcessingOpen}
+                onOpenChange={setIsGraphProcessingOpen}
+                onApply={(processedNodes) => {
+                    setNodes(processedNodes);
+                    setHasChanges(true);
+                }}
+            />
         </div>
     );
 }

@@ -10,6 +10,7 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+      - PYTHON_API_URL=http://server:8000
     depends_on:
       - server
 
@@ -23,6 +24,7 @@ services:
       - ./server:/app
     environment:
       - MONGO_URL=mongodb://mongo:27017/urbanus
+      - OPENTOPOGRAPHY_API_KEY=${OPENTOPOGRAPHY_API_KEY:-}
     depends_on:
       - mongo
 

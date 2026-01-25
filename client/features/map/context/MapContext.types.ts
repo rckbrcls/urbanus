@@ -11,7 +11,6 @@ import type {
   NodeEditMode,
   MapNode,
 } from "../types";
-import type { ElevationData } from "../services/ElevationService";
 import type L from "leaflet";
 
 // ============ STATE TYPES ============
@@ -40,7 +39,6 @@ export interface MapState {
 
   // Dados
   streetsData: GeoJSON.FeatureCollection | null;
-  elevationData: ElevationData | null;
   streetCount: number;
 
   // Edição de nós
@@ -91,7 +89,6 @@ export interface MapActions {
 
   // Data
   setStreetsData: (data: GeoJSON.FeatureCollection | null) => void;
-  setElevationData: (data: ElevationData | null) => void;
   enrichStreetsWithElevation: () => Promise<void>;
   applyNodeChanges: () => GeoJSON.FeatureCollection | null;
 
@@ -135,7 +132,6 @@ export const initialMapState: MapState = {
 
   // Data
   streetsData: null,
-  elevationData: null,
   streetCount: 0,
 
   // Nodes
@@ -171,7 +167,6 @@ export type MapAction =
   | { type: "SET_STAGES"; payload: Partial<ProcessingStages> }
   | { type: "SET_ERRORS"; payload: Partial<ProcessingErrors> }
   | { type: "SET_STREETS_DATA"; payload: GeoJSON.FeatureCollection | null }
-  | { type: "SET_ELEVATION_DATA"; payload: ElevationData | null }
   | { type: "SET_STREET_COUNT"; payload: number }
   | { type: "SET_NODES"; payload: MapNode[] }
   | { type: "SET_NODE_EDIT_MODE"; payload: NodeEditMode }
@@ -227,9 +222,7 @@ export function mapReducer(state: MapState, action: MapAction): MapState {
         bboxArea: 0,
         viewMode: "explore",
         showCropConfirm: false,
-        // Reset data
         streetsData: null,
-        elevationData: null,
         nodes: [],
         streetCount: 0,
         stages: { streets: "pending", topography: "pending" },
@@ -258,9 +251,6 @@ export function mapReducer(state: MapState, action: MapAction): MapState {
         streetsData: action.payload,
         streetCount: action.payload?.features.length ?? 0,
       };
-
-    case "SET_ELEVATION_DATA":
-      return { ...state, elevationData: action.payload };
 
     case "SET_STREET_COUNT":
       return { ...state, streetCount: action.payload };

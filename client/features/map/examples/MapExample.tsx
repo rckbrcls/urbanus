@@ -6,6 +6,7 @@
 
 'use client';
 
+import { useMemo } from 'react';
 import { MapProvider, useMapContext, useMapKeyboard } from '@/features/map';
 import {
     MapControls,
@@ -24,20 +25,23 @@ function MapContent() {
         selectedNodeIds,
         hoveredNodeId,
         nodeEditMode,
-        elevationData,
         stages,
     } = useMapContext();
 
     // Habilitar atalhos de teclado
     useMapKeyboard();
 
-    // Stats de elevação
-    const elevationStats = elevationData ? {
-        min: null as number | null,
-        max: null as number | null,
-        avg: null as number | null,
-        count: 0,
-    } : null;
+    // Stats de elevação (a partir dos nós)
+    const elevationStats = useMemo(() => {
+        const elevations = nodes.map((n) => n.elevation).filter((e): e is number => e !== null);
+        if (elevations.length === 0) return null;
+        return {
+            min: Math.min(...elevations),
+            max: Math.max(...elevations),
+            avg: elevations.reduce((a, b) => a + b, 0) / elevations.length,
+            count: elevations.length,
+        };
+    }, [nodes]);
 
     return (
         <div className="relative h-full w-full">
@@ -72,9 +76,16 @@ function MapContent() {
             )}
 
             {/* Legenda de Elevação */}
-            {elevationStats && (
+            {elevationStats && elevationStats.min !== null && elevationStats.max !== null && (
                 <div className="absolute bottom-4 right-4 z-[1000]">
-                    <ElevationLegend stats={elevationStats} />
+                    <ElevationLegend
+                        stats={{
+                            min: elevationStats.min,
+                            max: elevationStats.max,
+                            avg: elevationStats.avg,
+                            count: elevationStats.count,
+                        }}
+                    />
                 </div>
             )}
 

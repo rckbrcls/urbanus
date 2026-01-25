@@ -12,18 +12,26 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Folder, GalleryVerticalEnd, Map, Moon, Sun } from "lucide-react"
+import { 
+  Folder, 
+  GalleryVerticalEnd, 
+  Map, 
+  Moon, 
+  Sun, 
+  Upload, 
+  Network, 
+  BarChart3, 
+  Download, 
+  Settings, 
+  BookOpen 
+} from "lucide-react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
+import { useMounted } from "@/hooks/use-mounted"
 
 export function AppSidebar() {
   const { setTheme, theme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const mounted = useMounted()
 
   const toggleTheme = () => {
     if (theme === "dark") {
@@ -45,9 +53,7 @@ export function AppSidebar() {
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
                   <span className="font-semibold">Urbanus</span>
-                  <span className="">v1.0.0</span>
                 </div>
-
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -71,6 +77,61 @@ export function AppSidebar() {
                   <Link href="/projects">
                     <Folder />
                     <span>Projects</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Data Import">
+                  <Link href="/import">
+                    <Upload />
+                    <span>Import</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Graph Analysis">
+                  <Link href="/analysis">
+                    <Network />
+                    <span>Analysis</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Analytics">
+                  <Link href="/analytics">
+                    <BarChart3 />
+                    <span>Analytics</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Export">
+                  <Link href="/export">
+                    <Download />
+                    <span>Export</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>System</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Settings">
+                  <Link href="/settings">
+                    <Settings />
+                    <span>Settings</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Documentation">
+                  <Link href="/docs">
+                    <BookOpen />
+                    <span>Documentation</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
