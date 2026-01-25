@@ -1,4 +1,4 @@
-import { BoundingBox } from "@/types/map-types";
+import type { BoundingBox } from "@/features/map";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export interface ProjectStats {
