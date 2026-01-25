@@ -19,7 +19,6 @@ import {
     useMapContext,
     useMapKeyboard,
     MapErrorBoundary,
-    CropConfirmDialog,
     HIGHWAY_COLORS,
     AREA_LIMITS,
     GeoCalculations,
@@ -53,7 +52,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     const mapInstanceRef = useRef<L.Map | null>(null);
     const rectangleRef = useRef<L.Rectangle | null>(null);
     const streetsLayerRef = useRef<L.GeoJSON | null>(null);
-    const isInitializedRef = useRef(false);
 
     const router = useRouter();
     const { mutateAsync: createProject } = useCreateProject();
@@ -95,34 +93,43 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     const [lastZoom, setLastZoom] = useState<number>(zoom);
     const [projectName, setProjectName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    const [mapKey, setMapKey] = useState(0); // Force remount
 
     const isCropped = viewMode === 'cropped' || viewMode === 'edit';
 
-    // ============ MAP INITIALIZATION (Single Instance) ============
+    // ============ MAP INITIALIZATION ============
+    // Using key-based remount for layout changes (Leaflet doesn't handle container resizing well)
 
     useEffect(() => {
         if (!mapRef.current) return;
 
-        // Already initialized
+        // Clean up previous instance
         if (mapInstanceRef.current) {
-            return;
+            mapInstanceRef.current.remove();
+            mapInstanceRef.current = null;
         }
 
-        const mapConfig = {
-            center: center as [number, number],
-            zoom: zoom,
-        };
+        const mapConfig = isCropped && activeBbox
+            ? {
+                center: [
+                    (activeBbox.southWest.lat + activeBbox.northEast.lat) / 2,
+                    (activeBbox.southWest.lng + activeBbox.northEast.lng) / 2,
+                ] as [number, number],
+                zoom: 15,
+            }
+            : {
+                center: lastCenter,
+                zoom: lastZoom,
+            };
 
         const mapInstance = L.map(mapRef.current, {
             center: mapConfig.center,
             zoom: mapConfig.zoom,
-            zoomControl: true,
-            dragging: true,
-            scrollWheelZoom: true,
-            doubleClickZoom: true,
+            zoomControl: !isCropped,
+            dragging: !isCropped,
+            scrollWheelZoom: !isCropped,
+            doubleClickZoom: !isCropped,
             boxZoom: false,
-            keyboard: true,
+            keyboard: !isCropped,
         });
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -131,56 +138,50 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
             maxZoom: 19,
         }).addTo(mapInstance);
 
+        // If cropped, fit to bounds
+        if (isCropped && activeBbox) {
+            const bounds = L.latLngBounds(
+                [activeBbox.southWest.lat, activeBbox.southWest.lng],
+                [activeBbox.northEast.lat, activeBbox.northEast.lng]
+            );
+            mapInstance.fitBounds(bounds, { animate: false, padding: [10, 10] });
+            mapInstance.setMaxBounds(bounds.pad(0.1));
+        }
+
         mapInstanceRef.current = mapInstance;
-        isInitializedRef.current = true;
         setMap(mapInstance);
         setIsReady(true);
+
+        // Re-add streets layer if exists
+        if (streetsData && isCropped) {
+            const layer = L.geoJSON(streetsData, {
+                style: (feature) => {
+                    const highway = feature?.properties?.highway || 'default';
+                    return {
+                        color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.default,
+                        weight: 2,
+                        opacity: 0.8,
+                    };
+                },
+                onEachFeature: (feature, layer) => {
+                    const name = feature.properties?.name || 'Unnamed';
+                    const highway = feature.properties?.highway || 'unknown';
+                    layer.bindTooltip(`${name} (${highway})`, { sticky: true });
+                },
+            }).addTo(mapInstance);
+            streetsLayerRef.current = layer;
+        }
 
         return () => {
             if (mapInstanceRef.current) {
                 mapInstanceRef.current.remove();
                 mapInstanceRef.current = null;
-                isInitializedRef.current = false;
                 setMap(null);
                 setIsReady(false);
             }
         };
-    }, [mapKey]); // Only remount on explicit key change
-
-    // ============ UPDATE MAP STATE WHEN CROPPED CHANGES ============
-
-    useEffect(() => {
-        const mapInstance = mapInstanceRef.current;
-        if (!mapInstance) return;
-
-        if (isCropped && activeBbox) {
-            // Lock map to bbox
-            const bounds = L.latLngBounds(
-                [activeBbox.southWest.lat, activeBbox.southWest.lng],
-                [activeBbox.northEast.lat, activeBbox.northEast.lng]
-            );
-
-            mapInstance.fitBounds(bounds, { animate: false });
-            mapInstance.setMaxBounds(bounds);
-            mapInstance.dragging.disable();
-            mapInstance.scrollWheelZoom.disable();
-            mapInstance.doubleClickZoom.disable();
-            mapInstance.keyboard.disable();
-            mapInstance.zoomControl.remove();
-        } else {
-            // Unlock map
-            mapInstance.setMaxBounds(null as unknown as L.LatLngBoundsExpression);
-            mapInstance.dragging.enable();
-            mapInstance.scrollWheelZoom.enable();
-            mapInstance.doubleClickZoom.enable();
-            mapInstance.keyboard.enable();
-
-            // Add zoom control if not present
-            if (!mapInstance.zoomControl) {
-                L.control.zoom().addTo(mapInstance);
-            }
-        }
-    }, [isCropped, activeBbox]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCropped, activeBbox]); // Remount when crop state changes
 
     // ============ STORE SYNC ============
 
@@ -189,11 +190,13 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         if (!mapInstance || isCropped) return;
 
         const handleMoveEnd = () => {
-            if (!mapInstanceRef.current) return; // Guard against removed map
+            if (!mapInstanceRef.current) return;
             try {
                 const c = mapInstance.getCenter();
                 const z = mapInstance.getZoom();
                 setMapState([c.lat, c.lng], z);
+                setLastCenter([c.lat, c.lng]);
+                setLastZoom(z);
                 if (!hasInitialized) setInitialized();
             } catch {
                 // Map may have been removed
@@ -202,7 +205,9 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
 
         mapInstance.on('moveend', handleMoveEnd);
         return () => {
-            mapInstance.off('moveend', handleMoveEnd);
+            if (mapInstanceRef.current) {
+                mapInstance.off('moveend', handleMoveEnd);
+            }
         };
     }, [isCropped, setMapState, hasInitialized, setInitialized]);
 
@@ -217,6 +222,12 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         const handleMouseDown = (e: L.LeafletMouseEvent) => {
             if (!e.originalEvent.shiftKey) return;
             if (!mapInstanceRef.current) return;
+
+            // Clear previous rectangle
+            if (rectangleRef.current) {
+                rectangleRef.current.remove();
+                rectangleRef.current = null;
+            }
 
             startPoint = e.latlng;
             setIsDrawing(true);
@@ -248,7 +259,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                 northEast: { lat: bounds.getNorth(), lng: bounds.getEast() },
             };
 
-            // Calcular área
             const area = GeoCalculations.calculateArea(bbox);
 
             if (area > AREA_LIMITS.MAX_BBOX_AREA_KM2) {
@@ -257,7 +267,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                     rectangleRef.current.setStyle({ color: '#ef4444' });
                 }
             } else if (area < 0.001) {
-                // Too small, ignore
                 if (rectangleRef.current) {
                     rectangleRef.current.remove();
                     rectangleRef.current = null;
@@ -284,18 +293,47 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         };
     }, [enableBoundingBox, isCropped, setPendingBbox, setValidationError]);
 
+    // ============ UPDATE STREETS LAYER ============
+
+    useEffect(() => {
+        const mapInstance = mapInstanceRef.current;
+        if (!mapInstance || !streetsData || !isCropped) return;
+
+        // Remove old layer
+        if (streetsLayerRef.current) {
+            streetsLayerRef.current.remove();
+        }
+
+        // Add new layer
+        streetsLayerRef.current = L.geoJSON(streetsData, {
+            style: (feature) => {
+                const highway = feature?.properties?.highway || 'default';
+                return {
+                    color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.default,
+                    weight: 2,
+                    opacity: 0.8,
+                };
+            },
+            onEachFeature: (feature, layer) => {
+                const name = feature.properties?.name || 'Unnamed';
+                const highway = feature.properties?.highway || 'unknown';
+                layer.bindTooltip(`${name} (${highway})`, { sticky: true });
+            },
+        }).addTo(mapInstance);
+    }, [streetsData, isCropped]);
+
     // ============ CONFIRM BBOX ============
 
     const handleConfirmCrop = useCallback(() => {
-        if (!pendingBbox || !mapInstanceRef.current) return;
+        if (!pendingBbox) return;
 
-        const bboxCenter: [number, number] = [
-            (pendingBbox.southWest.lat + pendingBbox.northEast.lat) / 2,
-            (pendingBbox.southWest.lng + pendingBbox.northEast.lng) / 2,
-        ];
-
-        setLastCenter(bboxCenter);
-        setLastZoom(mapInstanceRef.current.getZoom());
+        // Save current position before cropping
+        if (mapInstanceRef.current) {
+            const c = mapInstanceRef.current.getCenter();
+            const z = mapInstanceRef.current.getZoom();
+            setLastCenter([c.lat, c.lng]);
+            setLastZoom(z);
+        }
 
         // Calculate dimensions
         const latDiff = pendingBbox.northEast.lat - pendingBbox.southWest.lat;
@@ -323,7 +361,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                 h = maxWidth / ratio;
             }
         }
-        setCropDimensions({ width: w, height: h });
+        setCropDimensions({ width: Math.max(w, 400), height: Math.max(h, 300) });
 
         // Clear rectangle
         if (rectangleRef.current) {
@@ -348,45 +386,12 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     // ============ BACK TO FULL VIEW ============
 
     const handleBack = useCallback(() => {
-        if (streetsLayerRef.current && mapInstanceRef.current) {
-            streetsLayerRef.current.remove();
+        if (streetsLayerRef.current) {
             streetsLayerRef.current = null;
         }
         setCropDimensions(null);
         clearBbox();
-
-        // Restore view
-        if (mapInstanceRef.current) {
-            mapInstanceRef.current.setView(lastCenter, lastZoom, { animate: false });
-        }
-    }, [clearBbox, lastCenter, lastZoom]);
-
-    // ============ ADD STREETS LAYER ============
-
-    useEffect(() => {
-        const mapInstance = mapInstanceRef.current;
-        if (!mapInstance || !streetsData) return;
-
-        if (streetsLayerRef.current) {
-            streetsLayerRef.current.remove();
-        }
-
-        streetsLayerRef.current = L.geoJSON(streetsData, {
-            style: (feature) => {
-                const highway = feature?.properties?.highway || 'default';
-                return {
-                    color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.default,
-                    weight: 2,
-                    opacity: 0.8,
-                };
-            },
-            onEachFeature: (feature, layer) => {
-                const name = feature.properties?.name || 'Unnamed';
-                const highway = feature.properties?.highway || 'unknown';
-                layer.bindTooltip(`${name} (${highway})`, { sticky: true });
-            },
-        }).addTo(mapInstance);
-    }, [streetsData]);
+    }, [clearBbox]);
 
     // ============ SAVE PROJECT ============
 
@@ -421,7 +426,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     const cardStyle = isCropped && cropDimensions
         ? { width: cropDimensions.width, height: cropDimensions.height }
         : isCropped
-            ? { width: 500, height: 400 }
+            ? { width: 600, height: 500 }
             : undefined;
 
     return (
@@ -432,8 +437,9 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                     <div className="absolute inset-0 z-[900] flex items-center justify-center bg-zinc-100 dark:bg-zinc-950" />
                 )}
 
-                {/* Map Container */}
+                {/* Map Container - keyed by mode to force remount */}
                 <div
+                    key={isCropped ? 'cropped-map' : 'full-map'}
                     ref={mapRef}
                     className={
                         isCropped
@@ -529,6 +535,16 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                                 </button>
                             )}
 
+                            {/* Retry Button */}
+                            {!isProcessing && (stages.streets === 'error' || stages.topography === 'error') && (
+                                <button
+                                    onClick={startProcessing}
+                                    className="flex items-center gap-2 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-orange-700"
+                                >
+                                    Retry
+                                </button>
+                            )}
+
                             {/* Save Button */}
                             {stages.streets === 'success' && stages.topography === 'success' && !isSaving && (
                                 <button
@@ -553,23 +569,23 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                                     ✓ Processed
                                 </span>
                             )}
-
-                            {/* Errors */}
-                            {(stages.streets === 'error' || stages.topography === 'error') && (
-                                <div className="absolute left-0 top-12 flex flex-col gap-2">
-                                    {stages.streets === 'error' && (
-                                        <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                                            ⚠️ Streets: {errors.streets || 'Failed'}
-                                        </span>
-                                    )}
-                                    {stages.topography === 'error' && (
-                                        <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                                            ⚠️ Topography: {errors.topography || 'Failed'}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
                         </div>
+
+                        {/* Error Messages */}
+                        {(stages.streets === 'error' || stages.topography === 'error') && (
+                            <div className="absolute left-3 top-14 flex flex-col gap-2" style={{ pointerEvents: 'auto' }}>
+                                {stages.streets === 'error' && (
+                                    <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
+                                        ⚠️ Streets: {errors.streets || 'Failed'}
+                                    </span>
+                                )}
+                                {stages.topography === 'error' && (
+                                    <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
+                                        ⚠️ Topography: {errors.topography || 'Failed'}
+                                    </span>
+                                )}
+                            </div>
+                        )}
 
                         {/* Save Dialog */}
                         {showSaveDialog && (
