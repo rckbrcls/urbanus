@@ -33,6 +33,7 @@ import {
     useMapEvents,
     useMap,
 } from '@/features/map/utils';
+import { useThrottle } from '@/features/map/utils/throttle';
 import type L from 'leaflet';
 import { GeoCalculations } from '@/lib/geo/calculations';
 
@@ -109,10 +110,49 @@ const EdgesLayer = React.memo(function EdgesLayer({
         return result;
     }, [nodes]);
 
+    // Memoizar cálculos pesados por edge para evitar recálculo durante drag
+    // avgElevation e estilos não mudam durante drag, apenas posições
+    const edgeCalculations = useMemo(() => {
+        return edges.map((edge) => {
+            const highway = edge.highway || 'default';
+            const color = HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.default;
+            const weight = HIGHWAY_WEIGHTS[highway] || HIGHWAY_WEIGHTS.default;
+            
+            // Calcular avgElevation apenas uma vez (não muda durante drag)
+            const avgElevation =
+                edge.startNode.elevation !== null && edge.endNode.elevation !== null
+                    ? (edge.startNode.elevation + edge.endNode.elevation) / 2
+                    : null;
+
+            const isAddMode = editMode === 'add';
+            const pathOptions: L.PathOptions = {
+                color,
+                weight,
+                opacity: isAddMode ? 0.9 : 0.8,
+                lineCap: 'round',
+                lineJoin: 'round',
+            };
+
+            if (isAddMode) {
+                pathOptions.interactive = true;
+                pathOptions.cursor = 'crosshair';
+            }
+
+            return {
+                edge,
+                highway,
+                color,
+                avgElevation,
+                pathOptions,
+                isAddMode,
+            };
+        });
+    }, [edges, editMode]); // Não depende de dragPosition - recálculo apenas quando edges ou editMode mudam
+
     return (
         <>
-            {edges.map((edge) => {
-                // Get positions, using drag position if applicable
+            {edgeCalculations.map(({ edge, highway, color, avgElevation, pathOptions, isAddMode }) => {
+                // Calcular posições apenas (leve) - usar dragPosition temporário durante drag
                 const startPos =
                     edge.startNode.id === draggedNodeId && dragPosition
                         ? dragPosition
@@ -122,30 +162,6 @@ const EdgesLayer = React.memo(function EdgesLayer({
                     edge.endNode.id === draggedNodeId && dragPosition
                         ? dragPosition
                         : edge.endNode.position;
-
-                const highway = edge.highway || 'default';
-                const color = HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.default;
-                const weight = HIGHWAY_WEIGHTS[highway] || HIGHWAY_WEIGHTS.default;
-
-                // Calculate average elevation for tooltip
-                const avgElevation =
-                    edge.startNode.elevation !== null && edge.endNode.elevation !== null
-                        ? (edge.startNode.elevation + edge.endNode.elevation) / 2
-                        : null;
-
-                const isAddMode = editMode === 'add';
-                const pathOptions: L.PathOptions = {
-                    color,
-                    weight,
-                    opacity: isAddMode ? 0.9 : 0.8,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                };
-
-                if (isAddMode) {
-                    pathOptions.interactive = true;
-                    pathOptions.cursor = 'crosshair';
-                }
 
                 return (
                     <Polyline
@@ -401,10 +417,28 @@ function MapContent({
         }
     }, [editMode, map]);
 
+    // Throttle mousemove para ~60fps (16ms) - reduz chamadas de 200+/s para ~60/s
+    // A animação visual continua suave via RAF no updateDrag
+    const throttledUpdateDrag = useThrottle(
+        useCallback(
+            (position: LatLng) => {
+                if (draggedNodeId) {
+                    updateDrag(position);
+                }
+            },
+            [draggedNodeId, updateDrag]
+        ),
+        16 // ~60fps
+    );
+
     useMapEvents({
         mousemove: (e) => {
             if (draggedNodeId) {
-                updateDrag(e.latlng);
+                const position: LatLng = {
+                    lat: e.latlng.lat,
+                    lng: e.latlng.lng,
+                };
+                throttledUpdateDrag(position);
             }
         },
         mouseup: () => {

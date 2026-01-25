@@ -83,43 +83,47 @@ export function useNodeDrag(options: UseNodeDragOptions) {
 
   /**
    * Atualiza posição durante drag
-   * Otimizado: usa RAF para animação suave, sempre processa posição mais recente
+   * Otimizado: usa RAF para animação suave, uma atualização por frame
    * Sem validação durante drag, apenas atualiza posição visual
+   * Sem recálculos pesados - apenas animação visual
    */
   const updateDrag = useCallback(
     (position: LatLng) => {
       // Usa refs para verificar estado atualizado
       if (!isDraggingRef.current || !draggedNodeIdRef.current) return;
 
-      // Sempre salva a posição mais recente
+      // Sempre salva a posição mais recente (sobrescreve anterior)
       pendingPositionRef.current = position;
 
       // Se já tem um RAF agendado, não agenda outro
-      // Mas sempre atualiza pendingPositionRef com a posição mais recente
+      // O RAF processará a posição mais recente quando executar
       if (rafIdRef.current !== null) return;
 
-      // Função recursiva para processar todas as atualizações pendentes
+      // Função para processar atualização no próximo frame
       const processUpdate = () => {
         const latest = pendingPositionRef.current;
-        if (latest && isDraggingRef.current) {
-          // Atualiza posição visual
-          setDragPosition(latest);
-
-          const node = draggedNodeRef.current;
-          if (node) {
-            onDragMove?.(node, latest);
-          }
-
-          // Limpa posição processada
-          pendingPositionRef.current = null;
+        
+        // Verifica se ainda está arrastando
+        if (!latest || !isDraggingRef.current) {
           rafIdRef.current = null;
+          return;
+        }
 
-          // Se ainda tem posição pendente (mouse se moveu durante o frame), agenda outro
-          if (pendingPositionRef.current && isDraggingRef.current) {
-            rafIdRef.current = requestAnimationFrame(processUpdate);
-          }
-        } else {
-          rafIdRef.current = null;
+        // Atualiza posição visual (única atualização de estado por frame)
+        setDragPosition(latest);
+
+        // Callback opcional (sem cálculos pesados)
+        const node = draggedNodeRef.current;
+        if (node) {
+          onDragMove?.(node, latest);
+        }
+
+        // Limpa referência do RAF
+        rafIdRef.current = null;
+        
+        // Se ainda tem posição pendente (mouse se moveu durante o frame), agenda outro
+        if (pendingPositionRef.current && isDraggingRef.current) {
+          rafIdRef.current = requestAnimationFrame(processUpdate);
         }
       };
 
@@ -149,8 +153,6 @@ export function useNodeDrag(options: UseNodeDragOptions) {
       rafIdRef.current = null;
     }
     pendingPositionRef.current = null;
-    lastUpdateRef.current = 0;
-    
   }, []);
 
   /**
