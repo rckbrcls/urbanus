@@ -2,10 +2,12 @@
  * Hook de Drag de Nós
  *
  * Gerencia operação de arrastar nós no mapa
+ * Otimizado para performance: throttling, sem validação durante drag, sem atualizar todos os nós
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { NodesService } from "../services";
+import { useThrottle } from "../utils/throttle";
 import type {
   BoundingBox,
   LatLng,
@@ -22,6 +24,7 @@ interface UseNodeDragOptions {
   onDragEnd?: (node: MapNode, finalPosition: LatLng) => void;
   onDragCancel?: (node: MapNode) => void;
   validateOnMove?: boolean;
+  throttleMs?: number;
 }
 
 export function useNodeDrag(options: UseNodeDragOptions) {
@@ -33,7 +36,8 @@ export function useNodeDrag(options: UseNodeDragOptions) {
     onDragMove,
     onDragEnd,
     onDragCancel,
-    validateOnMove = true,
+    validateOnMove = false, // Desabilitado por padrão para melhor performance
+    throttleMs = 16, // ~60fps
   } = options;
 
   const service = NodesService.getInstance();
@@ -46,9 +50,13 @@ export function useNodeDrag(options: UseNodeDragOptions) {
   );
 
   const originalPositionRef = useRef<LatLng | null>(null);
+  const draggedNodeRef = useRef<MapNode | null>(null);
+  const isDraggingRef = useRef(false);
+  const draggedNodeIdRef = useRef<string | null>(null);
 
   /**
    * Inicia drag de um nó
+   * Otimizado: não atualiza todos os nós, apenas marca estado interno
    */
   const startDrag = useCallback(
     (nodeId: string) => {
@@ -56,74 +64,125 @@ export function useNodeDrag(options: UseNodeDragOptions) {
       if (!node) return;
 
       originalPositionRef.current = { ...node.position };
+      draggedNodeRef.current = node;
+      isDraggingRef.current = true;
+      draggedNodeIdRef.current = nodeId;
       setIsDragging(true);
       setDraggedNodeId(nodeId);
       setDragPosition(node.position);
 
-      // Atualiza estado do nó
-      setNodes((prevNodes) =>
-        prevNodes.map((n) => ({
-          ...n,
-          isDragging: n.id === nodeId,
-        })),
-      );
-
+      // NÃO atualiza todos os nós aqui - apenas usa dragPosition durante render
       onDragStart?.(node);
     },
-    [nodes, setNodes, onDragStart],
+    [nodes, onDragStart],
   );
+
+  // RAF para atualização suave
+  const rafIdRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<LatLng | null>(null);
 
   /**
    * Atualiza posição durante drag
+   * Otimizado: usa RAF para animação suave, sempre processa posição mais recente
+   * Sem validação durante drag, apenas atualiza posição visual
    */
   const updateDrag = useCallback(
-    async (position: LatLng) => {
-      if (!isDragging || !draggedNodeId) return;
+    (position: LatLng) => {
+      // Usa refs para verificar estado atualizado
+      if (!isDraggingRef.current || !draggedNodeIdRef.current) return;
 
-      setDragPosition(position);
+      // Sempre salva a posição mais recente
+      pendingPositionRef.current = position;
 
-      // Validação em tempo real (opcional)
-      if (validateOnMove && bbox) {
-        const node = nodes.find((n) => n.id === draggedNodeId);
-        if (node) {
-          const result = await service.validateMove(
-            node,
-            position,
-            nodes,
-            bbox,
-          );
-          setValidation(result);
+      // Se já tem um RAF agendado, não agenda outro
+      // Mas sempre atualiza pendingPositionRef com a posição mais recente
+      if (rafIdRef.current !== null) return;
+
+      // Função recursiva para processar todas as atualizações pendentes
+      const processUpdate = () => {
+        const latest = pendingPositionRef.current;
+        if (latest && isDraggingRef.current) {
+          // Atualiza posição visual
+          setDragPosition(latest);
+
+          const node = draggedNodeRef.current;
+          if (node) {
+            onDragMove?.(node, latest);
+          }
+
+          // Limpa posição processada
+          pendingPositionRef.current = null;
+          rafIdRef.current = null;
+
+          // Se ainda tem posição pendente (mouse se moveu durante o frame), agenda outro
+          if (pendingPositionRef.current && isDraggingRef.current) {
+            rafIdRef.current = requestAnimationFrame(processUpdate);
+          }
+        } else {
+          rafIdRef.current = null;
         }
-      }
+      };
 
-      const node = nodes.find((n) => n.id === draggedNodeId);
-      if (node) {
-        onDragMove?.(node, position);
-      }
+      // Agenda primeira atualização
+      rafIdRef.current = requestAnimationFrame(processUpdate);
     },
-    [
-      isDragging,
-      draggedNodeId,
-      nodes,
-      bbox,
-      service,
-      validateOnMove,
-      onDragMove,
-    ],
+    [onDragMove],
   );
 
   /**
-   * Finaliza drag e aplica movimento
+   * Reset do estado interno
+   * Otimizado: não atualiza todos os nós desnecessariamente
    */
-  const endDrag = useCallback(async () => {
+  const resetDragState = useCallback(() => {
+    isDraggingRef.current = false;
+    draggedNodeIdRef.current = null;
+    setIsDragging(false);
+    setDraggedNodeId(null);
+    setDragPosition(null);
+    setValidation(null);
+    originalPositionRef.current = null;
+    draggedNodeRef.current = null;
+    
+    // Limpa qualquer RAF pendente
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    pendingPositionRef.current = null;
+    lastUpdateRef.current = 0;
+    
+  }, []);
+
+  /**
+   * Cancela drag e retorna à posição original
+   * Otimizado: não atualiza todos os nós, apenas reseta estado interno
+   */
+  const cancelDrag = useCallback(() => {
+    if (!isDragging || !draggedNodeId) return;
+
+    const node = draggedNodeRef.current;
+
+    // Reset estado (não precisa atualizar todos os nós)
+    resetDragState();
+
+    if (node) {
+      onDragCancel?.(node);
+    }
+  }, [isDragging, draggedNodeId, resetDragState, onDragCancel]);
+
+  /**
+   * Finaliza drag e aplica movimento
+   * Otimizado: validação só no final, atualiza estado apenas uma vez
+   */
+  const endDrag = useCallback(() => {
     if (!isDragging || !draggedNodeId || !dragPosition) return;
 
-    const node = nodes.find((n) => n.id === draggedNodeId);
+    const node = draggedNodeRef.current || nodes.find((n) => n.id === draggedNodeId);
     if (!node) return;
 
-    // Valida movimento final se bbox disponível
+    // Valida movimento final se bbox disponível (só no final, não durante drag)
     if (bbox) {
-      const validationResult = await service.validateMove(
+      const validationResult = service.validateMove(
         node,
         dragPosition,
         nodes,
@@ -137,7 +196,7 @@ export function useNodeDrag(options: UseNodeDragOptions) {
       }
     }
 
-    // Aplica movimento
+    // Aplica movimento (atualiza estado apenas uma vez no final)
     const { nodes: updatedNodes } = service.moveNode(
       nodes,
       draggedNodeId,
@@ -157,49 +216,10 @@ export function useNodeDrag(options: UseNodeDragOptions) {
     bbox,
     service,
     setNodes,
+    resetDragState,
+    cancelDrag,
     onDragEnd,
   ]);
-
-  /**
-   * Cancela drag e retorna à posição original
-   */
-  const cancelDrag = useCallback(() => {
-    if (!isDragging || !draggedNodeId) return;
-
-    const node = nodes.find((n) => n.id === draggedNodeId);
-
-    // Reset estado dos nós
-    setNodes((prevNodes) =>
-      prevNodes.map((n) => ({
-        ...n,
-        isDragging: false,
-      })),
-    );
-
-    resetDragState();
-
-    if (node) {
-      onDragCancel?.(node);
-    }
-  }, [isDragging, draggedNodeId, nodes, setNodes, onDragCancel]);
-
-  /**
-   * Reset do estado interno
-   */
-  const resetDragState = useCallback(() => {
-    setIsDragging(false);
-    setDraggedNodeId(null);
-    setDragPosition(null);
-    setValidation(null);
-    originalPositionRef.current = null;
-
-    setNodes((prevNodes) =>
-      prevNodes.map((n) => ({
-        ...n,
-        isDragging: false,
-      })),
-    );
-  }, [setNodes]);
 
   return {
     isDragging,

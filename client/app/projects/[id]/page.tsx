@@ -2,7 +2,7 @@
 
 import { useProject, useDeleteProject, useUpdateProject } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
-import { useState, use, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, use, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Plus, Network } from 'lucide-react';
 
 import {
@@ -60,7 +60,8 @@ interface EdgeData {
     endNode: MapNode;
 }
 
-function EdgesLayer({
+// Memoizar componente para evitar re-renders desnecessários
+const EdgesLayer = React.memo(function EdgesLayer({
     nodes,
     draggedNodeId,
     dragPosition,
@@ -74,6 +75,7 @@ function EdgesLayer({
     onEdgeClick?: (edge: EdgeData, clickPosition: LatLng) => void;
 }) {
     // Group nodes by streetId and sort by vertexIndex
+    // Otimizado: só recalcula quando nodes mudam (não durante drag)
     const edges = useMemo(() => {
         const nodesByStreet = new Map<string, MapNode[]>();
 
@@ -196,11 +198,24 @@ function EdgesLayer({
             })}
         </>
     );
-}
+}, (prevProps, nextProps) => {
+    // Comparação customizada para evitar re-renders desnecessários
+    // IMPORTANTE: dragPosition DEVE causar re-render para arestas seguirem o nó
+    if (prevProps.draggedNodeId !== nextProps.draggedNodeId) return false;
+    if (prevProps.dragPosition !== nextProps.dragPosition) {
+        // dragPosition mudou - PRECISA re-render para arestas seguirem o nó
+        return false;
+    }
+    if (prevProps.nodes !== nextProps.nodes) return false;
+    if (prevProps.editMode !== nextProps.editMode) return false;
+    // onEdgeClick pode mudar mas não afeta render
+    return true;
+});
 
 // ============ NODES LAYER ============
 
-function OptimizedNodesLayer({
+// Memoizar componente para evitar re-renders desnecessários
+const OptimizedNodesLayer = React.memo(function OptimizedNodesLayer({
     nodes,
     selectedIds,
     hoveredId,
@@ -308,7 +323,21 @@ function OptimizedNodesLayer({
             })}
         </>
     );
-}
+}, (prevProps, nextProps) => {
+    // Comparação customizada para evitar re-renders desnecessários
+    // IMPORTANTE: dragPosition DEVE causar re-render para animação funcionar
+    if (prevProps.draggedNodeId !== nextProps.draggedNodeId) return false;
+    if (prevProps.dragPosition !== nextProps.dragPosition) {
+        // dragPosition mudou - PRECISA re-render para animação funcionar
+        return false;
+    }
+    if (prevProps.nodes !== nextProps.nodes) return false;
+    if (prevProps.selectedIds !== nextProps.selectedIds) return false;
+    if (prevProps.hoveredId !== nextProps.hoveredId) return false;
+    if (prevProps.editMode !== nextProps.editMode) return false;
+    // Callbacks podem mudar mas não afetam render
+    return true;
+});
 
 // ============ MAP CONTENT ============
 
