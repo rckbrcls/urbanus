@@ -85,32 +85,32 @@ interface NodeStyleEntry {
 export const NODE_STYLES: Record<string, NodeStyleEntry> = {
   default: {
     color: "#6b7280", // gray-500
-    radius: 4,
+    radius: 6,
     fillOpacity: 0.8,
   },
   endpoint: {
     color: "#f59e0b", // amber-500
-    radius: 5,
+    radius: 8,
     fillOpacity: 0.9,
   },
   selected: {
     color: "#3b82f6", // blue-500
-    radius: 7,
+    radius: 10,
     fillOpacity: 1,
   },
   hovered: {
     color: "#8b5cf6", // violet-500
-    radius: 6,
+    radius: 9,
     fillOpacity: 0.9,
   },
   dragging: {
     color: "#22c55e", // green-500
-    radius: 8,
+    radius: 11,
     fillOpacity: 0.7,
   },
   invalid: {
     color: "#ef4444", // red-500
-    radius: 7,
+    radius: 10,
     fillOpacity: 0.8,
   },
 };
