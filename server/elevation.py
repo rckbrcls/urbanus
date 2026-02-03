@@ -1,8 +1,13 @@
 """
 Elevation enrichment service.
 
-Fetches GeoTIFF from OpenTopography, samples elevation at GeoJSON vertices
-using rasterio + numpy, returns enriched GeoJSON (vertex_elevations, stats).
+O que faz:
+- busca um GeoTIFF do OpenTopography para a bbox solicitada
+- amostra elevação nos vértices de cada LineString
+- injeta `vertex_elevations`, estatísticas e `max_slope` no GeoJSON
+
+Este módulo é usado pelo backend Python (FastAPI) e roda server-side
+para evitar trabalho pesado no navegador.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ MAX_AREA_KM2 = 100
 
 
 def _area_km2(south: float, north: float, west: float, east: float) -> float:
+    """Estimativa simples de área (km²) a partir de bbox em lat/lng."""
     avg_lat = (north + south) / 2
     km_per_deg_lat = 111.32
     km_per_deg_lon = 111.32 * max(0.01, abs(np.cos(np.radians(avg_lat))))
@@ -29,6 +35,11 @@ def _area_km2(south: float, north: float, west: float, east: float) -> float:
 
 
 def _fetch_geotiff(south: float, north: float, west: float, east: float, dem_type: str) -> bytes:
+    """
+    Busca o GeoTIFF no OpenTopography.
+    - valida API key
+    - limita área máxima para proteger custo/latência
+    """
     api_key = os.getenv("OPENTOPOGRAPHY_API_KEY")
     if not api_key:
         raise ValueError("OPENTOPOGRAPHY_API_KEY environment variable is required")
@@ -60,7 +71,10 @@ def _sample_elevations_at(
     coords: list[tuple[float, float]],
     no_val: float,
 ) -> list[float | None]:
-    """Sample elevation at (lng, lat) pairs. Returns list of elevation or None."""
+    """
+    Amostra elevação no raster para cada par (lng, lat).
+    Retorna lista com valores (m) ou None quando fora/nodata.
+    """
     out: list[float | None] = []
     for lon, lat in coords:
         try:
@@ -78,6 +92,7 @@ def _sample_elevations_at(
 
 
 def _elevation_stats(elevations: list[float | None]) -> dict[str, Any]:
+    """Calcula estatísticas simples (min, max, avg, range)."""
     valid = [e for e in elevations if e is not None]
     if not valid:
         return {"min": None, "max": None, "avg": None, "range": None}
@@ -87,6 +102,11 @@ def _elevation_stats(elevations: list[float | None]) -> dict[str, Any]:
 
 
 def _max_slope(elevations: list[float | None]) -> float | None:
+    """
+    Calcula variação máxima de elevação entre vértices consecutivos.
+    Observação: este valor NÃO divide pela distância (não é slope m/m).
+    Serve apenas como indicador rápido.
+    """
     diffs: list[float] = []
     for i in range(len(elevations) - 1):
         a, b = elevations[i], elevations[i + 1]
@@ -112,10 +132,12 @@ def enrich_geojson(
     if dem_type not in DEM_TYPES:
         dem_type = DEFAULT_DEM
 
+    # 1) Baixa o GeoTIFF da área solicitada
     tiff_bytes = _fetch_geotiff(south, north, west, east, dem_type)
     features = geojson.get("features") or []
     enriched = []
 
+    # 2) Abre o GeoTIFF em memória (sem escrever em disco)
     with MemoryFile(tiff_bytes) as mem:
         with mem.open() as src:
             nodatavals = src.nodatavals
@@ -125,6 +147,7 @@ def enrich_geojson(
             except (TypeError, ValueError):
                 no_val = -9999.0
 
+            # 3) Enriquecimento por feature
             for f in features:
                 geom = f.get("geometry")
                 if not geom or geom.get("type") != "LineString":
@@ -136,11 +159,13 @@ def enrich_geojson(
                     enriched.append(f)
                     continue
 
+                # Pares (lng, lat) para amostragem
                 pairs = [(float(c[0]), float(c[1])) for c in coords]
                 elevations = _sample_elevations_at(src, pairs, no_val)
                 stats = _elevation_stats(elevations)
                 max_slope = _max_slope(elevations)
 
+                # Injeta propriedades calculadas
                 props = dict(f.get("properties") or {})
                 props["vertex_elevations"] = elevations
                 props["elevation"] = stats
