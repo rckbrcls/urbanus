@@ -14,27 +14,30 @@ export interface GraphProcessingOptions {
 }
 
 /**
- * Resultado do processamento de grafo
+ * Estatísticas do processamento
  */
-export interface GraphProcessingResult {
+export interface GraphProcessingStats {
   originalNodeCount: number;
   newNodeCount: number;
   processedEdges: number;
   skippedEdges: number;
-  nodes: MapNode[];
   processingTime: number; // ms
 }
 
 /**
- * Análise de uma aresta
+ * Resultado do processamento de grafo
  */
-export interface EdgeAnalysis {
-  edgeId: string;
-  streetId: string;
-  streetName?: string;
-  startNodeId: string;
-  endNodeId: string;
-  distance: number; // metros
-  needsSubdivision: boolean;
-  intermediateNodesNeeded: number;
+export interface GraphProcessingResult extends GraphProcessingStats {
+  streets: GeoJSON.FeatureCollection;
+  nodes: MapNode[];
+}
+
+/**
+ * Resultado da análise do grafo
+ */
+export interface GraphProcessingAnalysis {
+  needsSubdivision: number;
+  totalNodesNeeded: number;
+  skippedEdges: number;
+  totalEdges: number;
 }

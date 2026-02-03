@@ -30,7 +30,7 @@ interface EdgesLayerProps {
     draggedNodeId: string | null;
     dragPosition: LatLng | null;
     showTooltips?: boolean;
-    onEdgeClick?: (edge: Edge) => void;
+    onEdgeClick?: (edge: Edge, clickPosition: LatLng) => void;
     onEdgeHover?: (edgeId: string | null) => void;
 }
 
@@ -172,7 +172,11 @@ export function EdgesLayer({
             if (onEdgeClick) {
                 polyline.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
-                    onEdgeClick(edge);
+                    const clickPosition: LatLng = {
+                        lat: e.latlng.lat,
+                        lng: e.latlng.lng,
+                    };
+                    onEdgeClick(edge, clickPosition);
                 });
             }
 

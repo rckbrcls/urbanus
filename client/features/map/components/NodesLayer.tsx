@@ -21,6 +21,7 @@ interface NodesLayerProps {
     draggedNodeId: string | null;
     editMode?: NodeEditMode;
     editable?: boolean;
+    dragRequiresSelection?: boolean;
     showElevation?: boolean;
     showEndpoints?: boolean;
     showIntersections?: boolean;
@@ -47,6 +48,7 @@ function NodesLayerComponent({
     draggedNodeId,
     editMode = 'none',
     editable = false,
+    dragRequiresSelection = true,
     showElevation = true,
     showEndpoints = true,
     showIntersections = true,
@@ -166,7 +168,7 @@ function NodesLayerComponent({
                 // Drag handlers (only start if already selected and mode is 'move')
                 if (editMode === 'move' || editMode === 'select') {
                     marker.on('mousedown', (e) => {
-                        if (isSelected && !node.isLocked) {
+                        if ((!dragRequiresSelection || isSelected) && !node.isLocked) {
                             L.DomEvent.stopPropagation(e);
                             onDragStart?.(node.id);
                         }
@@ -281,6 +283,7 @@ function arePropsEqual(prevProps: NodesLayerProps, nextProps: NodesLayerProps): 
     if (prevProps.draggedNodeId !== nextProps.draggedNodeId) return false;
     if (prevProps.editMode !== nextProps.editMode) return false;
     if (prevProps.editable !== nextProps.editable) return false;
+    if (prevProps.dragRequiresSelection !== nextProps.dragRequiresSelection) return false;
     if (prevProps.showElevation !== nextProps.showElevation) return false;
     if (prevProps.showEndpoints !== nextProps.showEndpoints) return false;
     if (prevProps.showIntersections !== nextProps.showIntersections) return false;

@@ -1,22 +1,22 @@
 /**
- * Hook de Processamento de Grafo
+ * Hook de Processamento de Grafo (backend)
  *
- * Gerencia o estado e operações de processamento de grafo
- * para subdivisão de arestas longas.
+ * Envia o GeoJSON atual para o servidor e retorna o resultado.
  */
 
 import { useState, useCallback, useMemo } from "react";
 import { GraphProcessorService } from "../services/GraphProcessorService";
+import { NodesService } from "../services/NodesService";
 import type { MapNode } from "../types";
 import type {
   GraphProcessingOptions,
   GraphProcessingResult,
-  EdgeAnalysis,
+  GraphProcessingAnalysis,
 } from "../types/graph.types";
 
 interface UseGraphProcessingOptions {
   /** Callback quando processamento é aplicado */
-  onApply?: (nodes: MapNode[]) => void;
+  onApply?: (payload: { streets: GeoJSON.FeatureCollection; nodes: MapNode[] }) => void;
   /** Callback quando ocorre erro */
   onError?: (error: Error) => void;
 }
@@ -28,41 +28,57 @@ interface UseGraphProcessingReturn {
   canUndo: boolean;
 
   // Análise
-  analyzeEdges: (maxEdgeLength: number) => EdgeAnalysis[];
+  analyzeEdges: (maxEdgeLength: number) => Promise<GraphProcessingAnalysis>;
 
   // Processamento
-  processGraph: (
-    options: GraphProcessingOptions,
-  ) => Promise<GraphProcessingResult>;
-  applyResult: () => MapNode[];
+  processGraph: (options: GraphProcessingOptions) => Promise<GraphProcessingResult>;
+  applyResult: () => { streets: GeoJSON.FeatureCollection; nodes: MapNode[] };
   reset: () => void;
-  undo: () => MapNode[] | null;
+  undo: () => { streets: GeoJSON.FeatureCollection; nodes: MapNode[] } | null;
+}
+
+interface GraphProcessingSnapshot {
+  streets: GeoJSON.FeatureCollection;
+  nodes: MapNode[];
 }
 
 export function useGraphProcessing(
+  streets: GeoJSON.FeatureCollection | null,
   nodes: MapNode[],
   options?: UseGraphProcessingOptions,
 ): UseGraphProcessingReturn {
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<GraphProcessingResult | null>(null);
-  const [history, setHistory] = useState<MapNode[][]>([]);
+  const [history, setHistory] = useState<GraphProcessingSnapshot[]>([]);
 
   const processor = useMemo(
     () => GraphProcessorService.getInstance(),
     [],
   );
+  const nodesService = useMemo(() => NodesService.getInstance(), []);
 
-  // Análise de arestas
+  const buildCurrentStreets = useCallback(() => {
+    if (!streets) {
+      throw new Error("Nenhum GeoJSON carregado para processamento");
+    }
+    return nodesService.applyNodesToStreets(streets, nodes);
+  }, [streets, nodes, nodesService]);
+
+  // Análise de arestas (backend)
   const analyzeEdges = useCallback(
-    (maxEdgeLength: number): EdgeAnalysis[] => {
+    async (maxEdgeLength: number): Promise<GraphProcessingAnalysis> => {
       try {
-        return processor.analyzeEdges(nodes, maxEdgeLength);
+        if (!streets || nodes.length === 0) {
+          return { needsSubdivision: 0, totalNodesNeeded: 0, skippedEdges: 0, totalEdges: 0 };
+        }
+        const currentStreets = buildCurrentStreets();
+        return await processor.analyzeGraph(currentStreets, maxEdgeLength);
       } catch (error) {
         options?.onError?.(error as Error);
-        return [];
+        return { needsSubdivision: 0, totalNodesNeeded: 0, skippedEdges: 0, totalEdges: 0 };
       }
     },
-    [nodes, processor, options],
+    [streets, nodes, buildCurrentStreets, processor, options],
   );
 
   // Processar grafo
@@ -70,17 +86,40 @@ export function useGraphProcessing(
     async (processingOptions: GraphProcessingOptions): Promise<GraphProcessingResult> => {
       setIsProcessing(true);
       try {
-        // Salvar estado atual no histórico
-        setHistory((prev) => [...prev, [...nodes]]);
+        if (nodes.length === 0) {
+          const emptyResult: GraphProcessingResult = {
+            originalNodeCount: 0,
+            newNodeCount: 0,
+            processedEdges: 0,
+            skippedEdges: 0,
+            processingTime: 0,
+            streets: streets ?? { type: "FeatureCollection", features: [] },
+            nodes: [],
+          };
+          setResult(emptyResult);
+          return emptyResult;
+        }
 
-        // Processar
-        const processingResult = processor.processGraph(
-          nodes,
+        const currentStreets = buildCurrentStreets();
+        setHistory((prev) => [...prev, { streets: currentStreets, nodes: [...nodes] }]);
+
+        const processingResult = await processor.processGraph(
+          currentStreets,
           processingOptions,
         );
 
-        setResult(processingResult);
-        return processingResult;
+        const processedNodes = nodesService.extractNodesFromStreets(
+          processingResult.geojson,
+        );
+
+        const resultWithNodes: GraphProcessingResult = {
+          ...processingResult.stats,
+          streets: processingResult.geojson,
+          nodes: processedNodes,
+        };
+
+        setResult(resultWithNodes);
+        return resultWithNodes;
       } catch (error) {
         const err = error instanceof Error ? error : new Error("Erro desconhecido");
         options?.onError?.(err);
@@ -89,21 +128,21 @@ export function useGraphProcessing(
         setIsProcessing(false);
       }
     },
-    [nodes, processor, options],
+    [nodes, streets, buildCurrentStreets, processor, nodesService, options],
   );
 
   // Aplicar resultado
-  const applyResult = useCallback((): MapNode[] => {
+  const applyResult = useCallback(() => {
     if (!result) {
       throw new Error("Nenhum resultado para aplicar");
     }
 
-    const processedNodes = result.nodes;
-    options?.onApply?.(processedNodes);
+    const payload = { streets: result.streets, nodes: result.nodes };
+    options?.onApply?.(payload);
     setResult(null);
     setHistory([]);
 
-    return processedNodes;
+    return payload;
   }, [result, options]);
 
   // Resetar
@@ -113,17 +152,17 @@ export function useGraphProcessing(
   }, []);
 
   // Desfazer
-  const undo = useCallback((): MapNode[] | null => {
+  const undo = useCallback(() => {
     if (history.length === 0) {
       return null;
     }
 
-    const previousNodes = history[history.length - 1];
+    const previous = history[history.length - 1];
     setHistory((prev) => prev.slice(0, -1));
     setResult(null);
-    options?.onApply?.(previousNodes);
+    options?.onApply?.(previous);
 
-    return previousNodes;
+    return previous;
   }, [history, options]);
 
   const canUndo = history.length > 0;

@@ -31,13 +31,15 @@ import type { MapNode } from "../types";
 import { Loader2, Play, Check, X, Undo2, BarChart3 } from "lucide-react";
 
 interface GraphProcessingPanelProps {
+  streets: GeoJSON.FeatureCollection | null;
   nodes: MapNode[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onApply?: (nodes: MapNode[]) => void;
+  onApply?: (payload: { streets: GeoJSON.FeatureCollection; nodes: MapNode[] }) => void;
 }
 
 export function GraphProcessingPanel({
+  streets,
   nodes,
   open,
   onOpenChange,
@@ -68,9 +70,9 @@ export function GraphProcessingPanel({
     applyResult,
     reset,
     undo,
-  } = useGraphProcessing(nodes, {
-    onApply: (processedNodes) => {
-      onApply?.(processedNodes);
+  } = useGraphProcessing(streets, nodes, {
+    onApply: (payload) => {
+      onApply?.(payload);
       onOpenChange(false);
     },
     onError: (error) => {
@@ -79,21 +81,15 @@ export function GraphProcessingPanel({
     },
   });
 
-  const handleAnalyze = useCallback(() => {
-    const analysis = analyzeEdges(maxEdgeLength);
-    const needsSubdivision = analysis.filter((a) => a.needsSubdivision).length;
-    const totalNodesNeeded = analysis.reduce(
-      (sum, a) => sum + a.intermediateNodesNeeded,
-      0,
-    );
-    const skippedEdges = analysis.length - needsSubdivision;
+  const handleAnalyze = useCallback(async () => {
+    const analysis = await analyzeEdges(maxEdgeLength);
 
     setAnalysisDialog({
       open: true,
       data: {
-        needsSubdivision,
-        totalNodesNeeded,
-        skippedEdges,
+        needsSubdivision: analysis.needsSubdivision,
+        totalNodesNeeded: analysis.totalNodesNeeded,
+        skippedEdges: analysis.skippedEdges,
       },
     });
     setShowAnalysis(true);
@@ -195,7 +191,7 @@ export function GraphProcessingPanel({
           <div className="flex flex-col gap-2">
             <Button
               onClick={handleAnalyze}
-              disabled={isProcessing || nodes.length === 0}
+              disabled={isProcessing || nodes.length === 0 || !streets}
               variant="outline"
               className="w-full"
             >
@@ -205,7 +201,9 @@ export function GraphProcessingPanel({
 
             <Button
               onClick={handleProcess}
-              disabled={isProcessing || nodes.length === 0 || maxEdgeLength <= 0}
+              disabled={
+                isProcessing || nodes.length === 0 || maxEdgeLength <= 0 || !streets
+              }
               className="w-full"
             >
               {isProcessing ? (

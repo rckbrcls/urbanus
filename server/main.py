@@ -6,6 +6,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
 from elevation import enrich_geojson as _enrich_geojson
+from graph_processing import analyze_geojson as _analyze_geojson
+from graph_processing import process_geojson as _process_geojson
 
 app = FastAPI()
 
@@ -61,6 +63,21 @@ class ElevationEnrichRequest(BaseModel):
     demType: Optional[str] = "COP30"
 
 
+class GraphProcessOptions(BaseModel):
+    maxEdgeLength: float
+    preserveElevations: Optional[bool] = True
+
+
+class GraphProcessRequest(BaseModel):
+    geojson: Dict[str, Any]
+    options: GraphProcessOptions
+
+
+class GraphAnalyzeRequest(BaseModel):
+    geojson: Dict[str, Any]
+    maxEdgeLength: float
+
+
 @app.get("/")
 def read_root():
     return {"status": "ok"}
@@ -107,5 +124,33 @@ async def elevation_enrich(req: ElevationEnrichRequest):
         return enriched
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/graph/analyze")
+async def graph_analyze(req: GraphAnalyzeRequest):
+    if req.maxEdgeLength <= 0:
+        raise HTTPException(
+            status_code=400, detail="maxEdgeLength deve ser maior que zero"
+        )
+    try:
+        return _analyze_geojson(req.geojson, req.maxEdgeLength)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/graph/process")
+async def graph_process(req: GraphProcessRequest):
+    if req.options.maxEdgeLength <= 0:
+        raise HTTPException(
+            status_code=400, detail="maxEdgeLength deve ser maior que zero"
+        )
+    try:
+        return _process_geojson(
+            req.geojson,
+            req.options.maxEdgeLength,
+            bool(req.options.preserveElevations),
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
