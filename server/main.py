@@ -63,9 +63,17 @@ class ElevationEnrichRequest(BaseModel):
     demType: Optional[str] = "COP30"
 
 
+class GraphProcessRules(BaseModel):
+    maxSegmentLength: Optional[float] = None
+    minSegmentLength: Optional[float] = None
+    minSlope: Optional[float] = None
+    maxSlope: Optional[float] = None
+
+
 class GraphProcessOptions(BaseModel):
     maxEdgeLength: float
     preserveElevations: Optional[bool] = True
+    rules: Optional[GraphProcessRules] = None
 
 
 class GraphProcessRequest(BaseModel):
@@ -147,10 +155,12 @@ async def graph_process(req: GraphProcessRequest):
             status_code=400, detail="maxEdgeLength deve ser maior que zero"
         )
     try:
+        rules = req.options.rules.model_dump() if req.options.rules else None
         return _process_geojson(
             req.geojson,
             req.options.maxEdgeLength,
             bool(req.options.preserveElevations),
+            rules,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

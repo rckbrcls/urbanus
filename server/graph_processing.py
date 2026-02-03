@@ -2,6 +2,8 @@ import math
 import time
 from typing import Any, Dict, List, Optional
 
+from sewer_standards import resolve_rules
+
 
 def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     r = 6371000.0
@@ -26,6 +28,65 @@ def _extract_elevations(feature: Dict[str, Any], expected_len: int) -> Optional[
     if not isinstance(elevations, list) or len(elevations) != expected_len:
         return None
     return [None if v is None else float(v) for v in elevations]
+
+
+def _init_checks() -> Dict[str, int]:
+    return {
+        "segmentCount": 0,
+        "tooLong": 0,
+        "tooShort": 0,
+        "belowMinSlope": 0,
+        "aboveMaxSlope": 0,
+        "missingElevation": 0,
+    }
+
+
+def _accumulate_checks(target: Dict[str, int], addition: Dict[str, int]) -> None:
+    for key, value in addition.items():
+        target[key] = target.get(key, 0) + value
+
+
+def _summarize_segments(
+    coords: List[List[float]],
+    elevations: Optional[List[Optional[float]]],
+    min_segment_length: Optional[float],
+    max_segment_length: Optional[float],
+    min_slope: Optional[float],
+    max_slope: Optional[float],
+) -> Dict[str, int]:
+    summary = _init_checks()
+
+    if len(coords) < 2:
+        return summary
+
+    for i in range(len(coords) - 1):
+        start = coords[i]
+        end = coords[i + 1]
+        length = _haversine_m(start[1], start[0], end[1], end[0])
+
+        summary["segmentCount"] += 1
+
+        if max_segment_length is not None and length > max_segment_length:
+            summary["tooLong"] += 1
+        if min_segment_length is not None and length < min_segment_length:
+            summary["tooShort"] += 1
+
+        if elevations is None:
+            continue
+
+        start_elev = elevations[i]
+        end_elev = elevations[i + 1]
+        if start_elev is None or end_elev is None or length <= 0:
+            summary["missingElevation"] += 1
+            continue
+
+        slope = abs((end_elev - start_elev) / length)
+        if min_slope is not None and slope < min_slope:
+            summary["belowMinSlope"] += 1
+        if max_slope is not None and slope > max_slope:
+            summary["aboveMaxSlope"] += 1
+
+    return summary
 
 
 def analyze_geojson(
@@ -69,13 +130,23 @@ def process_geojson(
     geojson: Dict[str, Any],
     max_edge_length: float,
     preserve_elevations: bool,
+    rules: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     start_time = time.perf_counter()
+
+    resolved_rules = resolve_rules(max_edge_length, rules)
+    max_segment_length = resolved_rules.get("maxSegmentLength") or max_edge_length
+    min_segment_length = resolved_rules.get("minSegmentLength")
+    min_slope = resolved_rules.get("minSlope")
+    max_slope = resolved_rules.get("maxSlope")
 
     original_node_count = 0
     new_node_count = 0
     processed_edges = 0
     skipped_edges = 0
+
+    checks_before = _init_checks()
+    checks_after = _init_checks()
 
     new_features: List[Dict[str, Any]] = []
 
@@ -93,6 +164,12 @@ def process_geojson(
             continue
 
         elevations = _extract_elevations(feature, len(coords))
+
+        _accumulate_checks(
+            checks_before,
+            _summarize_segments(coords, elevations, min_segment_length, max_segment_length, min_slope, max_slope),
+        )
+
         new_coords: List[List[float]] = []
         new_elevations: Optional[List[Optional[float]]] = [] if elevations is not None else None
 
@@ -111,9 +188,9 @@ def process_geojson(
                     new_elevations.append(start_elev)
 
             distance = _haversine_m(start_lat, start_lng, end_lat, end_lng)
-            if distance > max_edge_length:
+            if distance > max_segment_length:
                 processed_edges += 1
-                num_intermediates = int(math.floor(distance / max_edge_length))
+                num_intermediates = int(math.floor(distance / max_segment_length))
                 for j in range(1, num_intermediates + 1):
                     alpha = j / (num_intermediates + 1)
                     new_lat = _interpolate(start_lat, end_lat, alpha)
@@ -145,6 +222,18 @@ def process_geojson(
             props["vertex_elevations"] = new_elevations
             new_feature["properties"] = props
 
+        _accumulate_checks(
+            checks_after,
+            _summarize_segments(
+                new_coords,
+                new_elevations,
+                min_segment_length,
+                max_segment_length,
+                min_slope,
+                max_slope,
+            ),
+        )
+
         new_features.append(new_feature)
 
     processed_geojson = {k: v for k, v in geojson.items() if k != "features"}
@@ -160,5 +249,10 @@ def process_geojson(
             "processedEdges": processed_edges,
             "skippedEdges": skipped_edges,
             "processingTime": processing_time_ms,
+        },
+        "checks": {
+            "rules": resolved_rules,
+            "before": checks_before,
+            "after": checks_after,
         },
     }

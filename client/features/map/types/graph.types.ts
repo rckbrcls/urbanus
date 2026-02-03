@@ -10,7 +10,12 @@ import type { MapNode } from "./node.types";
 export interface GraphProcessingOptions {
   maxEdgeLength: number; // em metros
   preserveElevations: boolean; // interpolar elevações
-  minEdgeLength?: number; // mínimo para processar (opcional)
+  rules?: {
+    maxSegmentLength?: number;
+    minSegmentLength?: number;
+    minSlope?: number;
+    maxSlope?: number;
+  };
 }
 
 /**

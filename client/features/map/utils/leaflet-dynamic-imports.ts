@@ -25,6 +25,11 @@ export const Rectangle = dynamic(
   { ssr: false }
 );
 
+export const Polygon = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Polygon),
+  { ssr: false }
+);
+
 export const Polyline = dynamic(
   () => import('react-leaflet').then((mod) => mod.Polyline),
   { ssr: false }
