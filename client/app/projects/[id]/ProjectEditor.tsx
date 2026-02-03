@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network } from 'lucide-react';
 
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +36,7 @@ import {
 } from '@/features/map/utils';
 import { useThrottle } from '@/features/map/utils/throttle';
 import { GeoCalculations } from '@/lib/geo/calculations';
+import { toast } from '@/components/ui/sonner';
 
 // ============ TYPES ============
 
@@ -473,8 +475,12 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   const handleDelete = async () => {
     if (!project) return;
-    await deleteProject(project.id);
-    router.push('/projects');
+    try {
+      await deleteProject(project.id);
+      router.push('/projects');
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+    }
   };
 
   const handleDeleteSelected = useCallback(() => {
@@ -487,7 +493,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     }
 
     if (result.failedIds.length > 0) {
-      alert(
+      toast.error(
         `Não foi possível deletar ${result.failedIds.length} nó(s) (bloqueados ou endpoints).`
       );
     }
@@ -527,14 +533,14 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     );
   }
 
-    const projectBoundsRing: [number, number][] = [
-        [project.bounds.southWest.lat, project.bounds.southWest.lng],
-        [project.bounds.southWest.lat, project.bounds.northEast.lng],
-        [project.bounds.northEast.lat, project.bounds.northEast.lng],
-        [project.bounds.northEast.lat, project.bounds.southWest.lng],
-    ];
+  const projectBoundsRing: [number, number][] = [
+    [project.bounds.southWest.lat, project.bounds.southWest.lng],
+    [project.bounds.southWest.lat, project.bounds.northEast.lng],
+    [project.bounds.northEast.lat, project.bounds.northEast.lng],
+    [project.bounds.northEast.lat, project.bounds.southWest.lng],
+  ];
 
-    const maskPositions: [number, number][][] = [WORLD_BOUNDS_RING, projectBoundsRing];
+  const maskPositions: [number, number][][] = [WORLD_BOUNDS_RING, projectBoundsRing];
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
@@ -566,8 +572,8 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             <button
               onClick={() => setEditMode('move')}
               className={`px-3 py-1 text-xs rounded-md transition-colors ${editMode === 'move'
-                  ? 'bg-white shadow text-black dark:bg-zinc-600 dark:text-white'
-                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                ? 'bg-white shadow text-black dark:bg-zinc-600 dark:text-white'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                 }`}
             >
               Move
@@ -575,8 +581,8 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             <button
               onClick={() => setEditMode('add')}
               className={`px-3 py-1 text-xs rounded-md transition-colors ${editMode === 'add'
-                  ? 'bg-white shadow text-green-600 dark:bg-green-900/30 dark:text-green-400'
-                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                ? 'bg-white shadow text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                 }`}
             >
               Add
@@ -736,8 +742,8 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             <button
               onClick={() => setActiveTab('overview')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'overview'
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
+                ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
                 }`}
             >
               Overview
@@ -745,8 +751,8 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             <button
               onClick={() => setActiveTab('streets')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'streets'
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
+                ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
                 }`}
             >
               Streets

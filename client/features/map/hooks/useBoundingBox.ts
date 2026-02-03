@@ -5,14 +5,15 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import L from "leaflet";
+import type * as Leaflet from "leaflet";
 import { BoundingBoxService } from "../services";
 import { GeoCalculations, type LatLng, type BoundingBox } from "@/lib/geo";
 import type { BboxValidationResult } from "../types";
 import { BBOX_COLORS, MAP_STYLES, AREA_LIMITS } from "../constants";
+import { useLeaflet } from "./useLeaflet";
 
 interface UseBoundingBoxOptions {
-  mapInstance: L.Map | null;
+  mapInstance: Leaflet.Map | null;
   enabled: boolean;
   onSelectionStart?: () => void;
   onSelectionUpdate?: (bbox: BoundingBox, area: number) => void;
@@ -30,6 +31,7 @@ export function useBoundingBox(options: UseBoundingBoxOptions) {
     onSelectionCancel,
   } = options;
   const service = BoundingBoxService.getInstance();
+  const leaflet = useLeaflet();
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentBbox, setCurrentBbox] = useState<BoundingBox | null>(null);
@@ -38,7 +40,7 @@ export function useBoundingBox(options: UseBoundingBoxOptions) {
   );
 
   const startPointRef = useRef<LatLng | null>(null);
-  const rectangleRef = useRef<L.Rectangle | null>(null);
+  const rectangleRef = useRef<Leaflet.Rectangle | null>(null);
 
   /**
    * Inicia o modo de seleção de bbox
@@ -57,7 +59,7 @@ export function useBoundingBox(options: UseBoundingBoxOptions) {
    * Handler para início do desenho (mousedown com shift)
    */
   const handleDrawStart = useCallback(
-    (e: L.LeafletMouseEvent) => {
+    (e: Leaflet.LeafletMouseEvent) => {
       if (!enabled || !e.originalEvent.shiftKey) return;
 
       e.originalEvent.stopPropagation();
@@ -80,8 +82,9 @@ export function useBoundingBox(options: UseBoundingBoxOptions) {
    * Handler para atualização do desenho (mousemove)
    */
   const handleDrawUpdate = useCallback(
-    (e: L.LeafletMouseEvent) => {
-      if (!isDrawing || !startPointRef.current || !mapInstance) return;
+    (e: Leaflet.LeafletMouseEvent) => {
+      if (!isDrawing || !startPointRef.current || !mapInstance || !leaflet)
+        return;
 
       const endPoint: LatLng = { lat: e.latlng.lat, lng: e.latlng.lng };
       const bbox = service.createFromPoints(startPointRef.current, endPoint);
@@ -91,7 +94,7 @@ export function useBoundingBox(options: UseBoundingBoxOptions) {
       const area = service.calculateArea(bbox);
       const isValid = service.isAreaValid(area);
 
-      const bounds = L.latLngBounds(
+      const bounds = leaflet.latLngBounds(
         [bbox.southWest.lat, bbox.southWest.lng],
         [bbox.northEast.lat, bbox.northEast.lng],
       );
@@ -102,7 +105,7 @@ export function useBoundingBox(options: UseBoundingBoxOptions) {
           isValid ? MAP_STYLES.rectangle.valid : MAP_STYLES.rectangle.invalid,
         );
       } else {
-        rectangleRef.current = L.rectangle(bounds, {
+        rectangleRef.current = leaflet.rectangle(bounds, {
           ...MAP_STYLES.rectangle.valid,
           dashArray: "5, 5",
         }).addTo(mapInstance);
@@ -110,7 +113,7 @@ export function useBoundingBox(options: UseBoundingBoxOptions) {
 
       onSelectionUpdate?.(bbox, area);
     },
-    [isDrawing, mapInstance, service, onSelectionUpdate],
+    [isDrawing, mapInstance, leaflet, service, onSelectionUpdate],
   );
 
   /**

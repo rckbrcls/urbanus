@@ -1,5 +1,7 @@
 import type { BoundingBox } from "@/features/map";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/components/ui/sonner";
+import { getErrorMessage, getErrorMessageFromResponse } from "@/lib/errors";
 
 export interface ProjectStats {
   streetCount: number;
@@ -22,13 +24,25 @@ const API_URL = "http://localhost:8000";
 // API Functions
 const fetchProjects = async (): Promise<Project[]> => {
   const response = await fetch(`${API_URL}/projects`);
-  if (!response.ok) throw new Error("Failed to fetch projects");
+  if (!response.ok) {
+    const message = await getErrorMessageFromResponse(
+      response,
+      "Failed to fetch projects",
+    );
+    throw new Error(message);
+  }
   return response.json();
 };
 
 const fetchProject = async (id: string): Promise<Project> => {
   const response = await fetch(`${API_URL}/projects/${id}`);
-  if (!response.ok) throw new Error("Failed to fetch project");
+  if (!response.ok) {
+    const message = await getErrorMessageFromResponse(
+      response,
+      "Failed to fetch project",
+    );
+    throw new Error(message);
+  }
   return response.json();
 };
 
@@ -38,7 +52,13 @@ const createProject = async (project: Project): Promise<Project> => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(project),
   });
-  if (!response.ok) throw new Error("Failed to create project");
+  if (!response.ok) {
+    const message = await getErrorMessageFromResponse(
+      response,
+      "Failed to create project",
+    );
+    throw new Error(message);
+  }
   return response.json();
 };
 
@@ -46,7 +66,13 @@ const deleteProject = async (id: string): Promise<void> => {
   const response = await fetch(`${API_URL}/projects/${id}`, {
     method: "DELETE",
   });
-  if (!response.ok) throw new Error("Failed to delete project");
+  if (!response.ok) {
+    const message = await getErrorMessageFromResponse(
+      response,
+      "Failed to delete project",
+    );
+    throw new Error(message);
+  }
 };
 
 const updateProject = async (project: Project): Promise<Project> => {
@@ -56,7 +82,13 @@ const updateProject = async (project: Project): Promise<Project> => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(project),
   });
-  if (!response.ok) throw new Error("Failed to update project");
+  if (!response.ok) {
+    const message = await getErrorMessageFromResponse(
+      response,
+      "Failed to update project",
+    );
+    throw new Error(message);
+  }
   return response.json();
 };
 
@@ -83,6 +115,9 @@ export const useCreateProject = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Failed to create project"));
+    },
   });
 };
 
@@ -92,6 +127,9 @@ export const useDeleteProject = () => {
     mutationFn: deleteProject,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Failed to delete project"));
     },
   });
 };
@@ -103,6 +141,9 @@ export const useUpdateProject = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["projects", data.id] });
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Failed to update project"));
     },
   });
 };

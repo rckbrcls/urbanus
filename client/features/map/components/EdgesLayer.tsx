@@ -9,9 +9,10 @@
 'use client';
 
 import { useEffect, useRef, useMemo, useCallback } from 'react';
-import L from 'leaflet';
+import type * as Leaflet from 'leaflet';
 import type { MapNode, LatLng } from '../types';
 import { HIGHWAY_COLORS, HIGHWAY_WEIGHTS } from '../constants';
+import { useLeaflet } from '../hooks/useLeaflet';
 
 interface Edge {
     id: string;
@@ -25,7 +26,7 @@ interface Edge {
 }
 
 interface EdgesLayerProps {
-    mapInstance: L.Map | null;
+    mapInstance: Leaflet.Map | null;
     nodes: MapNode[];
     draggedNodeId: string | null;
     dragPosition: LatLng | null;
@@ -43,7 +44,8 @@ export function EdgesLayer({
     onEdgeClick,
     onEdgeHover,
 }: EdgesLayerProps) {
-    const layerRef = useRef<L.LayerGroup | null>(null);
+    const layerRef = useRef<Leaflet.LayerGroup | null>(null);
+    const leaflet = useLeaflet();
 
     // Group nodes by streetId and sort by vertexIndex
     const nodesByStreet = useMemo(() => {
@@ -101,7 +103,7 @@ export function EdgesLayer({
     }, [nodesByStreet, draggedNodeId, dragPosition]);
 
     // Get edge style based on highway type
-    const getEdgeStyle = useCallback((edge: Edge): L.PolylineOptions => {
+    const getEdgeStyle = useCallback((edge: Edge): Leaflet.PolylineOptions => {
         const highway = edge.highway || 'default';
         return {
             color: HIGHWAY_COLORS[highway] || HIGHWAY_COLORS.default,
@@ -137,7 +139,9 @@ export function EdgesLayer({
 
     // Create/update edges layer
     useEffect(() => {
-        if (!mapInstance) return;
+        if (!mapInstance || !leaflet) return;
+
+        const L = leaflet;
 
         // Remove previous layer
         if (layerRef.current) {
@@ -192,7 +196,7 @@ export function EdgesLayer({
         return () => {
             layerRef.current?.remove();
         };
-    }, [mapInstance, edges, showTooltips, getEdgeStyle, buildTooltipContent, onEdgeClick, onEdgeHover]);
+    }, [mapInstance, leaflet, edges, showTooltips, getEdgeStyle, buildTooltipContent, onEdgeClick, onEdgeHover]);
 
     return null;
 }

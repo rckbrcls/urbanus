@@ -8,12 +8,13 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import L from 'leaflet';
+import type * as Leaflet from 'leaflet';
 import type { MapNode, LatLng, NodeEditMode } from '../types';
 import { NODE_STYLES } from '../constants';
+import { useLeaflet } from '../hooks/useLeaflet';
 
 interface NodesLayerProps {
-    mapInstance: L.Map | null;
+    mapInstance: Leaflet.Map | null;
     nodes: MapNode[];
     selectedIds: string[];
     hoveredId: string | null;
@@ -57,15 +58,21 @@ function NodesLayerComponent({
     onDragStart,
     onDoubleClick,
 }: NodesLayerProps) {
-    const layerRef = useRef<L.LayerGroup | null>(null);
-    const markersRef = useRef<Map<string, L.CircleMarker>>(new Map());
+    const layerRef = useRef<Leaflet.LayerGroup | null>(null);
+    const markersRef = useRef<Map<string, Leaflet.CircleMarker>>(new Map());
+    const leaflet = useLeaflet();
 
     // Convert selectedIds to Set for fast lookup
     const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
     // Determine node style
     const getNodeStyle = useCallback(
-        (node: MapNode, isSelected: boolean, isHovered: boolean, isBeingDragged: boolean): L.CircleMarkerOptions => {
+        (
+            node: MapNode,
+            isSelected: boolean,
+            isHovered: boolean,
+            isBeingDragged: boolean
+        ): Leaflet.CircleMarkerOptions => {
             let style = NODE_STYLES.default;
 
             // Style priority (lowest to highest)
@@ -112,7 +119,9 @@ function NodesLayerComponent({
 
     // Create/update nodes layer
     useEffect(() => {
-        if (!mapInstance) return;
+        if (!mapInstance || !leaflet) return;
+
+        const L = leaflet;
 
         // Remove previous layer
         if (layerRef.current) {
@@ -223,6 +232,7 @@ function NodesLayerComponent({
         };
     }, [
         mapInstance,
+        leaflet,
         nodes,
         selectedIdSet,
         hoveredId,
