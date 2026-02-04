@@ -12,18 +12,19 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { 
-  Folder, 
-  GalleryVerticalEnd, 
-  Map, 
-  Moon, 
-  Sun, 
-  Upload, 
-  Network, 
-  BarChart3, 
-  Download, 
-  Settings, 
-  BookOpen 
+import {
+  Folder,
+  GalleryVerticalEnd,
+  Map,
+  Moon,
+  Sun,
+  Upload,
+  Network,
+  BarChart3,
+  Download,
+  Settings,
+  BookOpen,
+  Building
 } from "lucide-react"
 import Link from "next/link"
 import { useTheme } from "next-themes"
@@ -49,7 +50,7 @@ export function AppSidebar() {
             <SidebarMenuButton size="lg" asChild>
               <a href="#">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <GalleryVerticalEnd className="size-4" />
+                  <Building className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
                   <span className="font-semibold">Urbanus</span>
