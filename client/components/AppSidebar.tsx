@@ -19,7 +19,6 @@ import {
   Moon,
   Sun,
   Upload,
-  Network,
   BarChart3,
   Download,
   Settings,
@@ -86,14 +85,6 @@ export function AppSidebar() {
                   <Link href="/import">
                     <Upload />
                     <span>Import</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Graph Analysis">
-                  <Link href="/analysis">
-                    <Network />
-                    <span>Analysis</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

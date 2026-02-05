@@ -24,7 +24,6 @@ import { useNodeDrag } from '@/features/map/hooks/useNodeDrag';
 import { useElevationSync } from '@/features/map/hooks/useElevationSync';
 import { MapNode, NodeEditMode } from '@/features/map/types/node.types';
 import { LatLng } from '@/features/map/types/map.types';
-import { GraphProcessingPanel } from '@/features/map/components/GraphProcessingPanel';
 import { EdgesLayer, NodesLayer } from '@/features/map/components';
 import {
   MapContainer,
@@ -223,7 +222,6 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [isGraphProcessingOpen, setIsGraphProcessingOpen] = useState(false);
   const didInitRef = useRef(false);
 
   // NodesService for undo/redo
@@ -619,11 +617,11 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             {isSaving ? 'Saving...' : 'Save'}
           </button>
 
-          {/* Graph Processing Button */}
+          {/* Graph Processing Button (disabled — coming soon) */}
           <button
-            onClick={() => setIsGraphProcessingOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            title="Processar Grafo"
+            disabled
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-400 cursor-not-allowed opacity-50 dark:border-zinc-700 dark:text-zinc-500"
+            title="Em breve"
           >
             <Network className="h-4 w-4" />
             Processar
@@ -905,18 +903,6 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
         </div>
       </div>
 
-      {/* Graph Processing Panel */}
-      <GraphProcessingPanel
-        streets={originalStreets}
-        nodes={nodes}
-        open={isGraphProcessingOpen}
-        onOpenChange={setIsGraphProcessingOpen}
-        onApply={({ streets, nodes: processedNodes }) => {
-          setOriginalStreets(streets);
-          setNodes(processedNodes);
-          setHasChanges(true);
-        }}
-      />
     </div>
   );
 }
