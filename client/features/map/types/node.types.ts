@@ -18,9 +18,13 @@ export interface MapNode {
   vertexIndex: number;
 
   // Características
+  highway?: string;
   isEndpoint: boolean;
   isIntersection?: boolean;
   connectedStreets?: string[];
+  degree?: number;
+  isHighestElevation?: boolean;
+  isLowestElevation?: boolean;
 
   // Estado de UI
   isSelected: boolean;
@@ -129,4 +133,31 @@ export interface SelectionOptions {
 export interface BatchResult<T> {
   success: T[];
   failed: Array<{ id: string; error: string }>;
+}
+
+/**
+ * Resposta do endpoint /nodes/extract (backend Python)
+ */
+export interface NodesExtractResponse {
+  nodes: Array<{
+    id: string;
+    position: { lat: number; lng: number };
+    elevation: number | null;
+    degree: number;
+    isIntersection: boolean;
+    isEndpoint: boolean;
+    connectedStreets: string[];
+    streetNames: string[];
+    isHighestElevation: boolean;
+    isLowestElevation: boolean;
+  }>;
+  metadata: {
+    totalVertices: number;
+    totalUniquePositions: number;
+    filteredNodes: number;
+    highestElevationNodeId: string | null;
+    lowestElevationNodeId: string | null;
+    highestElevation: number | null;
+    lowestElevation: number | null;
+  };
 }

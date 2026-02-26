@@ -69,36 +69,40 @@ export class NodesService {
    */
   extractNodesFromStreets(streets: GeoJSON.FeatureCollection): MapNode[] {
     const nodes: MapNode[] = [];
-    const nodeMap = new Map<string, MapNode>();
     const intersectionMap = new Map<string, string[]>(); // posKey -> streetIds
 
+    // Pré-computar streetId estável por feature (evita uuid diferente entre passes)
+    const featureStreetIds = new Map<GeoJSON.Feature, string>();
     streets.features.forEach((feature) => {
       if (feature.geometry.type !== "LineString") return;
+      featureStreetIds.set(feature, feature.properties?.id?.toString() || uuidv4());
+    });
 
-      const streetId = feature.properties?.id?.toString() || uuidv4();
+    // Passo 1: Construir intersectionMap (precisa de todos os vértices primeiro)
+    featureStreetIds.forEach((streetId, feature) => {
+      const coordinates = (feature.geometry as GeoJSON.LineString).coordinates as [number, number][];
+
+      coordinates.forEach((coord) => {
+        const [lng, lat] = coord;
+        const posKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        const streetIds = intersectionMap.get(posKey) || [];
+        streetIds.push(streetId);
+        intersectionMap.set(posKey, streetIds);
+      });
+    });
+
+    // Passo 2: Criar um nó por vértice por rua (sem deduplicação)
+    featureStreetIds.forEach((streetId, feature) => {
       const streetName = feature.properties?.name || "Unnamed";
-      const coordinates = feature.geometry.coordinates as [number, number][];
+      const coordinates = (feature.geometry as GeoJSON.LineString).coordinates as [number, number][];
       const elevations =
         (feature.properties?.vertex_elevations as (number | null)[]) || [];
 
       coordinates.forEach((coord, index) => {
         const [lng, lat] = coord;
         const posKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-
-        // Track intersections
         const streetIds = intersectionMap.get(posKey) || [];
-        streetIds.push(streetId);
-        intersectionMap.set(posKey, streetIds);
-
-        // Verifica se já existe nó nessa posição (interseção)
-        if (nodeMap.has(posKey)) {
-          const existing = nodeMap.get(posKey)!;
-          // Nó compartilhado - é uma interseção
-          existing.isEndpoint = false;
-          existing.isIntersection = true;
-          existing.connectedStreets = streetIds;
-          return;
-        }
+        const degree = new Set(streetIds).size;
 
         const node: MapNode = {
           id: uuidv4(),
@@ -106,10 +110,12 @@ export class NodesService {
           elevation: elevations[index] ?? null,
           streetId,
           streetName,
+          highway: feature.properties?.highway || undefined,
           vertexIndex: index,
           isEndpoint: index === 0 || index === coordinates.length - 1,
-          isIntersection: false,
-          connectedStreets: [streetId],
+          isIntersection: degree > 2,
+          degree,
+          connectedStreets: [...new Set(streetIds)],
           isSelected: false,
           isHovered: false,
           isDragging: false,
@@ -119,9 +125,20 @@ export class NodesService {
         };
 
         nodes.push(node);
-        nodeMap.set(posKey, node);
       });
     });
+
+    // Passo 3: Marcar nós de maior/menor elevação (entre interseções)
+    let highestNode: MapNode | null = null;
+    let lowestNode: MapNode | null = null;
+
+    for (const node of nodes) {
+      if (!node.isIntersection || node.elevation === null) continue;
+      if (!highestNode || node.elevation > highestNode.elevation!) highestNode = node;
+      if (!lowestNode || node.elevation < lowestNode.elevation!) lowestNode = node;
+    }
+    if (highestNode) highestNode.isHighestElevation = true;
+    if (lowestNode) lowestNode.isLowestElevation = true;
 
     return nodes;
   }

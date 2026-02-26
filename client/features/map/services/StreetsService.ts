@@ -86,10 +86,11 @@ export class StreetsService {
           throw new StreetsError(
             "Limite de requisições excedido",
             "RATE_LIMITED",
+            response.status,
           );
         }
 
-        throw new StreetsError(errorMessage, "FETCH_ERROR");
+        throw new StreetsError(errorMessage, "FETCH_ERROR", response.status);
       }
 
       const geojson = await response.json();
@@ -203,12 +204,16 @@ export type StreetsErrorCode =
  * Classe de erro customizada para operações com ruas
  */
 export class StreetsError extends Error {
+  public status?: number;
+
   constructor(
     message: string,
     public code: StreetsErrorCode,
+    status?: number,
   ) {
     super(message);
     this.name = "StreetsError";
+    this.status = status;
   }
 
   /**

@@ -127,6 +127,7 @@ export const initialMapState: MapState = {
   stages: {
     streets: "pending",
     topography: "pending",
+    nodes: "pending",
   },
   errors: {},
 
@@ -225,7 +226,7 @@ export function mapReducer(state: MapState, action: MapAction): MapState {
         streetsData: null,
         nodes: [],
         streetCount: 0,
-        stages: { streets: "pending", topography: "pending" },
+        stages: { streets: "pending", topography: "pending", nodes: "pending" },
         errors: {},
       };
 

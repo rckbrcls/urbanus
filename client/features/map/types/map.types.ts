@@ -31,11 +31,13 @@ export interface BboxDimensions {
 export interface ProcessingStages {
   streets: "pending" | "loading" | "success" | "error";
   topography: "pending" | "loading" | "success" | "error" | "skipped";
+  nodes: "pending" | "loading" | "success" | "error";
 }
 
 export interface ProcessingErrors {
   streets?: string;
   topography?: string;
+  nodes?: string;
 }
 
 export interface MapContainerProps {

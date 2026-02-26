@@ -24,7 +24,6 @@ import {
     HIGHWAY_COLORS,
     AREA_LIMITS,
     GeoCalculations,
-    NodesService,
     type BoundingBox,
     type MapContainerProps,
 } from '@/features/map';
@@ -97,9 +96,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     const [isSaving, setIsSaving] = useState(false);
 
     const isCropped = viewMode === 'cropped' || viewMode === 'edit';
-
-    // NodesService for applying nodes to streets
-    const nodesService = NodesService.getInstance();
 
     // ============ MAP INITIALIZATION ============
 
@@ -326,17 +322,35 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
 
         // Add nodes as small, read-only circle markers
         nodes.forEach((node) => {
+            // Determine color based on node type
+            let color = '#8b5cf6'; // violet for intersections (default)
+            let radius = 4;
+            if (node.isHighestElevation) {
+                color = '#ef4444'; // red
+                radius = 6;
+            } else if (node.isLowestElevation) {
+                color = '#06b6d4'; // cyan
+                radius = 6;
+            } else if (node.isEndpoint) {
+                color = '#f59e0b'; // amber
+            }
+
             const marker = L.circleMarker([node.position.lat, node.position.lng], {
-                radius: 3, // Small radius for preview
-                color: node.isEndpoint ? '#f59e0b' : '#6b7280', // amber for endpoints, gray for others
-                fillColor: node.isEndpoint ? '#f59e0b' : '#6b7280',
-                fillOpacity: 0.6,
+                radius,
+                color,
+                fillColor: color,
+                fillOpacity: 0.7,
                 weight: 1,
             });
 
-            // Simple tooltip with elevation info
-            const elevText = node.elevation !== null ? `${node.elevation.toFixed(1)}m` : 'N/A';
-            marker.bindTooltip(`${elevText}`, {
+            // Tooltip with elevation and degree info
+            const parts: string[] = [];
+            if (node.elevation !== null) parts.push(`${node.elevation.toFixed(1)}m`);
+            if (node.degree) parts.push(`${node.degree} ruas`);
+            if (node.isHighestElevation) parts.push('MAIOR ELEVAÇÃO');
+            if (node.isLowestElevation) parts.push('MENOR ELEVAÇÃO');
+
+            marker.bindTooltip(parts.join(' | ') || 'N/A', {
                 direction: 'top',
                 offset: [0, -5],
                 className: 'node-preview-tooltip',
@@ -419,9 +433,6 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
     const handleSaveProject = useCallback(async () => {
         if (!projectName.trim() || !activeBbox || !streetsData) return;
 
-        // Apply node changes to streets
-        const updatedStreets = nodesService.applyNodesToStreets(streetsData, nodes);
-
         setIsSaving(true);
         try {
             const newProject = {
@@ -433,7 +444,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                 center: lastCenter,
                 zoom: lastZoom,
                 stats: { streetCount: streetCount || 0 },
-                streets: updatedStreets,
+                streets: streetsData,
             };
 
             await createProject(newProject);
@@ -443,7 +454,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
         } finally {
             setIsSaving(false);
         }
-    }, [projectName, activeBbox, streetsData, nodes, nodesService, bboxArea, lastCenter, lastZoom, streetCount, createProject, router]);
+    }, [projectName, activeBbox, streetsData, bboxArea, lastCenter, lastZoom, streetCount, createProject, router]);
 
     // ============ RENDER ============
 
@@ -554,7 +565,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                                 </button>
                             )}
 
-                            {!isProcessing && (stages.streets === 'error' || stages.topography === 'error') && (
+                            {!isProcessing && (stages.streets === 'error' || stages.topography === 'error' || stages.nodes === 'error') && (
                                 <button
                                     onClick={startProcessing}
                                     className="flex items-center gap-2 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-orange-700"
@@ -563,7 +574,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                                 </button>
                             )}
 
-                            {stages.streets === 'success' && stages.topography === 'success' && !isSaving && (
+                            {stages.streets === 'success' && stages.topography === 'success' && stages.nodes === 'success' && !isSaving && (
                                 <button
                                     onClick={() => setShowSaveDialog(true)}
                                     className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-emerald-700"
@@ -579,7 +590,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                                 </span>
                             )}
 
-                            {stages.streets === 'success' && stages.topography === 'success' && (
+                            {stages.streets === 'success' && stages.topography === 'success' && stages.nodes === 'success' && (
                                 <span className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white shadow-md">
                                     ✓ Processed
                                 </span>
@@ -601,7 +612,7 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                         )}
 
                         {/* Error Messages */}
-                        {(stages.streets === 'error' || stages.topography === 'error') && (
+                        {(stages.streets === 'error' || stages.topography === 'error' || stages.nodes === 'error') && (
                             <div className="absolute left-3 top-14 flex flex-col gap-2" style={{ pointerEvents: 'auto' }}>
                                 {stages.streets === 'error' && (
                                     <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
@@ -611,6 +622,11 @@ function MapContent({ enableBoundingBox }: { enableBoundingBox: boolean }) {
                                 {stages.topography === 'error' && (
                                     <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
                                         Topography: {errors.topography || 'Failed'}
+                                    </span>
+                                )}
+                                {stages.nodes === 'error' && (
+                                    <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
+                                        Nodes: {errors.nodes || 'Failed'}
                                     </span>
                                 )}
                             </div>

@@ -74,6 +74,21 @@ function sleep(ms: number): Promise<void> {
  * Verifica se um erro é recuperável (deve retry)
  */
 export function isRetryableError(error: unknown): boolean {
+  // Check status property (works with StreetsError and plain objects)
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const status = (error as { status: number }).status;
+    if (typeof status === "number") {
+      // 5xx errors são geralmente recuperáveis
+      if (status >= 500 && status < 600) {
+        return true;
+      }
+      // 429 Too Many Requests
+      if (status === 429) {
+        return true;
+      }
+    }
+  }
+
   if (error instanceof Error) {
     // Erros de rede geralmente são recuperáveis
     if (error.message.includes("network") || error.message.includes("fetch")) {
@@ -86,20 +101,16 @@ export function isRetryableError(error: unknown): boolean {
     }
 
     // Timeout deve retry
-    if (error.message.includes("timeout")) {
+    if (
+      error.message.includes("timeout") ||
+      error.message.includes("Timeout") ||
+      error.message.includes("too busy")
+    ) {
       return true;
     }
-  }
 
-  // HTTP errors
-  if (typeof error === "object" && error !== null && "status" in error) {
-    const status = (error as { status: number }).status;
-    // 5xx errors são geralmente recuperáveis
-    if (status >= 500 && status < 600) {
-      return true;
-    }
-    // 429 Too Many Requests
-    if (status === 429) {
+    // Overpass-specific errors
+    if (error.message.includes("Overpass")) {
       return true;
     }
   }

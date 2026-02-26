@@ -19,6 +19,7 @@ import type L from 'leaflet';
 import type { LatLng, BoundingBox, ViewMode, NodeEditMode, MapNode } from '../types';
 import { ElevationService } from '../services/ElevationService';
 import { NodesService } from '../services/NodesService';
+import { NodesApiService } from '../services/NodesApiService';
 import { StreetsService } from '../services/StreetsService';
 import {
     type MapContextValue,
@@ -55,6 +56,7 @@ export function MapProvider({
     // Services (singletons)
     const elevationService = ElevationService.getInstance();
     const nodesService = NodesService.getInstance();
+    const nodesApiService = NodesApiService.getInstance();
     const streetsService = StreetsService.getInstance();
 
     // Initial state with overrides
@@ -142,24 +144,30 @@ export function MapProvider({
             dispatch({ type: 'SET_STAGES', payload: { topography: 'success' } });
             dispatch({ type: 'SET_STREETS_DATA', payload: enrichedStreets });
 
-            // 3. Extract nodes from enriched streets
-            const extractedNodes = nodesService.extractNodesFromStreets(enrichedStreets);
+            // 3. Extract nodes via backend (only intersections with degree > 2)
+            dispatch({ type: 'SET_STAGES', payload: { nodes: 'loading' } });
+            const { nodes: extractedNodes } = await nodesApiService.extractNodes(enrichedStreets);
             dispatch({ type: 'SET_NODES', payload: extractedNodes });
+            dispatch({ type: 'SET_STAGES', payload: { nodes: 'success' } });
         } catch (error) {
             const err = error instanceof Error ? error : new Error('Erro desconhecido');
             onError?.(err);
 
-            if (stateRef.current.stages.streets !== 'success') {
+            const { stages } = stateRef.current;
+            if (stages.streets !== 'success') {
                 dispatch({ type: 'SET_STAGES', payload: { streets: 'error' } });
                 dispatch({ type: 'SET_ERRORS', payload: { streets: err.message } });
-            } else {
+            } else if (stages.topography !== 'success') {
                 dispatch({ type: 'SET_STAGES', payload: { topography: 'error' } });
                 dispatch({ type: 'SET_ERRORS', payload: { topography: err.message } });
+            } else {
+                dispatch({ type: 'SET_STAGES', payload: { nodes: 'error' } });
+                dispatch({ type: 'SET_ERRORS', payload: { nodes: err.message } });
             }
         } finally {
             dispatch({ type: 'SET_PROCESSING', payload: false });
         }
-    }, [streetsService, elevationService, nodesService, onStreetsLoaded, onError]);
+    }, [streetsService, elevationService, nodesApiService, onStreetsLoaded, onError]);
 
     const cancelProcessing = useCallback(() => {
         dispatch({ type: 'SET_PROCESSING', payload: false });

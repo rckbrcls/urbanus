@@ -90,7 +90,7 @@ export function EdgesLayer({
                     id: `${streetId}-${startNode.vertexIndex}-${endNode.vertexIndex}`,
                     streetId,
                     streetName: startNode.streetName,
-                    highway: (startNode as any).highway,
+                    highway: startNode.highway,
                     startNode,
                     endNode,
                     startPosition,

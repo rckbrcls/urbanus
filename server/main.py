@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
 from elevation import enrich_geojson as _enrich_geojson
+from nodes import extract_nodes as _extract_nodes
 
 app = FastAPI()
 
@@ -46,6 +47,10 @@ class Project(BaseModel):
     zoom: float
     stats: ProjectStats
     streets: Dict[str, Any]
+
+
+class NodesExtractRequest(BaseModel):
+    geojson: Dict[str, Any]
 
 
 class ElevationEnrichBbox(BaseModel):
@@ -91,6 +96,18 @@ async def delete_project(project_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"status": "deleted"}
+
+
+@app.post("/nodes/extract")
+async def nodes_extract(req: NodesExtractRequest):
+    """Extract intersection nodes (degree > 2) from enriched GeoJSON."""
+    try:
+        result = _extract_nodes(req.geojson)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/elevation/enrich")

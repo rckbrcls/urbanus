@@ -43,7 +43,7 @@ export function MapInfoPanel({
 
         return {
             total: nodes.length,
-            endpoints: nodes.filter((n) => n.isEndpoint).length,
+            intersections: nodes.filter((n) => n.isIntersection).length,
             selected: nodes.filter((n) => n.isSelected).length,
         };
     }, [nodes]);
@@ -80,6 +80,7 @@ export function MapInfoPanel({
                         <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                         {stages.streets === 'loading' && 'Buscando ruas...'}
                         {stages.topography === 'loading' && 'Buscando topografia...'}
+                        {stages.nodes === 'loading' && 'Extraindo nós...'}
                     </div>
                 )}
 
@@ -97,7 +98,7 @@ export function MapInfoPanel({
                 {showNodeCount && nodeStats && (
                     <div className="flex gap-3">
                         <InfoItem label="Nós" value={nodeStats.total.toString()} />
-                        <InfoItem label="Endpoints" value={nodeStats.endpoints.toString()} />
+                        <InfoItem label="Interseções" value={nodeStats.intersections.toString()} />
                         {nodeStats.selected > 0 && (
                             <InfoItem label="Selecionados" value={nodeStats.selected.toString()} highlight />
                         )}
@@ -124,6 +125,9 @@ export function MapInfoPanel({
                 )}
                 {stages.topography === 'error' && (
                     <div className="text-xs text-amber-500">Elevação indisponível</div>
+                )}
+                {stages.nodes === 'error' && (
+                    <div className="text-xs text-red-500">Erro ao extrair nós</div>
                 )}
             </div>
         </div>

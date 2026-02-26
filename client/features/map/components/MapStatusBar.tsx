@@ -25,8 +25,8 @@ export function MapStatusBar({
     nodeCount,
     areaKm2,
 }: MapStatusBarProps) {
-    const hasError = stages.streets === 'error' || stages.topography === 'error';
-    const isComplete = stages.streets === 'success' && stages.topography === 'success';
+    const hasError = stages.streets === 'error' || stages.topography === 'error' || stages.nodes === 'error';
+    const isComplete = stages.streets === 'success' && stages.topography === 'success' && stages.nodes === 'success';
 
     return (
         <div className="flex items-center gap-3">
@@ -43,6 +43,7 @@ export function MapStatusBar({
                     <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
                     {stages.streets === 'loading' && 'Buscando ruas...'}
                     {stages.topography === 'loading' && 'Buscando topografia...'}
+                    {stages.nodes === 'loading' && 'Extraindo nós...'}
                 </span>
             )}
 
@@ -77,6 +78,11 @@ export function MapStatusBar({
                     {stages.topography === 'error' && (
                         <span className="flex items-center gap-2 rounded-lg bg-red-500/95 px-3 py-1.5 text-xs font-medium text-white shadow-md backdrop-blur-sm">
                             ⚠️ Topografia: {errors.topography || 'Falha'}
+                        </span>
+                    )}
+                    {stages.nodes === 'error' && (
+                        <span className="flex items-center gap-2 rounded-lg bg-red-500/95 px-3 py-1.5 text-xs font-medium text-white shadow-md backdrop-blur-sm">
+                            ⚠️ Nós: {errors.nodes || 'Falha'}
                         </span>
                     )}
                 </div>

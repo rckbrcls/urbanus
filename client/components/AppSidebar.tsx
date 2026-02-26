@@ -14,15 +14,9 @@ import {
 } from "@/components/ui/sidebar"
 import {
   Folder,
-  GalleryVerticalEnd,
   Map,
   Moon,
   Sun,
-  Upload,
-  BarChart3,
-  Download,
-  Settings,
-  BookOpen,
   Building
 } from "lucide-react"
 import Link from "next/link"
@@ -77,53 +71,6 @@ export function AppSidebar() {
                   <Link href="/projects">
                     <Folder />
                     <span>Projects</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Data Import">
-                  <Link href="/import">
-                    <Upload />
-                    <span>Import</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Analytics">
-                  <Link href="/analytics">
-                    <BarChart3 />
-                    <span>Analytics</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Export">
-                  <Link href="/export">
-                    <Download />
-                    <span>Export</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>System</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Settings">
-                  <Link href="/settings">
-                    <Settings />
-                    <span>Settings</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Documentation">
-                  <Link href="/docs">
-                    <BookOpen />
-                    <span>Documentation</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

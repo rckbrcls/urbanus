@@ -80,10 +80,20 @@ function NodesLayerComponent({
                 style = NODE_STYLES.endpoint;
             }
 
+            // Base: intersection style (all backend nodes are degree > 2)
             if (node.isIntersection && showIntersections) {
-                style = NODE_STYLES.endpoint;
+                style = NODE_STYLES.intersection;
             }
 
+            // Elevation extremes (higher priority than base intersection)
+            if (node.isLowestElevation) {
+                style = NODE_STYLES.lowestElevation;
+            }
+            if (node.isHighestElevation) {
+                style = NODE_STYLES.highestElevation;
+            }
+
+            // Interaction states (highest priority)
             if (isHovered) {
                 style = NODE_STYLES.hovered;
             }
@@ -267,10 +277,16 @@ function buildTooltipContent(node: MapNode, showElevation: boolean): string {
         parts.push(node.streetName);
     }
 
+    // Degree info
+    if (node.isIntersection && node.degree) {
+        parts.push(`Interseção (${node.degree} ruas)`);
+    }
+
     // Badges
     const badges: string[] = [];
+    if (node.isHighestElevation) badges.push('MAIOR ELEVAÇÃO');
+    if (node.isLowestElevation) badges.push('MENOR ELEVAÇÃO');
     if (node.isEndpoint) badges.push('Endpoint');
-    if (node.isIntersection) badges.push('Intersection');
     if (node.isLocked) badges.push('Locked');
 
     if (badges.length > 0) {

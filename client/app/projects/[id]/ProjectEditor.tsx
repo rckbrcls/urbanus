@@ -51,6 +51,7 @@ interface EdgeData {
 
 function MapContent({
   nodes,
+  displayNodes,
   setNodes,
   editMode,
   selectedIds,
@@ -62,6 +63,7 @@ function MapContent({
   findNearestEdge,
 }: {
   nodes: MapNode[];
+  displayNodes: MapNode[];
   setNodes: React.Dispatch<React.SetStateAction<MapNode[]>>;
   editMode: NodeEditMode;
   selectedIds: string[];
@@ -173,10 +175,10 @@ function MapContent({
         onEdgeClick={editMode === 'add' ? onEdgeClick : undefined}
       />
 
-      {/* Nodes layer - imperative Leaflet for smoother zoom/pan */}
+      {/* Nodes layer - only intersection nodes (degree > 2) */}
       <NodesLayer
         mapInstance={map}
-        nodes={nodes}
+        nodes={displayNodes}
         selectedIds={selectedIds}
         hoveredId={hoveredId}
         draggedNodeId={draggedNodeId}
@@ -347,7 +349,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
               id: `${streetId}-${startNode.vertexIndex}-${endNode.vertexIndex}`,
               streetId,
               streetName: startNode.streetName,
-              highway: (startNode as any).highway,
+              highway: startNode.highway,
               startNode,
               endNode,
             };
@@ -467,6 +469,12 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
     return hasElevation ? { min, max } : null;
   }, [project]);
+
+  // Nós de interseção (degree > 2) para exibição no NodesLayer
+  const intersectionNodes = useMemo(
+    () => nodes.filter((n) => n.degree && n.degree > 2),
+    [nodes]
+  );
 
   const canUndo = nodesService.canUndo();
   const canRedo = nodesService.canRedo();
@@ -706,6 +714,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             {nodes.length > 0 && (
               <MapContent
                 nodes={nodes}
+                displayNodes={intersectionNodes}
                 setNodes={setNodes}
                 editMode={editMode}
                 selectedIds={selectedIds}
@@ -728,7 +737,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             </div>
             <div className="rounded-lg bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm dark:bg-zinc-900/90">
               <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                {nodes.length} nodes | {selectedIds.length} selected
+                {intersectionNodes.length} nodes | {selectedIds.length} selected
               </span>
             </div>
           </div>
@@ -778,7 +787,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                         Total Nodes
                       </p>
                       <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                        {nodes.length}
+                        {intersectionNodes.length}
                       </p>
                     </div>
                     <div className="col-span-2 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">

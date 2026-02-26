@@ -54,9 +54,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Construir filtro de tipos de highway
-    const highwayFilter = types.map((t) => `["highway"="${t}"]`).join("");
-
     // Query Overpass para buscar ruas
     const query = `
       [out:json][timeout:30];
@@ -68,24 +65,61 @@ export async function POST(request: NextRequest) {
       out skel qt;
     `;
 
-    const response = await fetch(OVERPASS_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: `data=${encodeURIComponent(query)}`,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 35_000);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Overpass API error:", errorText);
+    let response: Response;
+    try {
+      response = await fetch(OVERPASS_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeout);
+      const msg = fetchError instanceof Error && fetchError.name === "AbortError"
+        ? "Timeout: servidor Overpass não respondeu em 35s"
+        : "Falha de conexão com o servidor Overpass";
+      return NextResponse.json({ error: msg }, { status: 504 });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const responseText = await response.text();
+
+    // Overpass can return 200 with HTML error body — detect it
+    const isHtml = response.headers.get("content-type")?.includes("text/html")
+      || responseText.trimStart().startsWith("<");
+
+    if (!response.ok || isHtml) {
+      // Try to extract a human-readable message from Overpass HTML
+      const overpassMsg = responseText.match(/<p[^>]*>.*?<strong[^>]*>Error<\/strong>:\s*(.*?)<\/p>/s)?.[1]
+        ?.replace(/<[^>]+>/g, "").trim();
+
+      const userMessage = overpassMsg
+        ? `Overpass: ${overpassMsg}`
+        : "Erro ao buscar dados do OpenStreetMap";
+
+      console.error("Overpass API error:", overpassMsg || responseText.slice(0, 500));
       return NextResponse.json(
-        { error: "Erro ao buscar dados do OpenStreetMap", details: errorText },
-        { status: response.status }
+        { error: userMessage },
+        { status: response.ok ? 502 : response.status }
       );
     }
 
-    const data = await response.json();
+    let data: { elements: Array<{ type: string; id: number; nodes?: number[]; lat?: number; lon?: number; tags?: Record<string, string> }> };
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      console.error("Overpass returned invalid JSON:", responseText.slice(0, 500));
+      return NextResponse.json(
+        { error: "Resposta inválida do servidor Overpass" },
+        { status: 502 }
+      );
+    }
 
     // Converter para GeoJSON
     const geojson = convertToGeoJSON(data);
@@ -128,7 +162,7 @@ function convertToGeoJSON(data: {
 
   // Separar nodes e ways
   for (const element of data.elements) {
-    if (element.type === "node" && element.lat && element.lon) {
+    if (element.type === "node" && element.lat != null && element.lon != null) {
       nodes[element.id] = [element.lon, element.lat];
     } else if (element.type === "way" && element.nodes) {
       ways.push({
