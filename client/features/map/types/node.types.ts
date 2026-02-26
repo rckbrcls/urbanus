@@ -150,7 +150,6 @@ export interface NodesExtractResponse {
     streetNames: string[];
     isHighestElevation: boolean;
     isLowestElevation: boolean;
-    // Campos disponíveis em ambos os modos
     streetId: string;
     streetName: string;
     highway: string | null;
