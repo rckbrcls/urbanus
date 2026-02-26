@@ -4,7 +4,7 @@ Elevation enrichment service.
 O que faz:
 - busca um GeoTIFF do OpenTopography para a bbox solicitada
 - amostra elevação nos vértices de cada LineString
-- injeta `vertex_elevations`, estatísticas e `max_slope` no GeoJSON
+- injeta `vertex_elevations` e estatísticas no GeoJSON
 
 Este módulo é usado pelo backend Python (FastAPI) e roda server-side
 para evitar trabalho pesado no navegador.
@@ -101,18 +101,6 @@ def _elevation_stats(elevations: list[float | None]) -> dict[str, Any]:
     return {"min": mn, "max": mx, "avg": avg, "range": mx - mn}
 
 
-def _max_slope(elevations: list[float | None]) -> float | None:
-    """
-    Calcula variação máxima de elevação entre vértices consecutivos.
-    Observação: este valor NÃO divide pela distância (não é slope m/m).
-    Serve apenas como indicador rápido.
-    """
-    diffs: list[float] = []
-    for i in range(len(elevations) - 1):
-        a, b = elevations[i], elevations[i + 1]
-        if a is not None and b is not None:
-            diffs.append(abs(b - a))
-    return max(diffs) if diffs else None
 
 
 def enrich_geojson(
@@ -127,7 +115,7 @@ def enrich_geojson(
     Enrich a GeoJSON FeatureCollection with elevation.
 
     Fetches GeoTIFF for bbox, samples at each LineString vertex,
-    adds vertex_elevations, elevation stats, and max_slope to each feature.
+    adds vertex_elevations and elevation stats to each feature.
     """
     if dem_type not in DEM_TYPES:
         dem_type = DEFAULT_DEM
@@ -163,13 +151,11 @@ def enrich_geojson(
                 pairs = [(float(c[0]), float(c[1])) for c in coords]
                 elevations = _sample_elevations_at(src, pairs, no_val)
                 stats = _elevation_stats(elevations)
-                max_slope = _max_slope(elevations)
 
                 # Injeta propriedades calculadas
                 props = dict(f.get("properties") or {})
                 props["vertex_elevations"] = elevations
                 props["elevation"] = stats
-                props["max_slope"] = max_slope
 
                 enriched.append({
                     **f,

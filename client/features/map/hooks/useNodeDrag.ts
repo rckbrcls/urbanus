@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef, useMemo } from "react";
 import { NodesService } from "../services";
-import { useThrottle } from "../utils/throttle";
+import { getColocatedNodeIds } from "../utils/colocated";
 import type {
   BoundingBox,
   LatLng,
@@ -198,12 +198,15 @@ export function useNodeDrag(options: UseNodeDragOptions) {
       }
     }
 
-    // Aplica movimento (atualiza estado apenas uma vez no final)
-    const { nodes: updatedNodes } = service.moveNode(
-      nodes,
-      draggedNodeId,
-      dragPosition,
-    );
+    // Encontra todos os nós co-localizados (mesma posição na interseção)
+    const colocatedIds = getColocatedNodeIds(nodes, node);
+
+    // Aplica movimento para todos os nós co-localizados (batch para undo correto)
+    const movements = Array.from(colocatedIds).map((id) => ({
+      nodeId: id,
+      newPosition: dragPosition,
+    }));
+    const { nodes: updatedNodes } = service.moveNodes(nodes, movements);
     setNodes(updatedNodes);
 
     // Reset estado

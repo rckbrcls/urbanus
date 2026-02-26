@@ -10,6 +10,7 @@ import type {
   ViewMode,
   NodeEditMode,
   MapNode,
+  EnrichedFeatureCollection,
 } from "../types";
 import type L from "leaflet";
 
@@ -38,7 +39,7 @@ export interface MapState {
   errors: ProcessingErrors;
 
   // Dados
-  streetsData: GeoJSON.FeatureCollection | null;
+  streetsData: EnrichedFeatureCollection | null;
   streetCount: number;
 
   // Edição de nós
@@ -88,9 +89,9 @@ export interface MapActions {
   redo: () => void;
 
   // Data
-  setStreetsData: (data: GeoJSON.FeatureCollection | null) => void;
+  setStreetsData: (data: EnrichedFeatureCollection | null) => void;
   enrichStreetsWithElevation: () => Promise<void>;
-  applyNodeChanges: () => GeoJSON.FeatureCollection | null;
+  applyNodeChanges: () => EnrichedFeatureCollection | null;
 
   // UI
   setShowCropConfirm: (show: boolean) => void;
@@ -167,7 +168,7 @@ export type MapAction =
   | { type: "SET_PROCESSING"; payload: boolean }
   | { type: "SET_STAGES"; payload: Partial<ProcessingStages> }
   | { type: "SET_ERRORS"; payload: Partial<ProcessingErrors> }
-  | { type: "SET_STREETS_DATA"; payload: GeoJSON.FeatureCollection | null }
+  | { type: "SET_STREETS_DATA"; payload: EnrichedFeatureCollection | null }
   | { type: "SET_STREET_COUNT"; payload: number }
   | { type: "SET_NODES"; payload: MapNode[] }
   | { type: "SET_NODE_EDIT_MODE"; payload: NodeEditMode }

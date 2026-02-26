@@ -13,6 +13,7 @@ import type * as Leaflet from 'leaflet';
 import type { MapNode, LatLng } from '../types';
 import { HIGHWAY_COLORS, HIGHWAY_WEIGHTS } from '../constants';
 import { useLeaflet } from '../hooks/useLeaflet';
+import { getColocatedNodeIds } from '../utils/colocated';
 
 interface Edge {
     id: string;
@@ -66,6 +67,14 @@ export function EdgesLayer({
         return map;
     }, [nodes]);
 
+    // Find all co-located node IDs (same position as dragged node)
+    const colocatedIds = useMemo(() => {
+        if (!draggedNodeId) return new Set<string>();
+        const draggedNode = nodes.find((n) => n.id === draggedNodeId);
+        if (!draggedNode) return new Set<string>();
+        return getColocatedNodeIds(nodes, draggedNode);
+    }, [nodes, draggedNodeId]);
+
     // Build edges from consecutive nodes in each street
     const edges = useMemo(() => {
         const result: Edge[] = [];
@@ -75,14 +84,14 @@ export function EdgesLayer({
                 const startNode = streetNodes[i];
                 const endNode = streetNodes[i + 1];
 
-                // Get positions, using drag position if applicable
+                // Get positions, using drag position for ALL co-located nodes
                 const startPosition =
-                    startNode.id === draggedNodeId && dragPosition
+                    colocatedIds.has(startNode.id) && dragPosition
                         ? dragPosition
                         : startNode.position;
 
                 const endPosition =
-                    endNode.id === draggedNodeId && dragPosition
+                    colocatedIds.has(endNode.id) && dragPosition
                         ? dragPosition
                         : endNode.position;
 
@@ -100,7 +109,7 @@ export function EdgesLayer({
         });
 
         return result;
-    }, [nodesByStreet, draggedNodeId, dragPosition]);
+    }, [nodesByStreet, colocatedIds, dragPosition]);
 
     // Get edge style based on highway type
     const getEdgeStyle = useCallback((edge: Edge): Leaflet.PolylineOptions => {

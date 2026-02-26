@@ -12,6 +12,7 @@ import type * as Leaflet from 'leaflet';
 import type { MapNode, LatLng, NodeEditMode } from '../types';
 import { NODE_STYLES } from '../constants';
 import { useLeaflet } from '../hooks/useLeaflet';
+import { getColocatedNodeIds } from '../utils/colocated';
 
 interface NodesLayerProps {
     mapInstance: Leaflet.Map | null;
@@ -142,9 +143,14 @@ function NodesLayerComponent({
         layerRef.current = L.layerGroup().addTo(mapInstance);
         markersRef.current.clear();
 
-        // Separate nodes: regular nodes vs dragged node
-        const regularNodes = nodes.filter((n) => n.id !== draggedNodeId);
+        // Find all co-located nodes (same position as dragged node)
         const draggedNode = nodes.find((n) => n.id === draggedNodeId);
+        const colocatedIds = draggedNode
+            ? getColocatedNodeIds(nodes, draggedNode)
+            : new Set<string>();
+
+        // Separate nodes: filter out ALL co-located nodes (not just the dragged one)
+        const regularNodes = nodes.filter((n) => !colocatedIds.has(n.id));
 
         // Add markers for regular nodes first
         regularNodes.forEach((node) => {

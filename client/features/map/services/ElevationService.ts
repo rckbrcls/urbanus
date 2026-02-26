@@ -6,7 +6,10 @@
  */
 
 import type { BoundingBox } from "../types";
-import type { DEMType } from "../types/elevation.types";
+import type {
+  DEMType,
+  EnrichedFeatureCollection,
+} from "../types/elevation.types";
 
 export type ElevationErrorCode =
   | "FETCH_ERROR"
@@ -24,7 +27,9 @@ export class ElevationError extends Error {
   }
 
   isRetryable(): boolean {
-    return ["FETCH_ERROR", "RATE_LIMITED", "PROCESSING_ERROR"].includes(this.code);
+    return ["FETCH_ERROR", "RATE_LIMITED", "PROCESSING_ERROR"].includes(
+      this.code,
+    );
   }
 }
 
@@ -49,13 +54,13 @@ export class ElevationService {
 
   /**
    * Enrich GeoJSON with elevation via server (Python + rasterio).
-   * Returns enriched FeatureCollection (vertex_elevations, elevation stats, max_slope).
+   * Returns enriched FeatureCollection (vertex_elevations, elevation stats).
    */
   async fetchEnrichedGeoJSON(
     geojson: GeoJSON.FeatureCollection,
     bbox: BoundingBox,
     options: FetchEnrichedOptions = {},
-  ): Promise<GeoJSON.FeatureCollection> {
+  ): Promise<EnrichedFeatureCollection> {
     const { demType = "COP30" } = options;
 
     const body = {
@@ -85,12 +90,15 @@ export class ElevationService {
           /* ignore */
         }
         if (res.status === 429) {
-          throw new ElevationError("Rate limit exceeded. Try again later.", "RATE_LIMITED");
+          throw new ElevationError(
+            "Rate limit exceeded. Try again later.",
+            "RATE_LIMITED",
+          );
         }
         throw new ElevationError(msg, "FETCH_ERROR");
       }
 
-      const enriched = (await res.json()) as GeoJSON.FeatureCollection;
+      const enriched = (await res.json()) as EnrichedFeatureCollection;
       return enriched;
     } catch (e) {
       if (e instanceof ElevationError) throw e;
@@ -105,7 +113,11 @@ export class ElevationService {
    * Stub: client-side elevation lookup removed (server-side enrichment only).
    * useElevationSync calls this when elevationData is provided; we always return null.
    */
-  getElevationAtPoint(_data: unknown, _lat: number, _lng: number): number | null {
+  getElevationAtPoint(
+    _data: unknown,
+    _lat: number,
+    _lng: number,
+  ): number | null {
     return null;
   }
 }

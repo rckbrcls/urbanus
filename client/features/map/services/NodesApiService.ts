@@ -6,6 +6,7 @@
  */
 
 import type { MapNode, NodesExtractResponse } from "../types/node.types";
+import type { EnrichedFeatureCollection } from "../types/elevation.types";
 
 export interface NodesApiResult {
   nodes: MapNode[];
@@ -29,7 +30,7 @@ export class NodesApiService {
    * Envia o GeoJSON enriquecido e recebe apenas nós com grau > 2.
    */
   async extractNodes(
-    geojson: GeoJSON.FeatureCollection
+    geojson: EnrichedFeatureCollection,
   ): Promise<NodesApiResult> {
     const res = await fetch("/api/nodes/extract", {
       method: "POST",

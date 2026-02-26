@@ -69,5 +69,39 @@ export interface StreetElevationData {
   avg: number | null;
   range: number | null;
   vertexElevations: (number | null)[];
-  maxSlope: number | null;
 }
+
+// ============ ENRICHED GEOJSON TYPES ============
+
+/** Properties de elevação injetadas pelo servidor (elevation.py) */
+export interface EnrichedElevationStats {
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+  range: number | null;
+}
+
+/** Properties de uma rua enriquecida (Overpass + elevation.py) */
+export interface EnrichedStreetProperties {
+  id: number;
+  name: string | null;
+  highway: string;
+  surface: string | null;
+  lanes: number | null;
+  maxspeed: string | null;
+  oneway: boolean;
+  vertex_elevations: (number | null)[];
+  elevation: EnrichedElevationStats;
+}
+
+/** Feature individual de rua enriquecida */
+export type EnrichedFeature = GeoJSON.Feature<
+  GeoJSON.LineString,
+  EnrichedStreetProperties
+>;
+
+/** FeatureCollection de ruas enriquecidas */
+export type EnrichedFeatureCollection = GeoJSON.FeatureCollection<
+  GeoJSON.LineString,
+  EnrichedStreetProperties
+>;
