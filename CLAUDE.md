@@ -4,12 +4,9 @@ Este repositório contém duas linhas principais:
 - App web moderna (Next.js + React + Leaflet) em `client/`.
 - Backend Python (FastAPI + MongoDB + rasterio) em `server/`.
 
-Há também uma versão legada Streamlit em `URBANUS-1.0.0/` com o algoritmo 1.0.0.
-
 **Estrutura**
 - `client/`: Next.js (App Router) com módulo de mapa em `client/features/map/`.
 - `server/`: FastAPI com CRUD de projetos e enriquecimento de elevação via OpenTopography.
-- `URBANUS-1.0.0/`: app Streamlit legada (grafo/normalização de arestas).
 - `docs/`: documentos de arquitetura e decisões.
 
 **Fluxos principais (web atual)**
@@ -39,12 +36,6 @@ Docker (stack completa):
 docker-compose up --build
 ```
 
-Legado (Streamlit 1.0.0):
-```bash
-cd URBANUS-1.0.0
-streamlit run main.py --server.maxUploadSize 5000
-```
-
 **Variáveis de ambiente**
 - `OPENTOPOGRAPHY_API_KEY`: obrigatório para elevação (FastAPI e rota `/api/topography`).
 - `PYTHON_API_URL`: usado pelo Next.js em `client/app/api/elevation/enrich/route.ts` (default `http://localhost:8000`).
@@ -63,7 +54,3 @@ streamlit run main.py --server.maxUploadSize 5000
 
 **Testes**
 - Não há suite automatizada. Use `pnpm lint` no frontend.
-
-**Escopo do legado (URBANUS-1.0.0)**
-- Streamlit com processamento de grafo e normalização de arestas (ver `URBANUS-1.0.0/utils.py` e `docs/URBANUS_ALGORITHM_DOCUMENTATION.md`).
-- Considerar como referência histórica, não como base da app web atual.

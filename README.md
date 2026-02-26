@@ -34,8 +34,7 @@ Sistema para análise de redes viárias urbanas com processamento de grafos, enr
 8. [Algoritmos de Processamento de Grafo](#8-algoritmos-de-processamento-de-grafo)
    - 8.1 [Algoritmo de Subdivisão de Arestas](#81-algoritmo-de-subdivisão-de-arestas)
    - 8.2 [Interpolação de Elevação](#82-interpolação-de-elevação)
-   - 8.3 [Algoritmo Legado (URBANUS 1.0.0)](#83-algoritmo-legado-urbanus-100)
-   - 8.4 [Classificação de Nós](#84-classificação-de-nós)
+   - 8.3 [Classificação de Nós](#83-classificação-de-nós)
 9. [Algoritmos Geográficos](#9-algoritmos-geográficos)
    - 9.1 [Distância Haversine](#91-distância-haversine)
    - 9.2 [Cálculo de Área](#92-cálculo-de-área)
@@ -79,7 +78,6 @@ O URBANUS é uma plataforma de análise de infraestrutura urbana que permite:
 | Versão | Stack | Localização | Status |
 |--------|-------|-------------|--------|
 | Web (atual) | Next.js + FastAPI | `client/` + `server/` | Ativa |
-| Legacy 1.0.0 | Streamlit | `URBANUS-1.0.0/` | Referência |
 
 ---
 
@@ -196,10 +194,6 @@ URBANUS/
 │   ├── elevation.py                 # GeoTIFF + enriquecimento
 │   ├── graph_processing.py          # Subdivisão de grafos
 │   └── sewer_standards.py           # Sistema de regras
-├── URBANUS-1.0.0/                   # Versão legada Streamlit
-│   ├── main.py                      # Entry point
-│   ├── utils.py                     # Processamento de grafo
-│   └── config.py                    # Estado global
 └── docs/                            # Documentação
 ```
 
@@ -748,52 +742,7 @@ def interpolate_elevation(elev1, elev2, alpha):
     """
 ```
 
-### 8.3 Algoritmo Legado (URBANUS 1.0.0)
-
-O algoritmo original no Streamlit:
-
-```python
-def process_graph(graph, new_base_interval_value):
-    """
-    Processa grafo com subdivisão de arestas.
-
-    1. CARREGAR DADOS
-       - Ler Excel com colunas source/target
-       - Extrair coordenadas de strings "x,y"
-       - Calcular distância Euclidiana
-       - Criar grafo NetworkX
-
-    2. PROCESSAR ARESTAS
-       Para cada aresta (u, v) com distância D:
-         SE D > new_base_interval_value:
-           - N = floor(D / new_base_interval_value)
-           - Criar N nós intermediários
-           - Interpolar posições linearmente
-           - Substituir aresta por N+1 novas arestas
-
-    3. CLASSIFICAR NÓS
-       - Regular: grau < 3
-       - Interseção: grau ≥ 3
-       - Novo: ID > contagem original
-
-    4. RETORNAR
-       - Grafo processado
-       - Posições dos nós
-       - Estatísticas
-    """
-```
-
-**Diferenças do Algoritmo Moderno:**
-
-| Aspecto | Legado (1.0.0) | Moderno |
-|---------|----------------|---------|
-| Distância | Euclidiana | Haversine (geodésica) |
-| Elevação | Não suportada | Interpolação linear |
-| Validação | Básica | Slope, comprimento mín/máx |
-| Formato | NetworkX interno | GeoJSON |
-| Entrada | Excel | API REST |
-
-### 8.4 Classificação de Nós
+### 8.3 Classificação de Nós
 
 ```python
 def classify_node(node_id, graph, original_count):
@@ -1864,13 +1813,6 @@ flowchart LR
         OT["OpenTopography"]
     end
 
-    subgraph Legacy["Legacy (1.0.0)"]
-        Streamlit["Streamlit"]
-        Pandas["Pandas"]
-        NetworkX["NetworkX"]
-        Matplotlib["Matplotlib"]
-    end
-
     Frontend --> Backend
     Backend --> Storage
     Frontend --> External
@@ -1911,16 +1853,6 @@ flowchart LR
 |-----|-----|
 | Overpass API | Dados de ruas (OSM) |
 | OpenTopography | DEMs (elevação) |
-
-### Legacy (URBANUS 1.0.0)
-
-| Tecnologia | Uso |
-|------------|-----|
-| Streamlit | Framework UI |
-| Pandas | Processamento de dados |
-| NetworkX | Algoritmos de grafo |
-| Matplotlib | Visualização |
-| PyMuPDF | Manipulação de PDF |
 
 ---
 
@@ -1981,18 +1913,6 @@ docker-compose down
 
 # Ver logs
 docker-compose logs -f
-```
-
-### Legacy (Streamlit 1.0.0)
-
-```bash
-cd URBANUS-1.0.0
-
-# Instalar dependências
-pip install -r requirements.txt
-
-# Executar
-streamlit run main.py --server.maxUploadSize 5000
 ```
 
 ---

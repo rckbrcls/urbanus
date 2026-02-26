@@ -56,6 +56,7 @@ function MapContent({
   editMode,
   selectedIds,
   hoveredId,
+  anchorNodeIds,
   onNodeClick,
   onNodeHover,
   onModifiedNode,
@@ -68,6 +69,7 @@ function MapContent({
   editMode: NodeEditMode;
   selectedIds: string[];
   hoveredId: string | null;
+  anchorNodeIds: Set<string>;
   onNodeClick: (node: MapNode) => void;
   onNodeHover: (nodeId: string | null) => void;
   onModifiedNode: (nodeId: string) => void;
@@ -169,6 +171,7 @@ function MapContent({
       <EdgesLayer
         mapInstance={map}
         nodes={nodes}
+        anchorNodeIds={anchorNodeIds}
         draggedNodeId={draggedNodeId}
         dragPosition={dragPosition}
         showTooltips
@@ -331,29 +334,34 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
       nodesByStreet.forEach((streetNodes, streetId) => {
         streetNodes.sort((a, b) => a.vertexIndex - b.vertexIndex);
+        let previousAnchor: MapNode | null = null;
 
-        for (let i = 0; i < streetNodes.length - 1; i++) {
-          const startNode = streetNodes[i];
-          const endNode = streetNodes[i + 1];
+        for (const node of streetNodes) {
+          const isAnchor = Boolean((node.degree && node.degree >= 2) || node.isEndpoint);
+          if (!isAnchor) continue;
 
-          // Calculate distance from click point to line segment
-          const distance = calculateDistanceToSegment(
-            clickPosition,
-            startNode.position,
-            endNode.position
-          );
+          if (previousAnchor) {
+            // Calculate distance from click point to visible edge segment
+            const distance = calculateDistanceToSegment(
+              clickPosition,
+              previousAnchor.position,
+              node.position
+            );
 
-          if (distance < minDistance) {
-            minDistance = distance;
-            nearestEdge = {
-              id: `${streetId}-${startNode.vertexIndex}-${endNode.vertexIndex}`,
-              streetId,
-              streetName: startNode.streetName,
-              highway: startNode.highway,
-              startNode,
-              endNode,
-            };
+            if (distance < minDistance) {
+              minDistance = distance;
+              nearestEdge = {
+                id: `${streetId}-${previousAnchor.vertexIndex}-${node.vertexIndex}`,
+                streetId,
+                streetName: previousAnchor.streetName,
+                highway: previousAnchor.highway,
+                startNode: previousAnchor,
+                endNode: node,
+              };
+            }
           }
+
+          previousAnchor = node;
         }
       });
 
@@ -475,6 +483,17 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     () => nodes.filter((n) => n.degree && n.degree >= 2),
     [nodes]
   );
+
+  // Nós âncora (interseções + endpoints) para construção de arestas
+  const anchorNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    nodes.forEach((n) => {
+      if ((n.degree && n.degree >= 2) || n.isEndpoint) {
+        ids.add(n.id);
+      }
+    });
+    return ids;
+  }, [nodes]);
 
   const canUndo = nodesService.canUndo();
   const canRedo = nodesService.canRedo();
@@ -719,6 +738,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                 editMode={editMode}
                 selectedIds={selectedIds}
                 hoveredId={hoveredId}
+                anchorNodeIds={anchorNodeIds}
                 onNodeClick={handleNodeClick}
                 onNodeHover={handleNodeHover}
                 onModifiedNode={handleModifiedNode}
