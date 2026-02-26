@@ -2,7 +2,7 @@
 Node extraction service.
 
 Extrai nós (interseções) de um GeoJSON de ruas enriquecido com elevação.
-Filtra apenas nós com grau > 2 (cruzamentos reais) e marca os nós
+Filtra apenas nós com grau >= 2 (cruzamentos reais) e marca os nós
 de maior e menor elevação.
 """
 
@@ -20,7 +20,7 @@ def extract_nodes(geojson: dict[str, Any]) -> dict[str, Any]:
     1. Itera todas as features LineString e seus vértices
     2. Cria chave de posição com precisão de 6 casas decimais
     3. Rastreia quais street_ids passam por cada posição (grau = nº de ruas distintas)
-    4. Filtra: retorna apenas posições com grau > 2
+    4. Filtra: retorna apenas posições com grau >= 2
     5. Anexa elevação de vertex_elevations
     6. Identifica nó de maior e menor elevação
 
@@ -84,11 +84,11 @@ def extract_nodes(geojson: dict[str, Any]) -> dict[str, Any]:
 
     total_unique = len(position_map)
 
-    # Filtrar: apenas posições com grau > 2 (3+ ruas distintas)
+    # Filtrar: apenas posições com grau >= 2 (2+ ruas distintas)
     nodes = []
     for pos_key, entry in position_map.items():
         degree = len(entry["street_ids"])
-        if degree <= 2:
+        if degree < 2:
             continue
 
         node = {

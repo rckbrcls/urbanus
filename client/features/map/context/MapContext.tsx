@@ -144,7 +144,7 @@ export function MapProvider({
             dispatch({ type: 'SET_STAGES', payload: { topography: 'success' } });
             dispatch({ type: 'SET_STREETS_DATA', payload: enrichedStreets });
 
-            // 3. Extract nodes via backend (only intersections with degree > 2)
+            // 3. Extract nodes via backend (only intersections with degree >= 2)
             dispatch({ type: 'SET_STAGES', payload: { nodes: 'loading' } });
             const { nodes: extractedNodes } = await nodesApiService.extractNodes(enrichedStreets);
             dispatch({ type: 'SET_NODES', payload: extractedNodes });

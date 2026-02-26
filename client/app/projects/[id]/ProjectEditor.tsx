@@ -175,7 +175,7 @@ function MapContent({
         onEdgeClick={editMode === 'add' ? onEdgeClick : undefined}
       />
 
-      {/* Nodes layer - only intersection nodes (degree > 2) */}
+      {/* Nodes layer - only intersection nodes (degree >= 2) */}
       <NodesLayer
         mapInstance={map}
         nodes={displayNodes}
@@ -470,9 +470,9 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     return hasElevation ? { min, max } : null;
   }, [project]);
 
-  // Nós de interseção (degree > 2) para exibição no NodesLayer
+  // Nós de interseção (degree >= 2) para exibição no NodesLayer
   const intersectionNodes = useMemo(
-    () => nodes.filter((n) => n.degree && n.degree > 2),
+    () => nodes.filter((n) => n.degree && n.degree >= 2),
     [nodes]
   );
 

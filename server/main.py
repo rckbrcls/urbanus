@@ -100,7 +100,7 @@ async def delete_project(project_id: str):
 
 @app.post("/nodes/extract")
 async def nodes_extract(req: NodesExtractRequest):
-    """Extract intersection nodes (degree > 2) from enriched GeoJSON."""
+    """Extract intersection nodes (degree >= 2) from enriched GeoJSON."""
     try:
         result = _extract_nodes(req.geojson)
         return result

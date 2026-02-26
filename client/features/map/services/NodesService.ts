@@ -113,7 +113,7 @@ export class NodesService {
           highway: feature.properties?.highway || undefined,
           vertexIndex: index,
           isEndpoint: index === 0 || index === coordinates.length - 1,
-          isIntersection: degree > 2,
+          isIntersection: degree >= 2,
           degree,
           connectedStreets: [...new Set(streetIds)],
           isSelected: false,

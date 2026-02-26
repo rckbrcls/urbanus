@@ -80,7 +80,7 @@ function NodesLayerComponent({
                 style = NODE_STYLES.endpoint;
             }
 
-            // Base: intersection style (all backend nodes are degree > 2)
+            // Base: intersection style (all backend nodes are degree >= 2)
             if (node.isIntersection && showIntersections) {
                 style = NODE_STYLES.intersection;
             }
