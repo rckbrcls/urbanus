@@ -32,7 +32,7 @@ def extract_nodes(
     """
     features = geojson.get("features", [])
 
-    # ── Passo 1: Mapear posições → street_ids (para calcular degree) ──
+    #  Passo 1: Mapear posições -> street_ids (para calcular degree)
     position_map: dict[str, dict[str, Any]] = {}
     total_vertices = 0
 
@@ -60,7 +60,7 @@ def extract_nodes(
             position_map[pos_key]["street_ids"].add(street_id)
             position_map[pos_key]["street_names"].add(street_name)
 
-    # ── Passo 2: Construir nós ──
+    #  Passo 2: Construir nós
     nodes = []
 
     for feature in features:
@@ -113,7 +113,7 @@ def extract_nodes(
             }
             nodes.append(node)
 
-    # ── Passo 3: Marcar nós de maior e menor elevação ──
+    #  Passo 3: Marcar nós de maior e menor elevação
     highest_id = None
     lowest_id = None
     highest_elev = float("-inf")
@@ -137,7 +137,7 @@ def extract_nodes(
         if node["id"] == lowest_id:
             node["isLowestElevation"] = True
 
-    # ── Metadata ──
+    #  Metadata
     total_unique = len(position_map)
 
     metadata = {
