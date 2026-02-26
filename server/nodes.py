@@ -43,6 +43,7 @@ def extract_nodes(
 
         props = feature.get("properties", {})
         street_id = str(props.get("id", str(uuid.uuid4())))
+        street_name = props.get("name") or "Unnamed"
         coordinates = geometry.get("coordinates", [])
 
         for coord in coordinates:
@@ -54,9 +55,10 @@ def extract_nodes(
             pos_key = f"{lat:.6f},{lng:.6f}"
 
             if pos_key not in position_map:
-                position_map[pos_key] = {"street_ids": set()}
+                position_map[pos_key] = {"street_ids": set(), "street_names": set()}
 
             position_map[pos_key]["street_ids"].add(street_id)
+            position_map[pos_key]["street_names"].add(street_name)
 
     # ── Passo 2: Construir nós ──
     nodes = []
@@ -80,7 +82,7 @@ def extract_nodes(
             lng, lat = coord[0], coord[1]
             pos_key = f"{lat:.6f},{lng:.6f}"
 
-            entry = position_map.get(pos_key, {"street_ids": set()})
+            entry = position_map.get(pos_key, {"street_ids": set(), "street_names": set()})
             degree = len(entry["street_ids"])
             is_intersection = degree >= 2
             is_endpoint = i == 0 or i == len(coordinates) - 1
@@ -101,15 +103,11 @@ def extract_nodes(
                 "isIntersection": is_intersection,
                 "isEndpoint": is_endpoint,
                 "connectedStreets": sorted(entry["street_ids"]),
-                "streetNames": sorted(
-                    {street_name} - {"Unnamed"}
-                ) if street_name != "Unnamed" else [],
-                # Campos adicionais para modo "all"
+                "streetNames": sorted(entry["street_names"] - {"Unnamed"}),
                 "streetId": street_id,
                 "streetName": street_name,
                 "highway": highway,
                 "vertexIndex": i,
-                # Marcadores de elevação (preenchidos depois)
                 "isHighestElevation": False,
                 "isLowestElevation": False,
             }
