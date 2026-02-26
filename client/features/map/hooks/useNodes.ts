@@ -57,9 +57,6 @@ interface UseNodesReturn {
     redoSize: number;
   };
 
-  // Extração
-  extractFromStreets: (streets: GeoJSON.FeatureCollection) => MapNode[];
-
   // Seleção
   select: (nodeId: string, addToSelection?: boolean) => void;
   deselect: (nodeId: string) => void;
@@ -155,18 +152,6 @@ export function useNodes(options: UseNodesOptions = {}): UseNodesReturn {
       redoSize: history.redoSize,
     };
   }, [nodes, service, history]);
-
-  // ============ EXTRACTION ============
-
-  const extractFromStreets = useCallback(
-    (streets: GeoJSON.FeatureCollection): MapNode[] => {
-      const extractedNodes = service.extractNodesFromStreets(streets);
-      setNodes(extractedNodes);
-      history.clearHistory();
-      return extractedNodes;
-    },
-    [service, history],
-  );
 
   // ============ SINGLE NODE OPERATIONS ============
 
@@ -403,9 +388,6 @@ export function useNodes(options: UseNodesOptions = {}): UseNodesReturn {
 
     // Estatísticas
     stats,
-
-    // Extração
-    extractFromStreets,
 
     // Seleção (delegada ao hook de seleção)
     select: (nodeId, addToSelection) =>

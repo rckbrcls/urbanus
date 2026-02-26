@@ -8,6 +8,8 @@
 import type { MapNode, NodesExtractResponse } from "../types/node.types";
 import type { EnrichedFeatureCollection } from "../types/elevation.types";
 
+export type NodesExtractMode = "intersections" | "all";
+
 export interface NodesApiResult {
   nodes: MapNode[];
   metadata: NodesExtractResponse["metadata"];
@@ -26,16 +28,19 @@ export class NodesApiService {
   }
 
   /**
-   * Extrai nós de interseção via backend Python.
-   * Envia o GeoJSON enriquecido e recebe apenas nós com grau > 2.
+   * Extrai nós via backend Python.
+   *
+   * @param mode "intersections" → apenas grau >= 2 (para preview)
+   *             "all" → todos os vértices por rua (para edição)
    */
   async extractNodes(
     geojson: EnrichedFeatureCollection,
+    mode: NodesExtractMode = "intersections",
   ): Promise<NodesApiResult> {
     const res = await fetch("/api/nodes/extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ geojson }),
+      body: JSON.stringify({ geojson, mode }),
     });
 
     if (!res.ok) {
@@ -53,9 +58,10 @@ export class NodesApiService {
       id: n.id,
       position: n.position,
       elevation: n.elevation,
-      streetId: n.connectedStreets[0] ?? "",
-      streetName: n.streetNames[0],
-      vertexIndex: 0,
+      streetId: n.streetId,
+      streetName: n.streetName,
+      highway: n.highway ?? undefined,
+      vertexIndex: n.vertexIndex,
       isEndpoint: n.isEndpoint,
       isIntersection: n.isIntersection,
       connectedStreets: n.connectedStreets,

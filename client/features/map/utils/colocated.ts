@@ -1,9 +1,9 @@
 /**
  * Utilitário para encontrar nós co-localizados (mesma posição geográfica)
  *
- * Necessário porque extractNodesFromStreets cria um MapNode por vértice por rua,
- * sem deduplicação. Interseções onde N ruas se encontram geram N nós com IDs
- * diferentes mas mesma lat/lng.
+ * Necessário quando múltiplos nós compartilham a mesma posição (ex: interseções
+ * onde distintas ruas se encontram podem gerar nós com IDs diferentes mas
+ * mesma lat/lng).
  */
 
 import type { MapNode } from "../types";
@@ -12,11 +12,11 @@ import type { MapNode } from "../types";
  * Retorna o conjunto de IDs de todos os nós que compartilham a mesma posição
  * do nó alvo (incluindo o próprio nó alvo).
  *
- * Usa toFixed(6) para comparação de precisão, consistente com extractNodesFromStreets.
+ * Usa toFixed(6) para comparação de precisão.
  */
 export function getColocatedNodeIds(
   nodes: MapNode[],
-  targetNode: MapNode
+  targetNode: MapNode,
 ): Set<string> {
   const targetKey = `${targetNode.position.lat.toFixed(6)},${targetNode.position.lng.toFixed(6)}`;
 

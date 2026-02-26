@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -51,6 +51,7 @@ class Project(BaseModel):
 
 class NodesExtractRequest(BaseModel):
     geojson: Dict[str, Any]
+    mode: Literal["intersections", "all"] = "intersections"
 
 
 class ElevationEnrichBbox(BaseModel):
@@ -100,9 +101,9 @@ async def delete_project(project_id: str):
 
 @app.post("/nodes/extract")
 async def nodes_extract(req: NodesExtractRequest):
-    """Extract intersection nodes (degree >= 2) from enriched GeoJSON."""
+    """Extract nodes from enriched GeoJSON."""
     try:
-        result = _extract_nodes(req.geojson)
+        result = _extract_nodes(req.geojson, mode=req.mode)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -127,5 +128,3 @@ async def elevation_enrich(req: ElevationEnrichRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-

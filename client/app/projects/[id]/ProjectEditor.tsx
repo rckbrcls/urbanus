@@ -20,9 +20,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { HIGHWAY_COLORS } from '@/features/map/constants';
 import { NodesService } from '@/features/map/services/NodesService';
+import { NodesApiService } from '@/features/map/services/NodesApiService';
 import { useNodeDrag } from '@/features/map/hooks/useNodeDrag';
 import { useElevationSync } from '@/features/map/hooks/useElevationSync';
 import { MapNode, NodeEditMode } from '@/features/map/types/node.types';
+import type { EnrichedFeatureCollection } from '@/features/map/types/elevation.types';
 import { LatLng } from '@/features/map/types/map.types';
 import { EdgesLayer, NodesLayer } from '@/features/map/components';
 import {
@@ -231,6 +233,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   // NodesService for undo/redo
   const nodesService = useRef(NodesService.getInstance()).current;
+  const nodesApiService = useRef(NodesApiService.getInstance()).current;
 
   // Elevation sync hook
   const {
@@ -254,11 +257,19 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     if (project?.streets && !didInitRef.current) {
       didInitRef.current = true;
       setOriginalStreets(project.streets);
-      const extractedNodes = nodesService.extractNodesFromStreets(project.streets);
-      setNodes(extractedNodes);
-      setHasChanges(false);
+
+      // Extract nodes via backend API
+      nodesApiService
+        .extractNodes(project.streets as EnrichedFeatureCollection, "all")
+        .then(({ nodes: extractedNodes }) => {
+          setNodes(extractedNodes);
+          setHasChanges(false);
+        })
+        .catch((err) => {
+          console.error('Failed to extract nodes:', err);
+        });
     }
-  }, [project, nodesService]);
+  }, [project, nodesApiService]);
 
   const handleNodeClick = useCallback((node: MapNode) => {
     // Toggle selection

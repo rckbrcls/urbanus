@@ -4,24 +4,25 @@ const PYTHON_API_URL = process.env.PYTHON_API_URL ?? "http://localhost:8000";
 
 interface NodesExtractRequest {
   geojson: GeoJSON.FeatureCollection;
+  mode?: "intersections" | "all";
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: NodesExtractRequest = await request.json();
-    const { geojson } = body;
+    const { geojson, mode = "intersections" } = body;
 
     if (!geojson?.features) {
       return NextResponse.json(
         { error: "Missing required field: geojson (with features)" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const res = await fetch(`${PYTHON_API_URL}/nodes/extract`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ geojson }),
+      body: JSON.stringify({ geojson, mode }),
     });
 
     if (!res.ok) {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       const msg = Array.isArray(err.detail) ? err.detail[0] : err.detail;
       return NextResponse.json(
         { error: msg ?? "Node extraction failed" },
-        { status: res.status }
+        { status: res.status },
       );
     }
 
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
         error: "Internal server error",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
