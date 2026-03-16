@@ -3,6 +3,7 @@
  */
 
 import { LatLng } from "./map.types";
+import type { NodeType, AccessoryType } from "@urbanus/geo";
 
 /**
  * Representa um nó no mapa (vértice de uma rua)
@@ -25,6 +26,11 @@ export interface MapNode {
   degree?: number;
   isHighestElevation?: boolean;
   isLowestElevation?: boolean;
+
+  // Pipeline classification
+  nodeType?: NodeType;
+  pvObrigatorio?: boolean;
+  accessoryType?: AccessoryType;
 
   // Estado de UI
   isSelected: boolean;

@@ -25,17 +25,27 @@ services:
       - ./apps/api:/app/apps/api
       - ./py:/app/py
     environment:
-      - MONGO_URL=mongodb://mongo:27017/urbanus
+      - DATABASE_URL=postgresql+asyncpg://urbanus:urbanus@postgres:5432/urbanus
       - OPENTOPOGRAPHY_API_KEY=${OPENTOPOGRAPHY_API_KEY:-}
     depends_on:
-      - mongo
+      postgres:
+        condition: service_healthy
 
-  mongo:
-    image: mongo:latest
+  postgres:
+    image: postgis/postgis:16-3.4
     ports:
-      - "27018:27017"
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: urbanus
+      POSTGRES_PASSWORD: urbanus
+      POSTGRES_DB: urbanus
     volumes:
-      - mongo_data:/data/db
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U urbanus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  mongo_data:
+  pgdata:

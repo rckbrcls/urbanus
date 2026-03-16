@@ -103,4 +103,34 @@ export const GeoCalculations = {
   bboxToOverpass(bbox: BoundingBox): string {
     return `${bbox.southWest.lat},${bbox.southWest.lng},${bbox.northEast.lat},${bbox.northEast.lng}`;
   },
+
+  /**
+   * Slope between two points: Δz / horizontal distance (m/m).
+   * Positive means descending from zUp to zDown.
+   */
+  slope2d(zUp: number, zDown: number, distance2d: number): number {
+    if (distance2d <= 0) return 0;
+    return (zUp - zDown) / distance2d;
+  },
+
+  /**
+   * Tube invert elevation: z_terrain - cover - diameter.
+   */
+  tubeElevation(terrainZ: number, cover: number, diameterM: number): number {
+    return terrainZ - cover - diameterM;
+  },
+
+  /**
+   * Angle at node B between segments BA and BC (degrees, [0, 180]).
+   */
+  angleAtNode(a: LatLng, b: LatLng, c: LatLng): number {
+    const ba = { lat: a.lat - b.lat, lng: a.lng - b.lng };
+    const bc = { lat: c.lat - b.lat, lng: c.lng - b.lng };
+    const dot = ba.lat * bc.lat + ba.lng * bc.lng;
+    const magBa = Math.sqrt(ba.lat ** 2 + ba.lng ** 2);
+    const magBc = Math.sqrt(bc.lat ** 2 + bc.lng ** 2);
+    if (magBa === 0 || magBc === 0) return 0;
+    const cosAngle = Math.max(-1, Math.min(1, dot / (magBa * magBc)));
+    return (Math.acos(cosAngle) * 180) / Math.PI;
+  },
 };

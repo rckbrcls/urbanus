@@ -5,12 +5,17 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi",
   "uvicorn",
-  "motor",
   "pydantic>=2",
   "rasterio",
   "numpy",
   "httpx",
   "urbanus-geo",
+  "sqlalchemy[asyncio]>=2.0",
+  "asyncpg",
+  "geoalchemy2>=0.15",
+  "alembic",
+  "shapely>=2.0",
+  "networkx>=3.0",
 ]
 
 [build-system]

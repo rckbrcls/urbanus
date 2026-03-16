@@ -1,16 +1,30 @@
-import os
+from __future__ import annotations
+
 from typing import List
-from fastapi import FastAPI, HTTPException
+
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from urbanus_api.models import (
     Project,
     NodesExtractRequest,
     ElevationEnrichRequest,
 )
-from urbanus_api.elevation import enrich_geojson as _enrich_geojson
-from urbanus_api.nodes import extract_nodes as _extract_nodes
+from urbanus_api.services.elevation import enrich_geojson as _enrich_geojson
+from urbanus_api.core.graph.classification import extract_nodes as _extract_nodes
+from urbanus_api.core.graph.builder import build_graph_from_postgis, save_graph_to_postgis
+from urbanus_api.core.graph.sanitization import (
+    sanitize_long_edges,
+    remove_redundant_nodes,
+    resolve_curve_clusters,
+)
+from urbanus_api.core.elevation.extrema import detect_extrema
+from urbanus_api.core.routing.rsph import rsph_sewer_routing
+from urbanus_api.core.optimizer.low_points import resolve_low_points
+from urbanus_api.core.hydraulics.dimensioning import dimension_network
+from urbanus_api.data.database import get_db
+from urbanus_api.data.repositories import ProjectRepository
 
 app = FastAPI()
 
@@ -23,40 +37,64 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27018/urbanus")
-client = AsyncIOMotorClient(MONGO_URL)
-db = client.get_default_database()
-projects_collection = db["projects"]
+
+def _row_to_project(row) -> dict:
+    """Convert a ProjectTable row back to the API response format."""
+    # Reconstruct bounds from JSONB stored in streets_geojson context
+    # We store the raw project data, so we can reconstruct it
+    return {
+        "id": row.id,
+        "name": row.name,
+        "createdAt": row.created_at,
+        "bounds": row.streets_geojson.get("_bounds") if row.streets_geojson else {"southWest": {"lat": 0, "lng": 0}, "northEast": {"lat": 0, "lng": 0}},
+        "areaKm2": row.area_km2,
+        "center": row.streets_geojson.get("_center", [0, 0]) if row.streets_geojson else [0, 0],
+        "zoom": row.zoom,
+        "stats": {"streetCount": row.street_count},
+        "streets": {k: v for k, v in (row.streets_geojson or {}).items() if not k.startswith("_")},
+    }
 
 
 @app.get("/")
 def read_root():
     return {"status": "ok"}
 
+
 @app.post("/projects", response_model=Project)
-async def create_project(project: Project):
-    await projects_collection.replace_one({"id": project.id}, project.model_dump(), upsert=True)
+async def create_project(project: Project, db: AsyncSession = Depends(get_db)):
+    data = project.model_dump()
+    # Stash bounds and center in streets_geojson for round-trip reconstruction
+    streets = data.get("streets") or {}
+    streets["_bounds"] = data["bounds"]
+    streets["_center"] = data["center"]
+    data["streets"] = streets
+
+    repo = ProjectRepository(db)
+    await repo.upsert(data)
     return project
 
+
 @app.get("/projects", response_model=List[Project])
-async def get_projects():
-    projects = []
-    async for p in projects_collection.find():
-        projects.append(Project(**p))
-    return projects
+async def get_projects(db: AsyncSession = Depends(get_db)):
+    repo = ProjectRepository(db)
+    rows = await repo.get_all()
+    return [_row_to_project(r) for r in rows]
+
 
 @app.get("/projects/{project_id}", response_model=Project)
-async def get_project(project_id: str):
-    project = await projects_collection.find_one({"id": project_id})
-    if project:
-        return Project(**project)
+async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
+    repo = ProjectRepository(db)
+    row = await repo.get_by_id(project_id)
+    if row:
+        return _row_to_project(row)
     raise HTTPException(status_code=404, detail="Project not found")
 
+
 @app.delete("/projects/{project_id}")
-async def delete_project(project_id: str):
-    result = await projects_collection.delete_one({"id": project_id})
-    if result.deleted_count == 0:
+async def delete_project(project_id: str, db: AsyncSession = Depends(get_db)):
+    repo = ProjectRepository(db)
+    deleted = await repo.delete(project_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"status": "deleted"}
 
@@ -71,6 +109,117 @@ async def nodes_extract(req: NodesExtractRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/projects/{project_id}/process")
+async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_db)):
+    """Execute the full 8-step sewer network pipeline.
+
+    1. Classification — mandatory nodes (ROSA)
+    2. Sanitization — subdivide long edges (VERDE)
+    3. Sanitization — remove redundant nodes (VERMELHO)
+    4. Sanitization — resolve curve clusters
+    5. Elevation — detect maxima (AMARELO) and minima (AZUL_ESCURO)
+    6. Routing — RSPH gravity routing
+    7. Optimization — resolve low points (pumps or deep excavation)
+    8. Dimensioning — pipe sizing (Manning, NBR 9649)
+    """
+    repo = ProjectRepository(db)
+    project = await repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Load graph from PostGIS
+    G = await build_graph_from_postgis(project_id, db)
+    if len(G.nodes) == 0:
+        raise HTTPException(status_code=400, detail="No graph data found for this project. Extract nodes first.")
+
+    # Etapa 1: Classification (already done during extraction)
+    mandatory = {
+        n for n, d in G.nodes(data=True)
+        if d.get("pv_obrigatorio", False)
+    }
+
+    # Etapa 2: Subdivide long edges
+    G = sanitize_long_edges(G)
+
+    # Etapa 3: Remove redundant nodes
+    G = remove_redundant_nodes(G)
+
+    # Etapa 4: Resolve curve clusters
+    G = resolve_curve_clusters(G)
+
+    # Etapa 5: Detect elevation extrema
+    G = detect_extrema(G)
+
+    # Update mandatory set after sanitization
+    mandatory = {
+        n for n, d in G.nodes(data=True)
+        if d.get("pv_obrigatorio", False) or d.get("node_type") == "ROSA"
+    }
+
+    # Find outlet (lowest elevation node)
+    outlet = min(
+        (n for n in G.nodes if G.nodes[n].get("z") is not None),
+        key=lambda n: G.nodes[n]["z"],
+        default=None,
+    )
+    if outlet is None:
+        raise HTTPException(status_code=400, detail="No nodes with elevation data found")
+
+    # Etapa 6: RSPH gravity routing
+    tree, unreachable = rsph_sewer_routing(G, outlet, mandatory)
+
+    # Etapa 7: Resolve low points
+    tree, pump_stations = resolve_low_points(tree, unreachable, G, outlet)
+
+    # Etapa 8: Hydraulic dimensioning
+    pipes = dimension_network(tree)
+
+    # Save results to PostGIS
+    await save_graph_to_postgis(project_id, tree, db)
+
+    # Build response
+    from urbanus_geo.types import SewerNode, SewerEdge, SewerNetwork
+
+    nodes_out = []
+    for n, d in tree.nodes(data=True):
+        nodes_out.append(SewerNode(
+            id=str(n),
+            lat=d.get("y", 0),
+            lng=d.get("x", 0),
+            elevation=d.get("z"),
+            node_type=d.get("node_type"),
+            pv_obrigatorio=d.get("pv_obrigatorio", False),
+            degree=tree.degree(n),
+            is_intersection=d.get("is_intersection", False),
+            is_endpoint=d.get("is_endpoint", False),
+        ))
+
+    edges_out = []
+    for u, v, d in tree.edges(data=True):
+        edges_out.append(SewerEdge(
+            id=d.get("edge_id", f"{u}->{v}"),
+            source_node_id=str(u),
+            target_node_id=str(v),
+            length_m=d.get("length_m", 0),
+            slope=d.get("slope"),
+            cost=d.get("cost"),
+            name=d.get("name"),
+            highway=d.get("highway"),
+        ))
+
+    result = SewerNetwork(
+        project_id=project_id,
+        nodes=nodes_out,
+        edges=edges_out,
+        pipes=pipes,
+        pump_stations=pump_stations,
+        unreachable_nodes=unreachable,
+        total_cost=sum(p.flow_rate or 0 for p in pipes),  # Placeholder
+    )
+
+    return result.model_dump()
 
 
 @app.post("/elevation/enrich")
