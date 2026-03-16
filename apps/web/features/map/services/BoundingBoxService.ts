@@ -5,7 +5,8 @@
  */
 
 import { BboxValidator } from "../validators";
-import { GeoCalculations, BoundingBox, LatLng } from "@/lib/geo";
+import { GeoCalculations } from "@urbanus/geo";
+import type { BoundingBox, LatLng } from "@urbanus/geo";
 import type {
   BboxValidationResult,
   BboxValidationError,

@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { GeoValidations, GeoCalculations, type BoundingBox } from "@/lib/geo";
+import { GeoValidations, GeoCalculations, type BoundingBox } from "@urbanus/geo";
 
 const MAX_AREA_KM2 = 100;
 const MIN_AREA_KM2 = 0.001;

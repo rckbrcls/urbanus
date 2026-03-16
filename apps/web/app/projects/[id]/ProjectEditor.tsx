@@ -36,7 +36,7 @@ import {
   useMap,
 } from '@/features/map/utils';
 import { useThrottle } from '@/features/map/utils/throttle';
-import { GeoCalculations } from '@/lib/geo/calculations';
+import { GeoCalculations } from '@urbanus/geo';
 import { toast } from '@/components/ui/sonner';
 
 // ============ TYPES ============

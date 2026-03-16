@@ -19,19 +19,13 @@ import httpx
 import numpy as np
 from rasterio.io import MemoryFile
 
+from urbanus_geo.calculations import area_km2 as _area_km2
+from urbanus_geo.constants import MAX_AREA_KM2
+
 OPENTOPOGRAPHY_URL = "https://portal.opentopography.org/API/globaldem"
 DEM_TYPES = ("SRTMGL3", "SRTMGL1", "COP30", "COP90", "AW3D30", "NASADEM", "EU_DTM", "GEDI_L3")
 DEFAULT_DEM = "COP30"
 NODATA_THRESHOLD = -9000
-MAX_AREA_KM2 = 100
-
-
-def _area_km2(south: float, north: float, west: float, east: float) -> float:
-    """Estimativa simples de área (km²) a partir de bbox em lat/lng."""
-    avg_lat = (north + south) / 2
-    km_per_deg_lat = 111.32
-    km_per_deg_lon = 111.32 * max(0.01, abs(np.cos(np.radians(avg_lat))))
-    return (north - south) * km_per_deg_lat * (east - west) * km_per_deg_lon
 
 
 def _fetch_geotiff(south: float, north: float, west: float, east: float, dem_type: str) -> bytes:

@@ -17,11 +17,16 @@ ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
 ENV LD_LIBRARY_PATH=/usr/lib
 
-COPY requirements.txt .
-# Install rasterio with GDAL support
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install uv
 
-COPY . .
+COPY pyproject.toml uv.lock ./
+COPY py/ py/
+COPY apps/api/ apps/api/
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+RUN uv sync
+
+WORKDIR /app/apps/api
+
+EXPOSE 8000
+
+CMD ["uv", "run", "uvicorn", "urbanus_api.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]

@@ -6,8 +6,8 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { NodeValidator } from "../validators";
-import { GeoCalculations } from "@/lib/geo";
-import type { LatLng, BoundingBox } from "../types";
+import { GeoCalculations } from "@urbanus/geo";
+import type { LatLng, BoundingBox } from "@urbanus/geo";
 import type {
   MapNode,
   NodeAction,

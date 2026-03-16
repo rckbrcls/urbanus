@@ -1,6 +1,5 @@
 /**
- * Módulo Geo - Exports públicos
+ * Módulo Geo - Re-exports from @urbanus/geo
  */
 
-export * from "./calculations";
-export * from "./validations";
+export * from "@urbanus/geo";

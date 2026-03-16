@@ -1,12 +1,16 @@
 import os
-from typing import List, Dict, Any, Optional, Literal
+from typing import List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel
 
-from elevation import enrich_geojson as _enrich_geojson
-from nodes import extract_nodes as _extract_nodes
+from urbanus_api.models import (
+    Project,
+    NodesExtractRequest,
+    ElevationEnrichRequest,
+)
+from urbanus_api.elevation import enrich_geojson as _enrich_geojson
+from urbanus_api.nodes import extract_nodes as _extract_nodes
 
 app = FastAPI()
 
@@ -24,48 +28,6 @@ MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27018/urbanus")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.get_default_database()
 projects_collection = db["projects"]
-
-# Models
-class LatLng(BaseModel):
-    lat: float
-    lng: float
-
-class BoundingBox(BaseModel):
-    southWest: LatLng
-    northEast: LatLng
-
-class ProjectStats(BaseModel):
-    streetCount: int
-
-class Project(BaseModel):
-    id: str
-    name: str
-    createdAt: int
-    bounds: BoundingBox
-    areaKm2: float
-    center: List[float]
-    zoom: float
-    stats: ProjectStats
-    streets: Dict[str, Any]
-
-
-class NodesExtractRequest(BaseModel):
-    geojson: Dict[str, Any]
-    mode: Literal["intersections", "all"] = "intersections"
-
-
-class ElevationEnrichBbox(BaseModel):
-    south: float
-    north: float
-    west: float
-    east: float
-
-
-class ElevationEnrichRequest(BaseModel):
-    geojson: Dict[str, Any]
-    bbox: ElevationEnrichBbox
-    demType: Optional[str] = "COP30"
-
 
 
 @app.get("/")

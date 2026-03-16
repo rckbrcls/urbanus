@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { GeoValidations } from "@/lib/geo";
+import { GeoValidations } from "@urbanus/geo";
 
 /**
  * POST /api/geo/nodes

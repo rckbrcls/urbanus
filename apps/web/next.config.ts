@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  transpilePackages: ["@urbanus/geo", "@urbanus/constants", "@urbanus/utils"],
 };
 
 export default nextConfig;

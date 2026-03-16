@@ -2,8 +2,8 @@
  * Validador de Bounding Box
  */
 
-import { GeoValidations, ValidationError, ValidationResult } from "@/lib/geo";
-import type { BoundingBox, LatLng } from "../types";
+import { GeoValidations } from "@urbanus/geo";
+import type { ValidationError, ValidationResult, BoundingBox, LatLng } from "@urbanus/geo";
 
 export class BboxValidator {
   /**

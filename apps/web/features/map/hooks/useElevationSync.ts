@@ -152,7 +152,6 @@ export function useElevationSync(
                 elevationData,
                 node.position.lat,
                 node.position.lng,
-                interpolate
             );
 
             return {

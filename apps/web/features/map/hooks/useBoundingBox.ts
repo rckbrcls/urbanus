@@ -7,7 +7,7 @@
 import { useCallback, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
 import { BoundingBoxService } from "../services";
-import { GeoCalculations, type LatLng, type BoundingBox } from "@/lib/geo";
+import { GeoCalculations, type LatLng, type BoundingBox } from "@urbanus/geo";
 import type { BboxValidationResult } from "../types";
 import { BBOX_COLORS, MAP_STYLES, AREA_LIMITS } from "../constants";
 import { useLeaflet } from "./useLeaflet";

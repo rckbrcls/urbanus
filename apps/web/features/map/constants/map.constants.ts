@@ -1,24 +1,21 @@
 /**
  * Constantes do módulo de mapas
  *
- * Centraliza todas as configurações e constantes para facilitar manutenção
+ * Shared constants re-exported from @urbanus/constants.
+ * UI-specific constants (colors, styles) remain here.
  */
 
-// ============ COORDENADAS PADRÃO ============
-
-export const DEFAULT_CENTER: [number, number] = [-23.5505, -46.6333]; // São Paulo, Brasil
-export const DEFAULT_ZOOM = 13;
-
-// ============ LIMITES DE ÁREA ============
-
-export const AREA_LIMITS = {
-  MAX_BBOX_AREA_KM2: 100,
-  MIN_BBOX_AREA_KM2: 0.001,
-  BBOX_AREA_WARNING_THRESHOLD: 50,
-} as const;
-
-// Para compatibilidade com código existente
-export const MAX_AREA_KM2 = AREA_LIMITS.MAX_BBOX_AREA_KM2;
+// Re-export shared constants
+export {
+  AREA_LIMITS,
+  MAX_AREA_KM2,
+  NODE_CONSTRAINTS,
+  RATE_LIMITS,
+  DEFAULT_CENTER,
+  DEFAULT_ZOOM,
+  ELEVATION_CACHE,
+  KEYBOARD_SHORTCUTS,
+} from "@urbanus/constants";
 
 // ============ ESTILOS DE BOUNDING BOX ============
 
@@ -78,7 +75,6 @@ export const HIGHWAY_WEIGHTS: Record<string, number> = {
 
 /**
  * Tipos de nós com suas propriedades visuais.
- * Cada tipo tem cor, radius, label e descrição.
  */
 export const NODE_TYPES = {
   intersection: {
@@ -162,49 +158,8 @@ export const NODE_STYLES: Record<string, NodeStyleEntry> = {
     fillOpacity: 0.8,
   },
   intermediate: {
-    color: "#22c55e", // green-500 (nós criados pelo algoritmo)
+    color: "#22c55e", // green-500
     radius: 7,
     fillOpacity: 0.8,
   },
 };
-
-// ============ RESTRIÇÕES DE NÓS ============
-
-export const NODE_CONSTRAINTS = {
-  MIN_DISTANCE_METERS: 1, // Distância mínima entre nós
-  MAX_MOVE_DISTANCE_METERS: 500, // Distância máxima de movimento único
-  SNAP_DISTANCE_METERS: 5, // Distância para snap automático
-} as const;
-
-// ============ CACHE DE ELEVAÇÃO ============
-
-export const ELEVATION_CACHE = {
-  TTL_MS: 30 * 60 * 1000, // 30 minutos
-  MAX_ENTRIES: 10,
-} as const;
-
-// ============ RATE LIMITING ============
-
-export const RATE_LIMITS = {
-  STREETS_FETCH: {
-    maxRequests: 10,
-    windowMs: 60000, // 10 req/min
-  },
-  TOPOGRAPHY_FETCH: {
-    maxRequests: 5,
-    windowMs: 60000, // 5 req/min
-  },
-  NODE_OPERATIONS: {
-    maxRequests: 100,
-    windowMs: 60000, // 100 ops/min
-  },
-} as const;
-
-// ============ ATALHOS DE TECLADO ============
-
-export const KEYBOARD_SHORTCUTS = {
-  CANCEL: "Escape",
-  UNDO: "z",
-  SELECT_ALL: "a",
-  DELETE: "Delete",
-} as const;

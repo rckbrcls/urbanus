@@ -2,31 +2,14 @@
  * Tipos gerais do mapa
  */
 
-export interface LatLng {
-  lat: number;
-  lng: number;
-}
-
-export interface BoundingBox {
-  southWest: LatLng;
-  northEast: LatLng;
-}
-
-export interface ValidationError {
-  code: string;
-  message: string;
-  field?: string;
-}
-
-export interface ValidationWarning {
-  code: string;
-  message: string;
-}
-
-export interface BboxDimensions {
-  widthKm: number;
-  heightKm: number;
-}
+// Re-export canonical geo types from @urbanus/geo
+export type {
+  LatLng,
+  BoundingBox,
+  ValidationError,
+  ValidationWarning,
+  BboxDimensions,
+} from "@urbanus/geo";
 
 export interface ProcessingStages {
   streets: "pending" | "loading" | "success" | "error";
@@ -43,7 +26,7 @@ export interface ProcessingErrors {
 export interface MapContainerProps {
   center?: [number, number];
   zoom?: number;
-  onBoundingBoxChange?: (bbox: BoundingBox | null) => void;
+  onBoundingBoxChange?: (bbox: import("@urbanus/geo").BoundingBox | null) => void;
   enableBoundingBox?: boolean;
 }
 

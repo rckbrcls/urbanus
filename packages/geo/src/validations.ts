@@ -1,57 +1,24 @@
 /**
- * Validações geoespaciais compartilhadas
+ * Geospatial validations.
  *
- * Este módulo contém todas as validações geoespaciais,
- * garantindo consistência entre frontend e backend.
+ * Coordinate and bbox validation functions.
  */
 
-import { LatLng, BoundingBox } from "./calculations";
+import type { LatLng, BoundingBox, ValidationError, ValidationResult } from "./types";
 
-export interface ValidationError {
-  code: string;
-  message: string;
-  field?: string;
-}
-
-export interface ValidationWarning {
-  code: string;
-  message: string;
-}
-
-export interface ValidationResult {
-  valid: boolean;
-  errors: ValidationError[];
-  warnings?: ValidationWarning[];
-}
-
-/**
- * Validações geoespaciais
- */
 export const GeoValidations = {
-  /**
-   * Valida se coordenada é número finito válido
-   */
   isValidCoordinate(value: unknown): value is number {
     return typeof value === "number" && isFinite(value) && !isNaN(value);
   },
 
-  /**
-   * Valida latitude (-90 a 90)
-   */
   isValidLatitude(lat: number): boolean {
     return this.isValidCoordinate(lat) && lat >= -90 && lat <= 90;
   },
 
-  /**
-   * Valida longitude (-180 a 180)
-   */
   isValidLongitude(lng: number): boolean {
     return this.isValidCoordinate(lng) && lng >= -180 && lng <= 180;
   },
 
-  /**
-   * Valida objeto LatLng completo
-   */
   isValidLatLng(latlng: unknown): latlng is LatLng {
     if (!latlng || typeof latlng !== "object") return false;
     const ll = latlng as Record<string, unknown>;
@@ -61,41 +28,26 @@ export const GeoValidations = {
     );
   },
 
-  /**
-   * Valida estrutura de bounding box
-   */
   isValidBbox(bbox: unknown): bbox is BoundingBox {
     if (!bbox || typeof bbox !== "object") return false;
     const b = bbox as Record<string, unknown>;
     return this.isValidLatLng(b.southWest) && this.isValidLatLng(b.northEast);
   },
 
-  /**
-   * Sanitiza latitude para range válido
-   */
   clampLatitude(lat: number): number {
     return Math.max(-90, Math.min(90, lat));
   },
 
-  /**
-   * Sanitiza longitude para range válido
-   */
   clampLongitude(lng: number): number {
     return Math.max(-180, Math.min(180, lng));
   },
 
-  /**
-   * Valida estrutura GeoJSON básica
-   */
   isValidGeoJSON(data: unknown): data is GeoJSON.FeatureCollection {
     if (!data || typeof data !== "object") return false;
     const geo = data as Record<string, unknown>;
     return geo.type === "FeatureCollection" && Array.isArray(geo.features);
   },
 
-  /**
-   * Sanitiza GeoJSON removendo features inválidas
-   */
   sanitizeGeoJSON(data: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
     return {
       ...data,
@@ -120,9 +72,6 @@ export const GeoValidations = {
     };
   },
 
-  /**
-   * Valida formato de bbox
-   */
   validateBboxFormat(bbox: unknown): ValidationResult {
     const errors: ValidationError[] = [];
 
@@ -156,13 +105,9 @@ export const GeoValidations = {
     return { valid: errors.length === 0, errors };
   },
 
-  /**
-   * Valida se as coordenadas estão em ranges válidos e ordenadas corretamente
-   */
   validateBboxCoordinates(bbox: BoundingBox): ValidationResult {
     const errors: ValidationError[] = [];
 
-    // Latitude: -90 a 90
     if (!this.isValidLatitude(bbox.southWest.lat)) {
       errors.push({
         code: "INVALID_LATITUDE",
@@ -179,7 +124,6 @@ export const GeoValidations = {
       });
     }
 
-    // Longitude: -180 a 180
     if (!this.isValidLongitude(bbox.southWest.lng)) {
       errors.push({
         code: "INVALID_LONGITUDE",
@@ -196,7 +140,6 @@ export const GeoValidations = {
       });
     }
 
-    // Verificar se south < north
     if (bbox.southWest.lat >= bbox.northEast.lat) {
       errors.push({
         code: "INVALID_LAT_ORDER",
@@ -205,7 +148,6 @@ export const GeoValidations = {
       });
     }
 
-    // Verificar se west < east (considerando antimeridiano)
     if (bbox.southWest.lng >= bbox.northEast.lng) {
       errors.push({
         code: "INVALID_LNG_ORDER",

@@ -76,5 +76,5 @@ export * from "./components";
 // Utils
 export * from "./utils";
 
-// Re-export from lib/geo for convenience
-export { GeoCalculations } from "@/lib/geo";
+// Re-export from @urbanus/geo for convenience
+export { GeoCalculations } from "@urbanus/geo";
