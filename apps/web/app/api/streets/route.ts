@@ -96,7 +96,8 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok || isHtml) {
       // Try to extract a human-readable message from Overpass HTML
-      const overpassMsg = responseText.match(/<p[^>]*>.*?<strong[^>]*>Error<\/strong>:\s*(.*?)<\/p>/s)?.[1]
+      const overpassRegex = new RegExp('<p[^>]*>.*?<strong[^>]*>Error</strong>:\\s*(.*?)</p>', 's');
+      const overpassMsg = overpassRegex.exec(responseText)?.[1]
         ?.replace(/<[^>]+>/g, "").trim();
 
       const userMessage = overpassMsg

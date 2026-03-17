@@ -112,6 +112,11 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* MapLibre GL JS uses content-box sizing internally — prevent Tailwind's border-box from breaking it */
+.maplibregl-map * {
+  box-sizing: content-box;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

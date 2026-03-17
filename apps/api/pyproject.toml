@@ -18,6 +18,9 @@ dependencies = [
   "networkx>=3.0",
 ]
 
+[tool.uv.sources]
+urbanus-geo = { workspace = true }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

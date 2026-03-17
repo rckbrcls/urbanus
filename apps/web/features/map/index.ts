@@ -55,9 +55,6 @@ export type {
   InterpolationOptions,
 } from "./types/elevation.types";
 
-// Context
-export * from "./context";
-
 // Constants
 export * from "./constants";
 

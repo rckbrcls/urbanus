@@ -1,18 +1,97 @@
 'use client';
 
 import { Project } from '@/stores/useProjectStore';
-import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Rectangle } from '@/features/map/utils';
+import { useState, useRef, useEffect } from 'react';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { MAP_STYLES } from '@/lib/map/styles';
 
 interface ProjectCardProps {
   project: Project;
 }
 
+/**
+ * Non-interactive MapLibre thumbnail used in project cards.
+ * Renders bounds rectangle as a simple GeoJSON fill layer.
+ */
+function MapThumbnail({ project }: { project: Project }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: MAP_STYLES.voyagerNoLabels,
+      center: [project.center[1], project.center[0]],
+      zoom: project.zoom,
+      interactive: false,
+      attributionControl: false,
+    });
+
+    map.on('load', () => {
+      const { southWest: sw, northEast: ne } = project.bounds;
+
+      map.addSource('bounds', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [sw.lng, sw.lat],
+              [ne.lng, sw.lat],
+              [ne.lng, ne.lat],
+              [sw.lng, ne.lat],
+              [sw.lng, sw.lat],
+            ]],
+          },
+        },
+      });
+
+      map.addLayer({
+        id: 'bounds-fill',
+        type: 'fill',
+        source: 'bounds',
+        paint: {
+          'fill-color': '#3b82f6',
+          'fill-opacity': 0.1,
+        },
+      });
+
+      map.addLayer({
+        id: 'bounds-line',
+        type: 'line',
+        source: 'bounds',
+        paint: {
+          'line-color': '#2563eb',
+          'line-width': 2,
+        },
+      });
+    });
+
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [project]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="h-full w-full grayscale-[50%] filter transition-all duration-500 group-hover:grayscale-0"
+    />
+  );
+}
+
 export default function ProjectCard({ project }: ProjectCardProps) {
   const router = useRouter();
-  const [isHovered, setIsHovered] = useState(false);
+  const [, setIsHovered] = useState(false);
 
   return (
     <div
@@ -23,34 +102,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
     >
       {/* Map Thumbnail */}
       <div className="relative aspect-video w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
-        <MapContainer
-          center={project.center}
-          zoom={project.zoom}
-          zoomControl={false}
-          scrollWheelZoom={false}
-          doubleClickZoom={false}
-          dragging={false}
-          touchZoom={false}
-          className="h-full w-full grayscale-[50%] filter transition-all duration-500 group-hover:grayscale-0"
-          style={{ background: 'transparent' }}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
-          />
-          <Rectangle
-            bounds={[
-              [project.bounds.southWest.lat, project.bounds.southWest.lng],
-              [project.bounds.northEast.lat, project.bounds.northEast.lng],
-            ]}
-            pathOptions={{
-              color: '#2563eb', // blue-600
-              fillColor: '#3b82f6', // blue-500
-              fillOpacity: 0.1,
-              weight: 2,
-            }}
-          />
-        </MapContainer>
+        <MapThumbnail project={project} />
 
         {/* Overlay Gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60 transition-opacity group-hover:opacity-40" />
@@ -77,7 +129,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
             </span>
             <span className="flex items-center gap-1">
               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0121 18.382V7.618a1 1 0 01-1.447-.894L15 7m0 13V7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 01-1.447-.894L15 7m0 13V7" />
               </svg>
               {project.stats.streetCount} streets
             </span>
