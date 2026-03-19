@@ -2,30 +2,31 @@
 
 import ProjectCard from '@/components/ProjectCard';
 import { useProjects } from '../../stores/useProjectStore';
+import { useTranslation } from '@/i18n';
 
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect } from 'react';
 
 export default function ProjectsPage() {
   const { data: projects = [], isLoading } = useProjects();
+  const t = useTranslation('projects');
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-4 pt-0">
+    <div className="flex flex-1 flex-col gap-8 px-6 pb-6 pt-20">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Projects</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{t.title}</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Manage your urban analysis projects.
+            {t.subtitle}
           </p>
         </div>
         <Link
-          href="/"
+          href="/map"
           className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
         >
           <Plus className="h-4 w-4" />
-          New Project
+          {t.newProject}
         </Link>
       </div>
 
@@ -41,13 +42,13 @@ export default function ProjectsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
           </div>
-          <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">No projects yet</h3>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Start by creating a new project from the map.</p>
+          <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">{t.noProjectsTitle}</h3>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{t.noProjectsDescription}</p>
           <Link
-            href="/"
+            href="/map"
             className="mt-6 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
-            Go to Map
+            {t.goToMap}
           </Link>
         </div>
       ) : (

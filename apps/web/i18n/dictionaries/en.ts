@@ -1,0 +1,142 @@
+import type { Dictionary } from '../types';
+
+export const en: Dictionary = {
+  common: {
+    save: 'Save',
+    saving: 'Saving...',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    map: 'Map',
+    projects: 'Projects',
+    toggleTheme: 'Toggle theme',
+    back: 'Back',
+    retry: 'Retry',
+    loading: 'Loading...',
+    loadingMap: 'Loading map...',
+    export: 'Export',
+    process: 'Process',
+    processing: 'Processing...',
+    processed: 'Processed',
+    language: 'Language',
+  },
+  landing: {
+    tagline:
+      'Automated sanitary sewer network design — from map selection to hydraulic dimensioning, powered by open data and NBR\u00a09649.',
+    startDesigning: 'Start Designing',
+    howItWorks: 'How it works',
+    features: 'Features',
+    steps: {
+      drawArea: {
+        title: 'Draw your area',
+        description:
+          'Select a region on the map. Streets and elevation data are fetched automatically from OpenStreetMap and satellite sources.',
+      },
+      autoProcess: {
+        title: 'Auto-process',
+        description:
+          'Our 8-step pipeline classifies nodes, routes sewage gravitationally, and dimensions pipes to NBR 9649 standards.',
+      },
+      editExport: {
+        title: 'Edit & export',
+        description:
+          'Fine-tune the generated network in the interactive graph editor, then export the results for your project.',
+      },
+    },
+    featureCards: {
+      pipeline: {
+        title: '8-Step Pipeline',
+        description:
+          'From node classification to hydraulic dimensioning — a complete sewer design workflow automated end to end.',
+      },
+      nbr: {
+        title: 'NBR 9649 Compliant',
+        description:
+          "Manning's equation, minimum slopes, maximum depths, and pipe sizing all follow Brazilian sanitary sewer standards.",
+      },
+      openData: {
+        title: 'Open Data',
+        description:
+          'Street geometry from OpenStreetMap and elevation from OpenTopography — no proprietary datasets required.',
+      },
+      interactiveEditing: {
+        title: 'Interactive Editing',
+        description:
+          'A graph editor built on the map lets you add, move, and connect sewer nodes with real-time visual feedback.',
+      },
+    },
+    step: 'Step',
+  },
+  projects: {
+    title: 'Projects',
+    subtitle: 'Manage your urban analysis projects.',
+    newProject: 'New Project',
+    noProjectsTitle: 'No projects yet',
+    noProjectsDescription: 'Start by creating a new project from the map.',
+    goToMap: 'Go to Map',
+    streets: 'streets',
+  },
+  editor: {
+    modes: {
+      select: 'Select',
+      move: 'Move',
+      addNode: 'Add Node',
+      delete: 'Delete',
+      split: 'Split',
+    },
+    loadingProject: 'Loading project data...',
+    initializing: 'Initializing...',
+    projectNotFound: 'Project not found',
+    backToProjects: 'Back to Projects',
+    nodes: 'nodes',
+    selected: 'selected',
+    deleteConfirmTitle: 'Are you absolutely sure?',
+    deleteConfirmDescription:
+      'This action cannot be undone. This will permanently delete your project.',
+    overview: 'Overview',
+    streetsTab: 'Streets',
+    pipelineTab: 'Pipeline',
+    projectStats: 'Project Stats',
+    streets: 'Streets',
+    elevation: 'Elevation (Min - Max)',
+    centerCoordinates: 'Center Coordinates',
+    selectedNodes: 'Selected Nodes',
+    unnamed: 'Unnamed',
+    more: 'more',
+    clearSelection: 'Clear Selection',
+    highwayLegend: 'Highway Legend',
+    pipelineIdle: 'Click "Process" to run the pipeline',
+    pipelineProcessing: 'Running 8-step pipeline...',
+    pipelineError: 'Pipeline error',
+    pipelineRetry: 'Try again',
+    exportGeoJSON: 'Export GeoJSON',
+    deleteProject: 'Delete project',
+    runPipeline: 'Run pipeline (NBR 9649)',
+  },
+  pipeline: {
+    networkSummary: 'Network Summary',
+    nodes: 'Nodes',
+    segments: 'Segments',
+    length: 'Length',
+    pumpStations: 'Pump Stations',
+    totalCost: 'Total Cost',
+    unreachable: 'Unreachable',
+    nodeTypes: 'Node Types',
+    accessories: 'Accessories',
+    diameters: 'Diameters',
+  },
+  mapPage: {
+    shiftDragInstruction: '+ drag to select (max',
+    cropToArea: 'Crop to area?',
+    area: 'Area',
+    crop: 'Crop',
+    fetchData: 'Fetch Data',
+    saveProject: 'Save Project',
+    nameYourProject: 'Name your project',
+    projectPlaceholder: 'My Awesome Project',
+    nodesPreview: 'nodes (preview)',
+    editInProjectPage: 'Edit in project page',
+    streetsFailed: 'Failed',
+    topographyFailed: 'Failed',
+    nodesFailed: 'Failed',
+  },
+};

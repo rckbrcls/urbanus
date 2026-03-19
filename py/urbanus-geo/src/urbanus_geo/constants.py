@@ -43,12 +43,17 @@ INFILTRATION_RATE_MAX = 1.0      # L/s por km
 # === Declividade mínima ===
 # I_min = 0.0055 × Qi^(-0.47) — implementar como função em calculations.py
 
+# === Nós / Snapping ===
+SNAP_DISTANCE_METERS = 5.0          # m — clustering espacial de nós
+
 # === Algoritmo (etapas do pipeline) ===
 LONG_EDGE_MAX_DISTANCE = 100.0   # m — Etapa 2
 REDUNDANT_NODE_MIN_DISTANCE = 20.0  # m — Etapa 3
 CURVE_ANGLE_THRESHOLD = 150.0    # graus (deflexão > 30°) — Etapa 4
 ELEVATION_PROMINENCE_MIN = 2.0   # m — Etapa 5
 DIRECTION_CHANGE_THRESHOLD = 45.0  # graus — PV obrigatório
+GRADE_BREAK_THRESHOLD = 0.03       # m/m — diferença de declividade que exige PV
+MAX_TERRAIN_SLOPE = 0.15           # m/m — acima disso, subdividir para degraus
 
 # === Custos (elevatórias) ===
 PUMP_CAPEX_MIN = 150_000        # R$ (Q ≤ 7.5 L/s)

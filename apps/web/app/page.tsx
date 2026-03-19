@@ -1,25 +1,123 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import { Button } from "@/components/ui/button";
+import {
+  ArrowRight,
+  GitBranch,
+  Layers,
+  MapPin,
+  SquareMousePointer,
+  PencilRuler,
+  ShieldCheck,
+  Zap,
+} from "lucide-react";
+import Link from "next/link";
+import { useTranslation } from "@/i18n";
 
-const MapWrapper = dynamic(() => import('@/components/map/MapWrapper'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full w-full items-center justify-center bg-zinc-100 dark:bg-zinc-900">
-      <div className="flex flex-col items-center gap-2">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">Carregando mapa...</p>
-      </div>
-    </div>
-  ),
-});
+export default function LandingPage() {
+  const tl = useTranslation('landing');
+  const tc = useTranslation('common');
 
-export default function Home() {
+  const steps = [
+    { icon: SquareMousePointer, ...tl.steps.drawArea },
+    { icon: Zap, ...tl.steps.autoProcess },
+    { icon: PencilRuler, ...tl.steps.editExport },
+  ];
+
+  const features = [
+    { icon: GitBranch, ...tl.featureCards.pipeline },
+    { icon: ShieldCheck, ...tl.featureCards.nbr },
+    { icon: MapPin, ...tl.featureCards.openData },
+    { icon: Layers, ...tl.featureCards.interactiveEditing },
+  ];
+
   return (
-    <div className="flex flex-1 w-full flex-col bg-zinc-50 dark:bg-zinc-950">
-      <div className="relative flex-1">
-        <MapWrapper />
-      </div>
+    <div className="flex flex-1 flex-col">
+      {/* Hero */}
+      <section className="flex min-h-[calc(100dvh-3rem)] flex-col items-center justify-center gap-6 px-6 text-center">
+        <h1
+          className="text-5xl font-bold tracking-tight md:text-6xl"
+          style={{ fontFamily: "var(--font-baskerville)" }}
+        >
+          Urbanus
+        </h1>
+        <p className="max-w-xl text-lg text-muted-foreground">
+          {tl.tagline}
+        </p>
+        <Button asChild size="lg" className="mt-2 gap-2">
+          <Link href="/map">
+            {tl.startDesigning}
+            <ArrowRight className="size-4" />
+          </Link>
+        </Button>
+      </section>
+
+      {/* How it works */}
+      <section className="flex min-h-[calc(100dvh-3rem)] flex-col justify-center border-t px-6 py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="mb-12 text-center text-sm font-medium uppercase tracking-widest text-muted-foreground">
+            {tl.howItWorks}
+          </h2>
+          <div className="grid gap-10 md:grid-cols-3">
+            {steps.map((step, i) => (
+              <div key={step.title} className="flex flex-col items-center text-center">
+                <div className="mb-4 flex size-12 items-center justify-center rounded-lg border bg-card text-foreground">
+                  <step.icon className="size-5" />
+                </div>
+                <span className="mb-1 text-xs font-medium text-muted-foreground">
+                  {tl.step} {i + 1}
+                </span>
+                <h3 className="mb-2 text-base font-semibold">{step.title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {step.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="flex min-h-[calc(100dvh-3rem)] flex-col justify-center border-t px-6 py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="mb-12 text-center text-sm font-medium uppercase tracking-widest text-muted-foreground">
+            {tl.features}
+          </h2>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {features.map((feature) => (
+              <div
+                key={feature.title}
+                className="rounded-lg border bg-card p-6"
+              >
+                <div className="mb-3 flex size-9 items-center justify-center rounded-md border bg-background text-foreground">
+                  <feature.icon className="size-4" />
+                </div>
+                <h3 className="mb-1 text-sm font-semibold">{feature.title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {feature.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="mt-auto border-t px-6 py-8">
+        <div className="mx-auto flex max-w-4xl items-center justify-between text-xs text-muted-foreground">
+          <span style={{ fontFamily: "var(--font-baskerville)" }}>
+            Urbanus
+          </span>
+          <nav className="flex gap-4">
+            <Link href="/map" className="transition-colors hover:text-foreground">
+              {tc.map}
+            </Link>
+            <Link href="/projects" className="transition-colors hover:text-foreground">
+              {tc.projects}
+            </Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

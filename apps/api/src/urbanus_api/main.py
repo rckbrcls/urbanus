@@ -12,17 +12,25 @@ from urbanus_api.models import (
     ElevationEnrichRequest,
 )
 from urbanus_api.services.elevation import enrich_geojson as _enrich_geojson
-from urbanus_api.core.graph.classification import extract_nodes as _extract_nodes
-from urbanus_api.core.graph.builder import build_graph_from_postgis, save_graph_to_postgis
+from urbanus_api.core.graph.classification import (
+    extract_nodes as _extract_nodes,
+    enforce_direction_changes,
+)
+from urbanus_api.core.graph.builder import build_graph_from_postgis, build_graph_from_geojson, save_graph_to_postgis
 from urbanus_api.core.graph.sanitization import (
     sanitize_long_edges,
+    subdivide_steep_edges,
     remove_redundant_nodes,
     resolve_curve_clusters,
+    detect_grade_breaks,
+    enforce_min_pv_spacing,
 )
+from urbanus_api.core.graph.accessories import assign_accessory_types
 from urbanus_api.core.elevation.extrema import detect_extrema
 from urbanus_api.core.routing.rsph import rsph_sewer_routing
 from urbanus_api.core.optimizer.low_points import resolve_low_points
 from urbanus_api.core.hydraulics.dimensioning import dimension_network
+from urbanus_api.core.hydraulics.costing import compute_total_cost
 from urbanus_api.data.database import get_db
 from urbanus_api.data.repositories import ProjectRepository
 
@@ -129,10 +137,25 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Load graph from PostGIS
+    # Load graph from PostGIS (existing processed data)
     G = await build_graph_from_postgis(project_id, db)
+
+    # Fallback: build from streets_geojson if PostGIS has no graph data yet
     if len(G.nodes) == 0:
-        raise HTTPException(status_code=400, detail="No graph data found for this project. Extract nodes first.")
+        streets_geojson = project.streets_geojson
+        if not streets_geojson or not isinstance(streets_geojson, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="No streets data. Select an area and extract streets first.",
+            )
+        # Filter out metadata keys (prefixed with _)
+        clean_geojson = {k: v for k, v in streets_geojson.items() if not k.startswith("_")}
+        G = build_graph_from_geojson(clean_geojson)
+        if len(G.nodes) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract graph from streets data.",
+            )
 
     # Etapa 1: Classification (already done during extraction)
     mandatory = {
@@ -140,8 +163,14 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
         if d.get("pv_obrigatorio", False)
     }
 
+    # Etapa 1.5: Enforce direction changes > 45° → PV obrigatório
+    enforce_direction_changes(G)
+
     # Etapa 2: Subdivide long edges
     G = sanitize_long_edges(G)
+
+    # Etapa 2.5: Subdivide steep edges (terrain slope > 15%)
+    G = subdivide_steep_edges(G)
 
     # Etapa 3: Remove redundant nodes
     G = remove_redundant_nodes(G)
@@ -149,8 +178,14 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
     # Etapa 4: Resolve curve clusters
     G = resolve_curve_clusters(G)
 
+    # Etapa 4.5: Enforce minimum PV spacing (80m)
+    G = enforce_min_pv_spacing(G)
+
     # Etapa 5: Detect elevation extrema
     G = detect_extrema(G)
+
+    # Etapa 5.5: Detect grade breaks (slope change > 3%)
+    G = detect_grade_breaks(G)
 
     # Update mandatory set after sanitization
     mandatory = {
@@ -176,6 +211,9 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
     # Etapa 8: Hydraulic dimensioning
     pipes = dimension_network(tree)
 
+    # Etapa 9: Accessory type assignment
+    tree = assign_accessory_types(tree, pipes)
+
     # Save results to PostGIS
     await save_graph_to_postgis(project_id, tree, db)
 
@@ -194,6 +232,7 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
             degree=tree.degree(n),
             is_intersection=d.get("is_intersection", False),
             is_endpoint=d.get("is_endpoint", False),
+            accessory_type=d.get("accessory_type"),
         ))
 
     edges_out = []
@@ -216,7 +255,7 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
         pipes=pipes,
         pump_stations=pump_stations,
         unreachable_nodes=unreachable,
-        total_cost=sum(p.flow_rate or 0 for p in pipes),  # Placeholder
+        total_cost=compute_total_cost(pipes, pump_stations, tree),
     )
 
     return result.model_dump()

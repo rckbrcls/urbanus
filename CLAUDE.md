@@ -28,8 +28,9 @@ apps/api/src/urbanus_api/
 ├── core/
 │   ├── graph/
 │   │   ├── builder.py              # PostGIS ↔ NetworkX
-│   │   ├── classification.py       # Etapa 1: nós obrigatórios (ROSA)
-│   │   └── sanitization.py         # Etapas 2-4: subdivisão, remoção, curvas
+│   │   ├── classification.py       # Etapa 1: nós obrigatórios (ROSA) + clustering + dir changes
+│   │   ├── sanitization.py         # Etapas 2-4: subdivisão, remoção, curvas, grade breaks, steep, PV spacing
+│   │   └── accessories.py          # Etapa 9: atribuição de acessórios (PV/TIL/TL/CP)
 │   ├── elevation/
 │   │   ├── sampling.py             # Amostragem bilinear de DEM
 │   │   └── extrema.py              # Etapa 5: máximos/mínimos + proeminência
@@ -39,22 +40,28 @@ apps/api/src/urbanus_api/
 │   │   └── arborescence.py         # Alternativa: Edmonds/Chu-Liu
 │   ├── hydraulics/
 │   │   ├── manning.py              # Fórmula de Manning + raio hidráulico
-│   │   └── dimensioning.py         # Etapa 8: dimensionamento de tubos
+│   │   ├── dimensioning.py         # Etapa 8: dimensionamento de tubos + invert elevation
+│   │   └── costing.py              # Cálculo de custo real (tubulação + escavação + elevatórias)
 │   └── optimizer/
 │       └── low_points.py           # Etapa 7: resolução de pontos baixos
 └── workers/
     └── __init__.py                  # Stub para ARQ tasks futuras
 ```
 
-**Pipeline de 8 Etapas (POST /projects/{id}/process)**
-1. Classificação de nós obrigatórios (ROSA) — `core/graph/classification.py`
+**Pipeline de Processamento (POST /projects/{id}/process)**
+1. Classificação de nós obrigatórios (ROSA) + clustering espacial (5m) — `core/graph/classification.py`
+1.5. Mudança de direção > 45° → PV obrigatório — `core/graph/classification.py`
 2. Subdivisão de arestas longas (VERDE) — `core/graph/sanitization.py`
+2.5. Subdivisão de trechos íngremes (> 15%) — `core/graph/sanitization.py`
 3. Remoção de nós redundantes (VERMELHO) — `core/graph/sanitization.py`
 4. Resolução de clusters de curva — `core/graph/sanitization.py`
+4.5. Espaçamento mínimo PV (80m) — `core/graph/sanitization.py`
 5. Detecção de máximos/mínimos (AMARELO/AZUL_ESCURO) — `core/elevation/extrema.py`
+5.5. Detecção de quebra de greide (> 3%) — `core/graph/sanitization.py`
 6. Roteamento gravitacional RSPH — `core/routing/rsph.py`
 7. Resolução de pontos baixos (elevatórias) — `core/optimizer/low_points.py`
-8. Dimensionamento hidráulico NBR 9649 — `core/hydraulics/dimensioning.py`
+8. Dimensionamento hidráulico NBR 9649 + invert elevation — `core/hydraulics/dimensioning.py`
+9. Atribuição de acessórios (PV/TIL/TL/CP) — `core/graph/accessories.py`
 
 **Fluxos principais**
 - Seleção de área no mapa (Shift + Drag) → validação de área (máx. 100 km²).
@@ -119,11 +126,15 @@ docker-compose up --build
 - NodeType cores: ROSA=PV obrigatório, VERDE=intermediário, VERMELHO=redundante, AMARELO=ponto alto, AZUL_ESCURO=ponto baixo.
 
 **Onde mexer primeiro**
-- Pipeline de esgoto: `apps/api/src/urbanus_api/core/` — algoritmos das 8 etapas.
+- Pipeline de esgoto: `apps/api/src/urbanus_api/core/` — algoritmos do pipeline.
 - Lógica de mapa e nós: `apps/web/features/map/` (context, services, hooks, validators).
 - UI do mapa: `apps/web/components/Map.tsx` usa o módulo `features/map`.
+- Visualização de rede: `apps/web/components/map/SewerNetworkLayers.tsx` e `apps/web/components/pipeline/PipelineResultsPanel.tsx`.
+- Pipeline store: `apps/web/stores/pipelineStore.ts` — estado de processamento.
+- Proxy API: `apps/web/app/api/projects/[id]/process/route.ts` — proxy para FastAPI.
 - Elevação no servidor: `apps/api/src/urbanus_api/services/elevation.py` e endpoint `POST /elevation/enrich`.
 - CRUD de projetos: `apps/api/src/urbanus_api/main.py` + `apps/web/stores/useProjectStore.ts`.
+- Tipos sewer (TS): `apps/web/types/sewer.ts` — espelha tipos Pydantic.
 - Tipos geo (JS): `packages/geo/src/` — fonte de verdade para LatLng, BoundingBox, SewerNode no JS.
 - Tipos geo (Python): `py/urbanus-geo/src/urbanus_geo/` — fonte de verdade Pydantic.
 - Camada de dados: `apps/api/src/urbanus_api/data/` — SQLAlchemy + PostGIS.

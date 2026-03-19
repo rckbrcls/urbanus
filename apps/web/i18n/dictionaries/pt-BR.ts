@@ -1,0 +1,142 @@
+import type { Dictionary } from '../types';
+
+export const ptBR: Dictionary = {
+  common: {
+    save: 'Salvar',
+    saving: 'Salvando...',
+    cancel: 'Cancelar',
+    delete: 'Excluir',
+    map: 'Mapa',
+    projects: 'Projetos',
+    toggleTheme: 'Alternar tema',
+    back: 'Voltar',
+    retry: 'Tentar novamente',
+    loading: 'Carregando...',
+    loadingMap: 'Carregando mapa...',
+    export: 'Exportar',
+    process: 'Processar',
+    processing: 'Processando...',
+    processed: 'Processado',
+    language: 'Idioma',
+  },
+  landing: {
+    tagline:
+      'Projeto automatizado de redes de esgoto sanitário — da seleção no mapa ao dimensionamento hidráulico, com dados abertos e NBR\u00a09649.',
+    startDesigning: 'Começar',
+    howItWorks: 'Como funciona',
+    features: 'Funcionalidades',
+    steps: {
+      drawArea: {
+        title: 'Desenhe sua área',
+        description:
+          'Selecione uma região no mapa. Ruas e dados de elevação são obtidos automaticamente do OpenStreetMap e fontes de satélite.',
+      },
+      autoProcess: {
+        title: 'Processamento automático',
+        description:
+          'Nosso pipeline de 8 etapas classifica nós, roteia o esgoto gravitacionalmente e dimensiona tubos conforme a NBR 9649.',
+      },
+      editExport: {
+        title: 'Edite e exporte',
+        description:
+          'Ajuste a rede gerada no editor de grafos interativo e exporte os resultados para o seu projeto.',
+      },
+    },
+    featureCards: {
+      pipeline: {
+        title: 'Pipeline de 8 Etapas',
+        description:
+          'Da classificação de nós ao dimensionamento hidráulico — um fluxo completo de projeto de esgoto automatizado de ponta a ponta.',
+      },
+      nbr: {
+        title: 'Conforme NBR 9649',
+        description:
+          'Equação de Manning, declividades mínimas, profundidades máximas e dimensionamento de tubos seguem as normas brasileiras de esgoto sanitário.',
+      },
+      openData: {
+        title: 'Dados Abertos',
+        description:
+          'Geometria de ruas do OpenStreetMap e elevação do OpenTopography — sem necessidade de bases proprietárias.',
+      },
+      interactiveEditing: {
+        title: 'Edição Interativa',
+        description:
+          'Um editor de grafos sobre o mapa permite adicionar, mover e conectar nós de esgoto com feedback visual em tempo real.',
+      },
+    },
+    step: 'Etapa',
+  },
+  projects: {
+    title: 'Projetos',
+    subtitle: 'Gerencie seus projetos de análise urbana.',
+    newProject: 'Novo Projeto',
+    noProjectsTitle: 'Nenhum projeto ainda',
+    noProjectsDescription: 'Comece criando um novo projeto a partir do mapa.',
+    goToMap: 'Ir para o Mapa',
+    streets: 'ruas',
+  },
+  editor: {
+    modes: {
+      select: 'Selecionar',
+      move: 'Mover',
+      addNode: 'Adicionar Nó',
+      delete: 'Excluir',
+      split: 'Dividir',
+    },
+    loadingProject: 'Carregando dados do projeto...',
+    initializing: 'Inicializando...',
+    projectNotFound: 'Projeto não encontrado',
+    backToProjects: 'Voltar para Projetos',
+    nodes: 'nós',
+    selected: 'selecionados',
+    deleteConfirmTitle: 'Tem certeza absoluta?',
+    deleteConfirmDescription:
+      'Esta ação não pode ser desfeita. O projeto será excluído permanentemente.',
+    overview: 'Resumo',
+    streetsTab: 'Ruas',
+    pipelineTab: 'Pipeline',
+    projectStats: 'Estatísticas do Projeto',
+    streets: 'Ruas',
+    elevation: 'Elevação (Min - Max)',
+    centerCoordinates: 'Coordenadas do Centro',
+    selectedNodes: 'Nós Selecionados',
+    unnamed: 'Sem nome',
+    more: 'mais',
+    clearSelection: 'Limpar Seleção',
+    highwayLegend: 'Legenda de Vias',
+    pipelineIdle: 'Clique em "Processar" para executar o pipeline',
+    pipelineProcessing: 'Executando pipeline de 8 etapas...',
+    pipelineError: 'Erro no pipeline',
+    pipelineRetry: 'Tentar novamente',
+    exportGeoJSON: 'Exportar GeoJSON',
+    deleteProject: 'Excluir projeto',
+    runPipeline: 'Executar pipeline (NBR 9649)',
+  },
+  pipeline: {
+    networkSummary: 'Resumo da Rede',
+    nodes: 'Nós',
+    segments: 'Trechos',
+    length: 'Extensão',
+    pumpStations: 'Elevatórias',
+    totalCost: 'Custo Total',
+    unreachable: 'Inalcançáveis',
+    nodeTypes: 'Tipos de Nó',
+    accessories: 'Acessórios',
+    diameters: 'Diâmetros',
+  },
+  mapPage: {
+    shiftDragInstruction: '+ arraste para selecionar (máx',
+    cropToArea: 'Recortar para a área?',
+    area: 'Área',
+    crop: 'Recortar',
+    fetchData: 'Buscar Dados',
+    saveProject: 'Salvar Projeto',
+    nameYourProject: 'Nomeie seu projeto',
+    projectPlaceholder: 'Meu Projeto Incrível',
+    nodesPreview: 'nós (pré-visualização)',
+    editInProjectPage: 'Edite na página do projeto',
+    streetsFailed: 'Falhou',
+    topographyFailed: 'Falhou',
+    nodesFailed: 'Falhou',
+  },
+};

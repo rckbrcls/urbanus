@@ -26,6 +26,7 @@ from urbanus_geo.constants import (
     PIPE_DIAMETERS,
     MIN_DIAMETER_COLLECTOR,
     MIN_COVER_STREET,
+    MAX_GRAVITY_DEPTH,
 )
 from urbanus_geo.calculations import (
     manning_velocity,
@@ -60,7 +61,7 @@ def dimension_network(
 
     # Accumulate upstream node count
     upstream_count: dict[str, int] = {}
-    for node in reversed(topo_order):
+    for node in topo_order:
         count = 1
         for pred in tree.predecessors(node):
             count += upstream_count.get(pred, 1)
@@ -108,6 +109,29 @@ def dimension_network(
             q_design_ls=q_design,
             cover_depth=MIN_COVER_STREET,
         )
+
+        # Compute invert elevations (cota de fundo do tubo)
+        if z_u is not None and z_v is not None:
+            d_m = pipe.diameter_mm / 1000.0
+            invert_up = z_u - MIN_COVER_STREET - d_m
+            invert_down = invert_up - slope_used * length
+            depth_down = z_v - invert_down
+
+            # Store on tree nodes for downstream use
+            tree.nodes[u].setdefault("invert_elevation", invert_up)
+            tree.nodes[v]["invert_elevation"] = invert_down
+            tree.nodes[u].setdefault("rim_elevation", z_u)
+            tree.nodes[v]["rim_elevation"] = z_v
+            tree.nodes[u].setdefault("depth", MIN_COVER_STREET + d_m)
+            tree.nodes[v]["depth"] = depth_down
+
+            # Update cover_depth if pipe is deeper than minimum
+            pipe.cover_depth = max(MIN_COVER_STREET, depth_down - d_m)
+
+            # Flag if excessive depth → needs resolution in Etapa 7
+            if depth_down > MAX_GRAVITY_DEPTH:
+                tree.edges[u, v]["needs_pump_review"] = True
+
         pipes.append(pipe)
 
     return pipes

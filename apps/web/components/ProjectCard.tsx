@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { MAP_STYLES } from '@/lib/map/styles';
+import { useMapStyle } from '@/hooks/useMapStyle';
+import { useTranslation } from '@/i18n';
 
 interface ProjectCardProps {
   project: Project;
@@ -18,13 +19,20 @@ interface ProjectCardProps {
 function MapThumbnail({ project }: { project: Project }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapStyle = useMapStyle('minimal');
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current) return;
+
+    // Destroy previous map if style changed
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLES.voyagerNoLabels,
+      style: mapStyle,
       center: [project.center[1], project.center[0]],
       zoom: project.zoom,
       interactive: false,
@@ -79,7 +87,7 @@ function MapThumbnail({ project }: { project: Project }) {
       map.remove();
       mapRef.current = null;
     };
-  }, [project]);
+  }, [project, mapStyle]);
 
   return (
     <div
@@ -92,6 +100,7 @@ function MapThumbnail({ project }: { project: Project }) {
 export default function ProjectCard({ project }: ProjectCardProps) {
   const router = useRouter();
   const [, setIsHovered] = useState(false);
+  const t = useTranslation('projects');
 
   return (
     <div
@@ -131,7 +140,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 01-1.447-.894L15 7m0 13V7" />
               </svg>
-              {project.stats.streetCount} streets
+              {project.stats.streetCount} {t.streets}
             </span>
           </div>
         </div>

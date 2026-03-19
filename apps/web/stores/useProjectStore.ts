@@ -1,6 +1,6 @@
 import type { BoundingBox } from "@/features/map";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { getErrorMessage, getErrorMessageFromResponse } from "@/lib/errors";
 
 export interface ProjectStats {

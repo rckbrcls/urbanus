@@ -88,6 +88,96 @@ async def build_graph_from_postgis(
     return G
 
 
+def build_graph_from_geojson(geojson: dict) -> nx.Graph:
+    """Build a NetworkX graph directly from streets GeoJSON.
+
+    Used as fallback when no graph data exists in PostGIS yet.
+    Extracts nodes via classification, keeps only anchors (intersections +
+    endpoints), and connects consecutive anchors along each street.
+
+    Args:
+        geojson: Enriched GeoJSON (with elevations) from streets_geojson.
+
+    Returns:
+        NetworkX undirected graph with same attribute format as
+        build_graph_from_postgis.
+    """
+    from urbanus_api.core.graph.classification import extract_nodes
+    from urbanus_geo.calculations import haversine
+
+    result = extract_nodes(geojson, mode="all")
+    nodes = result["nodes"]
+
+    G = nx.Graph()
+
+    # Position-based dedup (nodes are already clustered at 5m)
+    pos_to_id: dict[str, str] = {}
+
+    for n in nodes:
+        is_anchor = n.get("isIntersection") or n.get("isEndpoint")
+        if not is_anchor:
+            continue
+
+        pos = n["position"]
+        pos_key = f'{pos["lat"]:.5f},{pos["lng"]:.5f}'
+
+        if pos_key in pos_to_id:
+            continue
+
+        pos_to_id[pos_key] = n["id"]
+        G.add_node(
+            n["id"],
+            x=pos["lng"],
+            y=pos["lat"],
+            z=n.get("elevation"),
+            node_type=n.get("nodeType"),
+            pv_obrigatorio=n.get("pvObrigatorio", False),
+            is_intersection=n.get("isIntersection", False),
+            is_endpoint=n.get("isEndpoint", False),
+            degree=n.get("degree", 0),
+        )
+
+    # Group nodes by street and connect consecutive anchors as edges
+    streets: dict[str, list[dict]] = {}
+    for n in nodes:
+        sid = n.get("streetId", "")
+        streets.setdefault(sid, []).append(n)
+
+    for street_id, street_nodes in streets.items():
+        sorted_nodes = sorted(street_nodes, key=lambda n: n.get("vertexIndex", 0))
+        anchors = [
+            n for n in sorted_nodes
+            if n.get("isIntersection") or n.get("isEndpoint")
+        ]
+
+        for i in range(len(anchors) - 1):
+            src, tgt = anchors[i], anchors[i + 1]
+            src_pos = src["position"]
+            tgt_pos = tgt["position"]
+            src_key = f'{src_pos["lat"]:.5f},{src_pos["lng"]:.5f}'
+            tgt_key = f'{tgt_pos["lat"]:.5f},{tgt_pos["lng"]:.5f}'
+            src_id = pos_to_id.get(src_key)
+            tgt_id = pos_to_id.get(tgt_key)
+
+            if not src_id or not tgt_id or src_id == tgt_id:
+                continue
+            if src_id not in G or tgt_id not in G:
+                continue
+
+            length = haversine(
+                src_pos["lat"], src_pos["lng"],
+                tgt_pos["lat"], tgt_pos["lng"],
+            )
+            G.add_edge(
+                src_id, tgt_id,
+                length_m=length,
+                name=src.get("streetName"),
+                highway=src.get("highway"),
+            )
+
+    return G
+
+
 async def save_graph_to_postgis(
     project_id: str,
     G: nx.Graph,
@@ -142,7 +232,7 @@ async def save_graph_to_postgis(
         )
 
         edge_row = EdgeTable(
-            id=data.get("edge_id", f"e_{uuid.uuid4().hex[:8]}"),
+            id=f"e_{uuid.uuid4().hex}",
             project_id=project_id,
             geometry=line,
             name=data.get("name"),

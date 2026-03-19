@@ -5,7 +5,7 @@ import type { Project } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors } from 'lucide-react';
+import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2 } from 'lucide-react';
 
 import {
   AlertDialog,
@@ -26,8 +26,11 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useCommandManager } from '@/stores/commandManager';
 import { mapNodesToNetworkGraph } from '@/lib/graph/serialization';
 import type { EditingMode } from '@/lib/graph/types';
+import { usePipelineStore } from '@/stores/pipelineStore';
+import { PipelineResultsPanel } from '@/components/pipeline/PipelineResultsPanel';
+import { useTranslation } from '@/i18n';
 
-// Dynamic import for GraphMapView (no SSR — MapLibre uses WebGL)
+// Dynamic imports (no SSR — MapLibre uses WebGL)
 const GraphMapView = dynamic(() => import('@/components/map/GraphMapView'), {
   ssr: false,
   loading: () => (
@@ -36,6 +39,7 @@ const GraphMapView = dynamic(() => import('@/components/map/GraphMapView'), {
     </div>
   ),
 });
+const SewerNetworkLayers = dynamic(() => import('@/components/map/SewerNetworkLayers'), { ssr: false });
 
 // ============ TYPES ============
 
@@ -44,24 +48,16 @@ interface ProjectEditorProps {
   isLoading: boolean;
 }
 
-// ============ MODE BUTTONS ============
-
-const MODES: { mode: EditingMode; label: string; icon: React.ReactNode; shortcut?: string }[] = [
-  { mode: 'select', label: 'Select', icon: <MousePointer className="h-4 w-4" />, shortcut: 'V' },
-  { mode: 'move', label: 'Move', icon: <Move className="h-4 w-4" />, shortcut: 'M' },
-  { mode: 'add-node', label: 'Add Node', icon: <Plus className="h-4 w-4" />, shortcut: 'A' },
-  { mode: 'delete', label: 'Delete', icon: <X className="h-4 w-4" />, shortcut: 'D' },
-  { mode: 'split-edge', label: 'Split', icon: <Scissors className="h-4 w-4" />, shortcut: 'S' },
-];
-
 // ============ MAIN COMPONENT ============
 
 export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const router = useRouter();
   const { mutateAsync: deleteProject } = useDeleteProject();
   const { mutateAsync: updateProject } = useUpdateProject();
+  const te = useTranslation('editor');
+  const tc = useTranslation('common');
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'streets'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'streets' | 'pipeline'>('overview');
   const [isMounted, setIsMounted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -83,16 +79,34 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const commandRedo = useCommandManager((s) => s.redo);
   const clearCommands = useCommandManager((s) => s.clear);
 
+  // Pipeline store
+  const pipelineStatus = usePipelineStore((s) => s.status);
+  const pipelineResult = usePipelineStore((s) => s.result);
+  const pipelineError = usePipelineStore((s) => s.error);
+  const processProject = usePipelineStore((s) => s.processProject);
+  const resetPipeline = usePipelineStore((s) => s.reset);
+
   const nodesApiService = useRef(NodesApiService.getInstance()).current;
+
+  // ============ MODE BUTTONS ============
+
+  const MODES: { mode: EditingMode; label: string; icon: React.ReactNode; shortcut?: string }[] = useMemo(() => [
+    { mode: 'select', label: te.modes.select, icon: <MousePointer className="h-4 w-4" />, shortcut: 'V' },
+    { mode: 'move', label: te.modes.move, icon: <Move className="h-4 w-4" />, shortcut: 'M' },
+    { mode: 'add-node', label: te.modes.addNode, icon: <Plus className="h-4 w-4" />, shortcut: 'A' },
+    { mode: 'delete', label: te.modes.delete, icon: <X className="h-4 w-4" />, shortcut: 'D' },
+    { mode: 'split-edge', label: te.modes.split, icon: <Scissors className="h-4 w-4" />, shortcut: 'S' },
+  ], [te.modes]);
 
   useEffect(() => {
     setIsMounted(true);
     return () => {
-      // Cleanup graph state when leaving page
+      // Cleanup state when leaving page
       resetGraph();
       clearCommands();
+      resetPipeline();
     };
-  }, [resetGraph, clearCommands]);
+  }, [resetGraph, clearCommands, resetPipeline]);
 
   // Initialize graph from project data
   useEffect(() => {
@@ -136,6 +150,12 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   }, [setMode]);
 
   // ============ HANDLERS ============
+
+  const handleProcess = useCallback(async () => {
+    if (!project) return;
+    await processProject(project.id);
+    setActiveTab('pipeline');
+  }, [project, processProject]);
 
   const handleSave = useCallback(async () => {
     if (!project) return;
@@ -204,7 +224,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
         <div className="flex flex-col items-center gap-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
           <div className="text-zinc-500">
-            {isLoading ? 'Loading project data...' : 'Initializing...'}
+            {isLoading ? te.loadingProject : te.initializing}
           </div>
         </div>
       </div>
@@ -214,270 +234,308 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   if (!project) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 bg-zinc-50 dark:bg-zinc-950">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Project not found</h1>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{te.projectNotFound}</h1>
         <button onClick={() => router.push('/projects')} className="text-blue-600 hover:underline">
-          Back to Projects
+          {te.backToProjects}
         </button>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-      {/* Header */}
-      <header className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-center gap-4">
+    <div className="relative h-screen overflow-hidden">
+      {/* Full-bleed Map */}
+      <div className="absolute inset-0">
+        <GraphMapView
+          center={project.center}
+          zoom={project.zoom}
+          bounds={project.bounds}
+          streetFeatures={project.streets as unknown as GeoJSON.FeatureCollection}
+          sewerNetwork={pipelineResult}
+        />
+      </div>
+
+      {/* Overlay stats — top left */}
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+        <div className="flex items-center gap-2 rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
           <button
             onClick={() => router.push('/projects')}
-            className="rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="rounded-lg p-1 text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
+            <ArrowLeft className="h-4 w-4" />
           </button>
-          <div>
-            <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{project.name}</h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Created {new Date(project.createdAt).toLocaleDateString()}
-              {hasChanges && <span className="ml-2 text-amber-500">* Unsaved changes</span>}
-            </p>
-          </div>
+          <div className="h-4 w-px bg-border" />
+          <span className="text-xs font-medium text-foreground">{project.name}</span>
+          {hasChanges && <span className="text-xs text-amber-500">*</span>}
         </div>
+        <div className="rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
+          <span className="text-xs font-medium text-muted-foreground">
+            {project.areaKm2.toFixed(2)} km² &middot; {nodeCount} {te.nodes}
+            {selectedNodeIds.length > 0 && ` \u00b7 ${selectedNodeIds.length} ${te.selected}`}
+          </span>
+        </div>
+      </div>
 
-        <div className="flex items-center gap-2">
-          {/* Edit Mode Toolbar */}
-          <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-1 mr-2">
-            {MODES.map(({ mode, label, icon, shortcut }) => (
-              <button
-                key={mode}
-                onClick={() => setMode(mode)}
-                title={`${label}${shortcut ? ` (${shortcut})` : ''}`}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-colors ${
-                  editingMode === mode
-                    ? 'bg-white shadow text-black dark:bg-zinc-600 dark:text-white'
-                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                }`}
-              >
-                {icon}
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-            ))}
-          </div>
+      {/* Edit Mode Toolbar — top center */}
+      <div className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-border bg-background/90 p-1 backdrop-blur-sm">
+        {MODES.map(({ mode, label, icon, shortcut }) => (
+          <button
+            key={mode}
+            onClick={() => setMode(mode)}
+            title={`${label}${shortcut ? ` (${shortcut})` : ''}`}
+            className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
+              editingMode === mode
+                ? 'bg-foreground/10 font-medium text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {icon}
+            <span className="hidden sm:inline">{label}</span>
+          </button>
+        ))}
+        <div className="mx-1 h-4 w-px bg-border" />
+        <button
+          onClick={commandUndo}
+          disabled={!canUndo}
+          className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 className="h-4 w-4" />
+        </button>
+        <button
+          onClick={commandRedo}
+          disabled={!canRedo}
+          className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <Redo2 className="h-4 w-4" />
+        </button>
+      </div>
 
-          {/* Undo/Redo */}
-          <div className="flex gap-1 mr-2">
-            <button
-              onClick={commandUndo}
-              disabled={!canUndo}
-              className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30"
-              title="Undo (Ctrl+Z)"
-            >
-              <Undo2 className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
-            </button>
-            <button
-              onClick={commandRedo}
-              disabled={!canRedo}
-              className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30"
-              title="Redo (Ctrl+Shift+Z)"
-            >
-              <Redo2 className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
-            </button>
-          </div>
-
-          {/* Save */}
+      {/* Floating Sidebar — right */}
+      <div className="absolute top-4 right-4 bottom-4 z-10 flex w-80 flex-col overflow-hidden rounded-2xl border border-border bg-background/90 backdrop-blur-sm">
+        {/* Action buttons */}
+        <div className="flex items-center gap-1.5 border-b border-border p-3">
           <button
             onClick={handleSave}
             disabled={isSaving || !hasChanges}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-40"
           >
-            <Save className="h-4 w-4" />
-            {isSaving ? 'Saving...' : 'Save'}
+            <Save className="h-3.5 w-3.5" />
+            {isSaving ? tc.saving : tc.save}
           </button>
-
-          {/* Process (coming soon) */}
           <button
-            disabled
-            className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-400 cursor-not-allowed opacity-50 dark:border-zinc-700 dark:text-zinc-500"
-            title="Em breve"
+            onClick={handleProcess}
+            disabled={pipelineStatus === 'processing'}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-500/20 disabled:opacity-40 dark:text-emerald-400"
+            title={te.runPipeline}
           >
-            <Network className="h-4 w-4" />
-            Processar
+            {pipelineStatus === 'processing' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Network className="h-3.5 w-3.5" />
+            )}
+            {pipelineStatus === 'processing' ? tc.processing : tc.process}
           </button>
-
-          {/* Export */}
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            title={te.exportGeoJSON}
           >
             <Download className="h-4 w-4" />
-            Export
           </button>
-
-          {/* Delete */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <button className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30">
+              <button
+                className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-red-500"
+                title={te.deleteProject}
+              >
                 <Trash2 className="h-4 w-4" />
-                Delete
               </button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogTitle>{te.deleteConfirmTitle}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete your project.
+                  {te.deleteConfirmDescription}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{tc.cancel}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
                   className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-900 dark:text-white dark:hover:bg-red-800"
                 >
-                  Delete
+                  {tc.delete}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Map (Left) */}
-        <div className="relative flex-1 bg-zinc-200 dark:bg-zinc-800">
-          <GraphMapView
-            center={project.center}
-            zoom={project.zoom}
-            bounds={project.bounds}
-            streetFeatures={project.streets as unknown as GeoJSON.FeatureCollection}
-          />
-
-          {/* Overlay stats */}
-          <div className="absolute top-4 left-4 z-[10] flex flex-col gap-2">
-            <div className="rounded-lg bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm dark:bg-zinc-900/90">
-              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                Area: {project.areaKm2.toFixed(2)} km²
-              </span>
-            </div>
-            <div className="rounded-lg bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm dark:bg-zinc-900/90">
-              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                {nodeCount} nodes | {selectedNodeIds.length} selected
-              </span>
-            </div>
-          </div>
+        {/* Tabs */}
+        <div className="flex border-b border-border">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors ${
+              activeTab === 'overview'
+                ? 'border-b-2 border-foreground text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {te.overview}
+          </button>
+          <button
+            onClick={() => setActiveTab('streets')}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors ${
+              activeTab === 'streets'
+                ? 'border-b-2 border-foreground text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {te.streetsTab}
+          </button>
+          <button
+            onClick={() => setActiveTab('pipeline')}
+            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors ${
+              activeTab === 'pipeline'
+                ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {te.pipelineTab}
+            {pipelineResult && (
+              <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            )}
+          </button>
         </div>
 
-        {/* Data Inspector (Right) */}
-        <div className="w-80 border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex border-b border-zinc-200 dark:border-zinc-800">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'overview'
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
-              }`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveTab('streets')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'streets'
-                  ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
-              }`}
-            >
-              Streets
-            </button>
-          </div>
-
-          <div className="p-4">
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Project Stats
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Streets</p>
-                      <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                        {project.stats.streetCount}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Nodes</p>
-                      <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">{nodeCount}</p>
-                    </div>
-                    <div className="col-span-2 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Elevation (Min - Max)</p>
-                      <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                        {elevationStats
-                          ? `${elevationStats.min.toFixed(0)}m - ${elevationStats.max.toFixed(0)}m`
-                          : '-'}
-                      </p>
-                    </div>
+        {/* Tab content — scrollable */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {te.projectStats}
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border border-border p-3">
+                    <p className="text-xs text-muted-foreground">{te.streets}</p>
+                    <p className="mt-1 text-lg font-bold text-foreground">
+                      {project.stats.streetCount}
+                    </p>
                   </div>
-                </div>
-
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Center Coordinates
-                  </h3>
-                  <div className="rounded-lg bg-zinc-50 p-3 font-mono text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-300">
-                    {project.center[0].toFixed(5)}, {project.center[1].toFixed(5)}
+                  <div className="rounded-xl border border-border p-3">
+                    <p className="text-xs text-muted-foreground">{te.nodes}</p>
+                    <p className="mt-1 text-lg font-bold text-foreground">{nodeCount}</p>
                   </div>
-                </div>
-
-                {selectedNodeIds.length > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                      Selected Nodes
-                    </h3>
-                    <div className="space-y-2">
-                      {selectedNodeIds.slice(0, 5).map((id) => {
-                        const node = graphNodes[id];
-                        if (!node) return null;
-                        return (
-                          <div key={id} className="rounded-lg bg-blue-50 p-2 text-xs dark:bg-blue-900/20">
-                            <p className="font-medium text-blue-900 dark:text-blue-100">
-                              {node.properties.streetName || 'Unnamed'}
-                            </p>
-                            <p className="text-blue-600 dark:text-blue-400">
-                              Elev: {node.properties.elevation?.toFixed(1) ?? 'N/A'}m
-                            </p>
-                          </div>
-                        );
-                      })}
-                      {selectedNodeIds.length > 5 && (
-                        <p className="text-xs text-zinc-500">+{selectedNodeIds.length - 5} more</p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setSelection([])}
-                      className="mt-2 w-full rounded-lg bg-zinc-200 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300"
-                    >
-                      Clear Selection
-                    </button>
+                  <div className="col-span-2 rounded-xl border border-border p-3">
+                    <p className="text-xs text-muted-foreground">{te.elevation}</p>
+                    <p className="mt-1 text-lg font-bold text-foreground">
+                      {elevationStats
+                        ? `${elevationStats.min.toFixed(0)}m - ${elevationStats.max.toFixed(0)}m`
+                        : '-'}
+                    </p>
                   </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'streets' && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Highway Legend</h3>
-                <div className="space-y-2">
-                  {Object.entries(HIGHWAY_COLORS).map(([type, color]) => (
-                    <div key={type} className="flex items-center justify-between rounded-lg border border-zinc-100 p-2 dark:border-zinc-800">
-                      <span className="text-xs capitalize text-zinc-600 dark:text-zinc-400">{type}</span>
-                      <div className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-                    </div>
-                  ))}
                 </div>
               </div>
-            )}
-          </div>
+
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {te.centerCoordinates}
+                </h3>
+                <div className="rounded-xl border border-border p-3 font-mono text-xs text-muted-foreground">
+                  {project.center[0].toFixed(5)}, {project.center[1].toFixed(5)}
+                </div>
+              </div>
+
+              {selectedNodeIds.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {te.selectedNodes}
+                  </h3>
+                  <div className="space-y-2">
+                    {selectedNodeIds.slice(0, 5).map((id) => {
+                      const node = graphNodes[id];
+                      if (!node) return null;
+                      return (
+                        <div key={id} className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-2 text-xs">
+                          <p className="font-medium text-foreground">
+                            {node.properties.streetName || te.unnamed}
+                          </p>
+                          <p className="text-muted-foreground">
+                            Elev: {node.properties.elevation?.toFixed(1) ?? 'N/A'}m
+                          </p>
+                        </div>
+                      );
+                    })}
+                    {selectedNodeIds.length > 5 && (
+                      <p className="text-xs text-muted-foreground">+{selectedNodeIds.length - 5} {te.more}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSelection([])}
+                    className="mt-2 w-full rounded-xl border border-border py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {te.clearSelection}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'streets' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-foreground">{te.highwayLegend}</h3>
+              <div className="space-y-1.5">
+                {Object.entries(HIGHWAY_COLORS).map(([type, color]) => (
+                  <div key={type} className="flex items-center justify-between rounded-xl border border-border p-2">
+                    <span className="text-xs capitalize text-muted-foreground">{type}</span>
+                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'pipeline' && (
+            <div className="space-y-4">
+              {pipelineStatus === 'idle' && (
+                <div className="py-8 text-center">
+                  <Network className="mx-auto h-8 w-8 text-muted-foreground/40" />
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {te.pipelineIdle}
+                  </p>
+                </div>
+              )}
+
+              {pipelineStatus === 'processing' && (
+                <div className="py-8 text-center">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-500" />
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {te.pipelineProcessing}
+                  </p>
+                </div>
+              )}
+
+              {pipelineStatus === 'error' && (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                  <p className="text-xs font-medium text-red-600 dark:text-red-400">{te.pipelineError}</p>
+                  <p className="mt-1 text-xs text-red-500/80">{pipelineError}</p>
+                  <button
+                    onClick={handleProcess}
+                    className="mt-2 text-xs font-medium text-red-600 underline dark:text-red-400"
+                  >
+                    {te.pipelineRetry}
+                  </button>
+                </div>
+              )}
+
+              {pipelineStatus === 'success' && pipelineResult && (
+                <PipelineResultsPanel result={pipelineResult} />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

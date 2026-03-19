@@ -10,13 +10,14 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useMapStore } from '@/stores/useMapStore';
 import { useAreaSelectionStore } from '@/stores/areaSelectionStore';
 import { useCreateProject } from '@/stores/useProjectStore';
-import { MAP_STYLES } from '@/lib/map/styles';
+import { useMapStyle } from '@/hooks/useMapStyle';
 import { AREA_LIMITS } from '@urbanus/constants';
 import { HIGHWAY_COLORS } from '@/features/map/constants';
 
 import BboxDrawControl from './BboxDrawControl';
 import StreetsLayer from './StreetsLayer';
 import PreviewNodesLayer from './PreviewNodesLayer';
+import { useTranslation } from '@/i18n';
 
 export default function MapView() {
   const mapRef = useRef<MapRef>(null);
@@ -51,10 +52,15 @@ export default function MapView() {
   const setShowSaveDialog = useAreaSelectionStore((s) => s.setShowSaveDialog);
   const setValidationError = useAreaSelectionStore((s) => s.setValidationError);
 
+  // i18n
+  const tm = useTranslation('mapPage');
+  const tc = useTranslation('common');
+
   // Local UI state
   const [projectName, setProjectName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  const mapStyle = useMapStyle('labels');
   const isCropped = viewMode === 'cropped';
 
   // ============ MAP CALLBACKS ============
@@ -152,7 +158,7 @@ export default function MapView() {
                 ? croppedInitialView
                 : { latitude: center[0], longitude: center[1], zoom }
             }
-            mapStyle={MAP_STYLES.voyager}
+            mapStyle={mapStyle}
             onMoveEnd={handleMoveEnd}
             dragPan={!isCropped}
             scrollZoom={!isCropped}
@@ -185,7 +191,7 @@ export default function MapView() {
                 <kbd className="rounded bg-zinc-200 px-1.5 py-0.5 font-mono text-xs dark:bg-zinc-700">
                   Shift
                 </kbd>{' '}
-                + drag to select (max {AREA_LIMITS.MAX_BBOX_AREA_KM2} km²)
+                {tm.shiftDragInstruction} {AREA_LIMITS.MAX_BBOX_AREA_KM2} km²)
               </p>
             </div>
 
@@ -200,11 +206,11 @@ export default function MapView() {
             {pendingBbox && (
               <div className="absolute right-4 top-4 z-[20] w-80 rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
                 <h3 className="mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                  Crop to area?
+                  {tm.cropToArea}
                 </h3>
                 <div className="mb-4 space-y-2 text-xs">
                   <p className="text-zinc-600 dark:text-zinc-400">
-                    Area: <strong className="text-zinc-900 dark:text-zinc-100">{bboxArea.toFixed(2)} km²</strong>
+                    {tm.area}: <strong className="text-zinc-900 dark:text-zinc-100">{bboxArea.toFixed(2)} km²</strong>
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -212,13 +218,13 @@ export default function MapView() {
                     onClick={handleCancelCrop}
                     className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
-                    Cancel
+                    {tc.cancel}
                   </button>
                   <button
                     onClick={handleConfirmCrop}
                     className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                   >
-                    Crop
+                    {tm.crop}
                   </button>
                 </div>
               </div>
@@ -238,7 +244,7 @@ export default function MapView() {
                 onClick={handleBack}
                 className="flex items-center gap-2 rounded-lg bg-white/95 px-3 py-1.5 text-sm font-medium text-zinc-800 shadow-md backdrop-blur-sm transition-all hover:bg-white dark:bg-zinc-800/95 dark:text-zinc-100 dark:hover:bg-zinc-800"
               >
-                ← Back
+                ← {tc.back}
               </button>
 
               <span className="rounded-lg bg-white/95 px-2 py-1 text-xs text-zinc-600 shadow-md backdrop-blur-sm dark:bg-zinc-800/95 dark:text-zinc-400">
@@ -250,7 +256,7 @@ export default function MapView() {
                   onClick={startProcessing}
                   className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-blue-700"
                 >
-                  Fetch Data
+                  {tm.fetchData}
                 </button>
               )}
 
@@ -259,7 +265,7 @@ export default function MapView() {
                   onClick={startProcessing}
                   className="flex items-center gap-2 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-orange-700"
                 >
-                  Retry
+                  {tc.retry}
                 </button>
               )}
 
@@ -268,20 +274,20 @@ export default function MapView() {
                   onClick={() => setShowSaveDialog(true)}
                   className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow-md transition-all hover:bg-emerald-700"
                 >
-                  Save Project
+                  {tm.saveProject}
                 </button>
               )}
 
               {isProcessing && (
                 <span className="flex items-center gap-2 rounded-lg bg-blue-600/80 px-3 py-1.5 text-sm font-medium text-white shadow-md">
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Processing...
+                  {tc.processing}
                 </span>
               )}
 
               {allStagesSuccess && (
                 <span className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white shadow-md">
-                  ✓ Processed
+                  ✓ {tc.processed}
                 </span>
               )}
             </div>
@@ -290,8 +296,8 @@ export default function MapView() {
             {nodes.length > 0 && (
               <div className="absolute right-3 top-3" style={{ pointerEvents: 'auto' }}>
                 <div className="rounded-lg bg-white/95 px-2 py-1.5 shadow-md backdrop-blur-sm dark:bg-zinc-800/95">
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400">{nodes.length} nodes (preview)</p>
-                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Edit in project page</p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">{nodes.length} {tm.nodesPreview}</p>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{tm.editInProjectPage}</p>
                 </div>
               </div>
             )}
@@ -301,17 +307,17 @@ export default function MapView() {
               <div className="absolute left-3 top-14 flex flex-col gap-2" style={{ pointerEvents: 'auto' }}>
                 {stages.streets === 'error' && (
                   <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                    Streets: {errors.streets || 'Failed'}
+                    Streets: {errors.streets || tm.streetsFailed}
                   </span>
                 )}
                 {stages.topography === 'error' && (
                   <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                    Topography: {errors.topography || 'Failed'}
+                    Topography: {errors.topography || tm.topographyFailed}
                   </span>
                 )}
                 {stages.nodes === 'error' && (
                   <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                    Nodes: {errors.nodes || 'Failed'}
+                    Nodes: {errors.nodes || tm.nodesFailed}
                   </span>
                 )}
               </div>
@@ -324,13 +330,13 @@ export default function MapView() {
                 style={{ pointerEvents: 'auto' }}
               >
                 <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  Name your project
+                  {tm.nameYourProject}
                 </h3>
                 <input
                   type="text"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="My Awesome Project"
+                  placeholder={tm.projectPlaceholder}
                   className="mb-3 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-500"
                   autoFocus
                 />
@@ -342,14 +348,14 @@ export default function MapView() {
                     }}
                     className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
-                    Cancel
+                    {tc.cancel}
                   </button>
                   <button
                     onClick={handleSaveProject}
                     disabled={!projectName.trim() || isSaving}
                     className="flex-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {isSaving ? 'Saving...' : 'Save'}
+                    {isSaving ? tc.saving : tc.save}
                   </button>
                 </div>
               </div>

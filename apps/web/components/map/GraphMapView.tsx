@@ -4,7 +4,7 @@ import { useRef, useCallback } from 'react';
 import MapGL, { type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { MAP_STYLES } from '@/lib/map/styles';
+import { useMapStyle } from '@/hooks/useMapStyle';
 import { useGraphStore } from '@/stores/graphStore';
 import { useDerivedGeoJSON } from '@/hooks/useDerivedGeoJSON';
 import { useGraphEditor } from '@/hooks/useGraphEditor';
@@ -12,6 +12,8 @@ import { useGraphEditor } from '@/hooks/useGraphEditor';
 import GraphLayers from './GraphLayers';
 import GhostEdge from './GhostEdge';
 import FlowArrows from './FlowArrows';
+import SewerNetworkLayers from './SewerNetworkLayers';
+import type { SewerNetwork } from '@/types/sewer';
 
 interface GraphMapViewProps {
   center: [number, number];
@@ -21,13 +23,14 @@ interface GraphMapViewProps {
     northEast: { lat: number; lng: number };
   };
   streetFeatures?: GeoJSON.FeatureCollection | null;
+  sewerNetwork?: SewerNetwork | null;
 }
 
 /**
  * Main map component for the graph editor.
  * Renders graph nodes/edges via GraphLayers and delegates interactions to useGraphEditor.
  */
-export default function GraphMapView({ center, zoom, bounds, streetFeatures }: GraphMapViewProps) {
+export default function GraphMapView({ center, zoom, bounds, streetFeatures, sewerNetwork }: GraphMapViewProps) {
   const mapRef = useRef<MapRef>(null);
   const editingMode = useGraphStore((s) => s.editingMode);
 
@@ -42,6 +45,8 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures }: G
     handleMouseMove,
     handleMouseUp,
   } = useGraphEditor({ mapRef, streetFeatures });
+
+  const mapStyle = useMapStyle('minimal');
 
   const onMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
@@ -64,7 +69,7 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures }: G
         longitude: center[1],
         zoom,
       }}
-      mapStyle={MAP_STYLES.voyagerNoLabels}
+      mapStyle={mapStyle}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -89,6 +94,9 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures }: G
 
       {/* Flow direction arrows */}
       <FlowArrows edgesGeoJSON={edgesGeoJSON} />
+
+      {/* Sewer network overlay (after pipeline processing) */}
+      {sewerNetwork && <SewerNetworkLayers network={sewerNetwork} />}
 
       {/* Ghost edge (add-edge mode) */}
       {ghostEdgeFrom && ghostEdgeTo && (

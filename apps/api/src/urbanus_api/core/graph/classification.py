@@ -16,7 +16,145 @@ from __future__ import annotations
 import uuid
 from typing import Any, Literal
 
-from urbanus_geo.constants import DIRECTION_CHANGE_THRESHOLD
+from urbanus_geo.calculations import haversine
+from urbanus_geo.constants import DIRECTION_CHANGE_THRESHOLD, SNAP_DISTANCE_METERS
+
+
+def _cluster_nearby_nodes(
+    nodes: list[dict[str, Any]],
+    snap_distance: float = 5.0,
+) -> list[dict[str, Any]]:
+    """Merge nodes within snap_distance meters using Union-Find.
+
+    The representative of each cluster is the node with highest degree.
+    Properties are merged: street_ids union, degree recalculated,
+    elevation averaged, pv_obrigatorio = any True in cluster.
+    """
+    n = len(nodes)
+    if n == 0:
+        return nodes
+
+    # Union-Find
+    parent = list(range(n))
+    rank = [0] * n
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra == rb:
+            return
+        if rank[ra] < rank[rb]:
+            ra, rb = rb, ra
+        parent[rb] = ra
+        if rank[ra] == rank[rb]:
+            rank[ra] += 1
+
+    # Build pairs within snap_distance
+    for i in range(n):
+        pi = nodes[i]["position"]
+        for j in range(i + 1, n):
+            pj = nodes[j]["position"]
+            dist = haversine(pi["lat"], pi["lng"], pj["lat"], pj["lng"])
+            if dist <= snap_distance:
+                union(i, j)
+
+    # Group by cluster
+    clusters: dict[int, list[int]] = {}
+    for i in range(n):
+        root = find(i)
+        clusters.setdefault(root, []).append(i)
+
+    # Build merged nodes
+    merged: list[dict[str, Any]] = []
+    for indices in clusters.values():
+        if len(indices) == 1:
+            merged.append(nodes[indices[0]])
+            continue
+
+        # Pick representative: highest original degree
+        rep_idx = max(indices, key=lambda i: nodes[i].get("degree", 0))
+        rep = dict(nodes[rep_idx])
+
+        # Merge street_ids and street_names
+        all_street_ids: set[str] = set()
+        all_street_names: set[str] = set()
+        elevations: list[float] = []
+        any_pv = False
+        any_endpoint = False
+
+        for i in indices:
+            nd = nodes[i]
+            all_street_ids.update(nd.get("connectedStreets", []))
+            all_street_names.update(nd.get("streetNames", []))
+            if nd.get("elevation") is not None:
+                elevations.append(nd["elevation"])
+            if nd.get("pvObrigatorio"):
+                any_pv = True
+            if nd.get("isEndpoint"):
+                any_endpoint = True
+
+        rep["connectedStreets"] = sorted(all_street_ids)
+        rep["streetNames"] = sorted(all_street_names - {"Unnamed"})
+        rep["degree"] = len(all_street_ids)
+        rep["isIntersection"] = rep["degree"] >= 2
+        rep["isEndpoint"] = any_endpoint
+        if elevations:
+            rep["elevation"] = sum(elevations) / len(elevations)
+        if any_pv:
+            rep["pvObrigatorio"] = True
+            rep["nodeType"] = "ROSA"
+            rep["accessoryType"] = "PV"
+        # Recalculate: if merged degree >= 2, it's an intersection → ROSA
+        if rep["degree"] >= 2 and not rep.get("pvObrigatorio"):
+            rep["nodeType"] = "ROSA"
+            rep["pvObrigatorio"] = True
+            rep["accessoryType"] = "PV"
+
+        merged.append(rep)
+
+    return merged
+
+
+def enforce_direction_changes(G) -> None:
+    """Mark degree-2 nodes with direction change > threshold as ROSA/pv_obrigatorio.
+
+    For each degree-2 node in the graph, compute the angle between the two
+    adjacent edges. If the deflection (180 - angle) exceeds
+    DIRECTION_CHANGE_THRESHOLD, the node needs a PV for the pipe bend.
+    """
+    from urbanus_geo.calculations import angle_at_node
+
+    for node in list(G.nodes):
+        if G.degree(node) != 2:
+            continue
+        ndata = G.nodes[node]
+        if ndata.get("pv_obrigatorio"):
+            continue
+
+        neighbors = list(G.neighbors(node))
+        if len(neighbors) != 2:
+            continue
+        n1, n2 = neighbors
+
+        nd = G.nodes[node]
+        n1d = G.nodes[n1]
+        n2d = G.nodes[n2]
+
+        a = (n1d.get("y", 0), n1d.get("x", 0))
+        b = (nd.get("y", 0), nd.get("x", 0))
+        c = (n2d.get("y", 0), n2d.get("x", 0))
+
+        angle = angle_at_node(a, b, c)
+        deflection = 180.0 - angle
+
+        if deflection > DIRECTION_CHANGE_THRESHOLD:
+            ndata["node_type"] = "ROSA"
+            ndata["pv_obrigatorio"] = True
 
 
 def extract_nodes(
@@ -92,7 +230,7 @@ def extract_nodes(
             is_endpoint = i == 0 or i == len(coordinates) - 1
 
             # Filtrar por modo
-            if mode == "intersections" and not is_intersection:
+            if mode == "intersections" and not (is_intersection or is_endpoint):
                 continue
 
             elevation = None
@@ -141,7 +279,10 @@ def extract_nodes(
             }
             nodes.append(node)
 
-    # Passo 3: Marcar nós de maior e menor elevação
+    # Passo 3.5: Clustering espacial — merge nós dentro de SNAP_DISTANCE_METERS
+    nodes = _cluster_nearby_nodes(nodes, snap_distance=SNAP_DISTANCE_METERS)
+
+    # Passo 4: Marcar nós de maior e menor elevação
     highest_id = None
     lowest_id = None
     highest_elev = float("-inf")
@@ -169,7 +310,7 @@ def extract_nodes(
             if node["nodeType"] is None:
                 node["nodeType"] = "AZUL_ESCURO"
 
-    # Metadata
+    # Metadata (totalUniquePositions reflects pre-clustering count)
     total_unique = len(position_map)
 
     metadata = {
