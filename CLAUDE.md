@@ -132,3 +132,23 @@ docker-compose up --build
 
 **Testes**
 - Não há suite automatizada. Use `pnpm lint` no frontend.
+
+**Documentação Técnica (`docs/`)**
+
+> **Regra de manutenção:** ao alterar código no domínio de um documento, atualizar o documento correspondente em `docs/`. Se a alteração criar um novo módulo ou conceito não coberto, adicionar uma entrada nesta tabela.
+
+| Doc | Descrição | Domínio (arquivos/pastas) |
+|-----|-----------|---------------------------|
+| `00-visao-geral.md` | Visão geral do projeto | Atualizar quando mudar stack, fluxo principal ou arquitetura |
+| `01-arquitetura-monorepo.md` | Estrutura do monorepo e infra | `pnpm-workspace.yaml`, `turbo.json`, `Makefile`, `docker-compose.yml`, `Dockerfile`s, variáveis de ambiente |
+| `02-tipos-e-constantes.md` | Tipos geo e constantes NBR 9649 | `packages/geo/src/`, `packages/constants/src/`, `packages/utils/src/`, `py/urbanus-geo/src/urbanus_geo/` |
+| `03-backend-api.md` | API FastAPI e endpoints | `apps/api/src/urbanus_api/main.py`, `models.py`, `data/`, `services/`, `core/graph/builder.py` |
+| `04-banco-de-dados.md` | Esquema PostGIS e migrações | `apps/api/src/urbanus_api/data/tables.py`, `migrations/` |
+| `05-pipeline-8-etapas.md` | Pipeline completo de esgoto | `apps/api/src/urbanus_api/core/` (todos os módulos do pipeline) |
+| `06-hidraulica-nbr9649.md` | Hidráulica e Manning | `core/hydraulics/`, `core/routing/cost.py`, `urbanus_geo/calculations.py` (funções hidráulicas) |
+| `07-algoritmos-geo.md` | Algoritmos geoespaciais | `core/elevation/sampling.py`, `urbanus_geo/calculations.py` (funções geo), `packages/geo/src/calculations.ts` |
+| `08-frontend.md` | Frontend Next.js | `apps/web/app/`, `apps/web/components/`, `apps/web/features/map/` |
+| `09-estado-e-stores.md` | Stores e estado global | `apps/web/stores/`, `apps/web/hooks/useDerivedGeoJSON.ts` |
+| `10-editor-de-grafos.md` | Editor de grafos no mapa | `apps/web/hooks/useGraphEditor.ts`, `apps/web/types/map.ts`, `apps/web/lib/map/snapping.ts`, `apps/web/stores/commandManager.ts` |
+| `11-elevacao-e-topografia.md` | Elevação e DEM | `apps/api/src/urbanus_api/services/elevation.py`, `core/elevation/` |
+| `12-referencias.md` | Referências técnicas | Atualizar quando adicionar dependência ou referência acadêmica |
