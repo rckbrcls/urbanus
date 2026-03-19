@@ -27,6 +27,8 @@ RUN uv sync
 
 WORKDIR /app/apps/api
 
+RUN chmod +x /app/apps/api/entrypoint.sh
+
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "urbanus_api.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/app/apps/api/entrypoint.sh"]

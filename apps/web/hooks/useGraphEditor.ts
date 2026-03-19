@@ -9,6 +9,7 @@
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import type { MapRef } from 'react-map-gl/maplibre';
+import type maplibregl from 'maplibre-gl';
 import type { MapMouseEvent } from 'maplibre-gl';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -27,6 +28,13 @@ import { calculateEdgeLength, calculateSlope } from '@/lib/graph/operations';
 import { snapToNearest } from '@/lib/map/snapping';
 
 const INTERACTIVE_LAYERS = ['graph-nodes-layer', 'graph-edges-layer'];
+
+/** Only query layers that actually exist in the current style. */
+function safeQuery(map: maplibregl.Map, point: maplibregl.PointLike, layers: string[]) {
+  const existing = layers.filter((l) => map.getLayer(l));
+  if (existing.length === 0) return [];
+  return map.queryRenderedFeatures(point, { layers: existing });
+}
 
 interface UseGraphEditorOptions {
   mapRef: React.RefObject<MapRef | null>;
@@ -143,7 +151,7 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
       }
 
       // Hover
-      const features = map.queryRenderedFeatures(e.point, { layers: INTERACTIVE_LAYERS });
+      const features = safeQuery(map, e.point, INTERACTIVE_LAYERS);
 
       if (features.length > 0) {
         map.getCanvas().style.cursor = editingMode === 'delete' ? 'crosshair' : 'pointer';
@@ -168,7 +176,7 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
       const map = mapRef.current?.getMap();
       if (!map) return;
 
-      const features = map.queryRenderedFeatures(e.point, { layers: ['graph-nodes-layer'] });
+      const features = safeQuery(map, e.point, ['graph-nodes-layer']);
       if (features.length === 0) return;
 
       const feat = features[0];
@@ -214,7 +222,7 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
       const map = mapRef.current?.getMap();
       if (!map) return;
 
-      const features = map.queryRenderedFeatures(e.point, { layers: INTERACTIVE_LAYERS });
+      const features = safeQuery(map, e.point, INTERACTIVE_LAYERS);
 
       switch (editingMode) {
         case 'select': {

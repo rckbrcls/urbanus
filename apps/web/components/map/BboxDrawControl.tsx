@@ -43,6 +43,14 @@ export default function BboxDrawControl() {
   const setValidationError = useAreaSelectionStore((s) => s.setValidationError);
   const viewMode = useAreaSelectionStore((s) => s.viewMode);
 
+  // Clear rectangle when leaving explore mode (confirm/cancel)
+  useEffect(() => {
+    if (viewMode !== 'explore') {
+      setRectGeoJSON(null);
+      setIsInvalid(false);
+    }
+  }, [viewMode]);
+
   useEffect(() => {
     const map = mapRef?.getMap();
     if (!map) return;

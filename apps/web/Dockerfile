@@ -4,15 +4,19 @@ WORKDIR /app
 
 RUN npm install -g pnpm
 
-COPY package.json pnpm-workspace.yaml turbo.json ./
+# Copy workspace manifests + lockfile
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/geo/package.json packages/geo/
 COPY packages/constants/package.json packages/constants/
 COPY packages/utils/package.json packages/utils/
 
-RUN pnpm install --frozen-lockfile
+# Copy all source (workspace packages + app)
+COPY packages/ packages/
+COPY apps/web/ apps/web/
 
-COPY . .
+# Install deps (inside container, after all source is copied)
+RUN pnpm install --frozen-lockfile
 
 WORKDIR /app/apps/web
 

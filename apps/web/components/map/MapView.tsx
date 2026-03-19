@@ -111,21 +111,14 @@ export default function MapView() {
 
   // ============ COMPUTED ============
 
-  const maxBounds = useMemo((): LngLatBoundsLike | undefined => {
-    if (!isCropped || !activeBbox) return undefined;
-    const pad = 0.01; // small padding
-    return [
-      [activeBbox.southWest.lng - pad, activeBbox.southWest.lat - pad],
-      [activeBbox.northEast.lng + pad, activeBbox.northEast.lat + pad],
-    ];
-  }, [isCropped, activeBbox]);
-
   const croppedInitialView = useMemo(() => {
     if (!activeBbox) return undefined;
     return {
-      latitude: (activeBbox.southWest.lat + activeBbox.northEast.lat) / 2,
-      longitude: (activeBbox.southWest.lng + activeBbox.northEast.lng) / 2,
-      zoom: 15,
+      bounds: [
+        [activeBbox.southWest.lng, activeBbox.southWest.lat],
+        [activeBbox.northEast.lng, activeBbox.northEast.lat],
+      ] as LngLatBoundsLike,
+      fitBoundsOptions: { padding: 40 },
     };
   }, [activeBbox]);
 
@@ -147,7 +140,7 @@ export default function MapView() {
           key={isCropped ? 'cropped' : 'explore'}
           className={
             isCropped
-              ? 'absolute left-1/2 top-1/2 z-[6] h-[70vh] w-[70vw] max-w-[900px] max-h-[700px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800'
+              ? 'absolute left-1/2 top-1/2 z-[6] h-[70vh] w-[70vw] max-w-[900px] max-h-[700px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 cursor-default'
               : 'h-full w-full'
           }
         >
@@ -161,9 +154,14 @@ export default function MapView() {
             }
             mapStyle={MAP_STYLES.voyager}
             onMoveEnd={handleMoveEnd}
-            maxBounds={maxBounds}
-            dragPan={!isCropped || true}
-            scrollZoom={!isCropped || true}
+            dragPan={!isCropped}
+            scrollZoom={!isCropped}
+            doubleClickZoom={!isCropped}
+            touchZoomRotate={!isCropped}
+            dragRotate={!isCropped}
+            keyboard={!isCropped}
+            touchPitch={!isCropped}
+            boxZoom={false}
             style={{ width: '100%', height: '100%' }}
             attributionControl={{ compact: true }}
           >

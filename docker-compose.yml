@@ -6,9 +6,15 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/apps/web/node_modules
+      - ./apps/web/app:/app/apps/web/app
+      - ./apps/web/components:/app/apps/web/components
+      - ./apps/web/features:/app/apps/web/features
+      - ./apps/web/hooks:/app/apps/web/hooks
+      - ./apps/web/lib:/app/apps/web/lib
+      - ./apps/web/stores:/app/apps/web/stores
+      - ./packages/geo/src:/app/packages/geo/src
+      - ./packages/constants/src:/app/packages/constants/src
+      - ./packages/utils/src:/app/packages/utils/src
     environment:
       - NODE_ENV=development
       - PYTHON_API_URL=http://server:8000

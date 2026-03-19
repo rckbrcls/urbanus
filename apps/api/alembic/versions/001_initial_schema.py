@@ -31,8 +31,6 @@ def upgrade() -> None:
         sa.Column("street_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("streets_geojson", sa.dialects.postgresql.JSONB()),
     )
-    op.create_index("idx_projects_bounds", "projects", ["bounds"], postgresql_using="gist")
-
     op.create_table(
         "edges",
         sa.Column("id", sa.String(), primary_key=True),
