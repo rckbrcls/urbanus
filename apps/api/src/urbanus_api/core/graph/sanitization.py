@@ -9,7 +9,6 @@ Etapa 4: Resolução de clusters de curva (ângulo < threshold).
 from __future__ import annotations
 
 import math
-import uuid
 
 import networkx as nx
 
@@ -68,7 +67,7 @@ def sanitize_long_edges(
             if z_u is not None and z_v is not None:
                 new_z = z_u + frac * (z_v - z_u)
 
-            new_id = f"verde_{uuid.uuid4().hex[:8]}"
+            new_id = f"verde_{u}_{v}_{i}"
             G.add_node(new_id, x=new_lng, y=new_lat, z=new_z, node_type="VERDE")
 
             seg_length = length / n_segments
@@ -211,7 +210,7 @@ def resolve_curve_clusters(
             e1_data = dict(G.edges[node, n1])
             e2_data = dict(G.edges[node, n2])
 
-            new_id = f"curve_{uuid.uuid4().hex[:8]}"
+            new_id = f"curve_{n1}_{n2}"
             G.remove_node(node)
             G.add_node(new_id, x=new_lng, y=new_lat, z=new_z, node_type="VERDE")
             G.add_edge(n1, new_id, **e1_data)
@@ -326,7 +325,7 @@ def subdivide_steep_edges(
             if z_u is not None and z_v is not None:
                 new_z = z_u + frac * (z_v - z_u)
 
-            new_id = f"steep_{uuid.uuid4().hex[:8]}"
+            new_id = f"steep_{u}_{v}_{i}"
             G.add_node(
                 new_id, x=new_lng, y=new_lat, z=new_z,
                 node_type="ROSA", pv_obrigatorio=True,

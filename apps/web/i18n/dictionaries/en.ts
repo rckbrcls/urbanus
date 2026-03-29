@@ -34,7 +34,7 @@ export const en: Dictionary = {
       autoProcess: {
         title: 'Auto-process',
         description:
-          'Our 8-step pipeline classifies nodes, routes sewage gravitationally, and dimensions pipes to NBR 9649 standards.',
+          'Our 8-step pipeline classifies nodes, routes sewage gravitationally, and dimensions pipes automatically.',
       },
       editExport: {
         title: 'Edit & export',
@@ -49,9 +49,9 @@ export const en: Dictionary = {
           'From node classification to hydraulic dimensioning — a complete sewer design workflow automated end to end.',
       },
       nbr: {
-        title: 'NBR 9649 Compliant',
+        title: 'Standards Compliant',
         description:
-          "Manning's equation, minimum slopes, maximum depths, and pipe sizing all follow Brazilian sanitary sewer standards.",
+          "Manning's equation, minimum slopes, maximum depths, and pipe sizing all follow sanitary sewer engineering standards.",
       },
       openData: {
         title: 'Open Data',
@@ -110,7 +110,7 @@ export const en: Dictionary = {
     pipelineRetry: 'Try again',
     exportGeoJSON: 'Export GeoJSON',
     deleteProject: 'Delete project',
-    runPipeline: 'Run pipeline (NBR 9649)',
+    runPipeline: 'Run pipeline',
   },
   pipeline: {
     networkSummary: 'Network Summary',

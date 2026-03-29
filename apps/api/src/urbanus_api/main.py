@@ -196,7 +196,7 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
     # Find outlet (lowest elevation node)
     outlet = min(
         (n for n in G.nodes if G.nodes[n].get("z") is not None),
-        key=lambda n: G.nodes[n]["z"],
+        key=lambda n: (G.nodes[n]["z"], str(n)),
         default=None,
     )
     if outlet is None:

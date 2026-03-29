@@ -1,4 +1,4 @@
-.PHONY: dev dev-web dev-api build lint type-check install
+.PHONY: dev dev-web dev-api build lint type-check install test test-ts test-py
 
 install:
 	pnpm install
@@ -22,3 +22,12 @@ lint:
 
 type-check:
 	pnpm turbo run type-check
+
+test: test-ts test-py
+
+test-ts:
+	pnpm turbo run test
+
+test-py:
+	cd py/urbanus-geo && uv run pytest tests/ -v
+	cd apps/api && uv run pytest tests/ -v

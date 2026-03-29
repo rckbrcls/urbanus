@@ -9,6 +9,7 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useDerivedGeoJSON } from '@/hooks/useDerivedGeoJSON';
 import { useGraphEditor } from '@/hooks/useGraphEditor';
 
+import BboxOverlay from './BboxOverlay';
 import GraphLayers from './GraphLayers';
 import GhostEdge from './GhostEdge';
 import FlowArrows from './FlowArrows';
@@ -89,8 +90,11 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures, sew
               : undefined
       }
     >
-      {/* Graph layers */}
-      <GraphLayers nodesGeoJSON={nodesGeoJSON} edgesGeoJSON={edgesGeoJSON} />
+      {/* Bounding box overlay */}
+      {bounds && <BboxOverlay bounds={bounds} />}
+
+      {/* Graph layers — dimmed when sewer overlay is active */}
+      <GraphLayers nodesGeoJSON={nodesGeoJSON} edgesGeoJSON={edgesGeoJSON} dimmed={!!sewerNetwork} />
 
       {/* Flow direction arrows */}
       <FlowArrows edgesGeoJSON={edgesGeoJSON} />

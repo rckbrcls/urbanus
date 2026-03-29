@@ -77,7 +77,7 @@ def _cluster_nearby_nodes(
             continue
 
         # Pick representative: highest original degree
-        rep_idx = max(indices, key=lambda i: nodes[i].get("degree", 0))
+        rep_idx = max(indices, key=lambda i: (nodes[i].get("degree", 0), nodes[i].get("id", "")))
         rep = dict(nodes[rep_idx])
 
         # Merge street_ids and street_names
@@ -90,7 +90,14 @@ def _cluster_nearby_nodes(
         for i in indices:
             nd = nodes[i]
             all_street_ids.update(nd.get("connectedStreets", []))
+            # Include primary streetId — may not be in connectedStreets
+            sid = nd.get("streetId")
+            if sid:
+                all_street_ids.add(sid)
             all_street_names.update(nd.get("streetNames", []))
+            sname = nd.get("streetName")
+            if sname and sname != "Unnamed":
+                all_street_names.add(sname)
             if nd.get("elevation") is not None:
                 elevations.append(nd["elevation"])
             if nd.get("pvObrigatorio"):

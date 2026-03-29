@@ -6,7 +6,6 @@
  * unique nodes by position and builds edges between adjacent anchors.
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import { GeoCalculations } from '@urbanus/geo';
 import type { MapNode } from '@/features/map/types/node.types';
 import type { NetworkGraph, NetworkNode, NetworkEdge } from './types';
@@ -32,11 +31,57 @@ export function mapNodesToNetworkGraph(nodes: MapNode[]): NetworkGraph {
     return `${lat.toFixed(5)},${lng.toFixed(5)}`;
   }
 
+  // Group nodes by ALL connected streets (not just primary streetId).
+  // After backend clustering, a merged node keeps only one streetId but
+  // connectedStreets lists every street it belongs to. Using connectedStreets
+  // ensures every street gets its intersection nodes back.
+  function streetsOf(mn: MapNode): string[] {
+    const streets = mn.connectedStreets?.length ? [...mn.connectedStreets] : [];
+    if (!streets.includes(mn.streetId)) streets.push(mn.streetId);
+    return streets;
+  }
+
+  // Pre-compute street endpoint positions (geographic extremes per street)
+  const streetEndpointKeys = new Set<string>();
+  {
+    const byStreet = new Map<string, MapNode[]>();
+    for (const mn of nodes) {
+      for (const sid of streetsOf(mn)) {
+        const arr = byStreet.get(sid) || [];
+        arr.push(mn);
+        byStreet.set(sid, arr);
+      }
+    }
+    for (const streetNodes of byStreet.values()) {
+      if (streetNodes.length < 2) continue;
+      // Use geographic extremes as endpoints (vertexIndex may be
+      // from a different street after clustering)
+      const lats = streetNodes.map((n) => n.position.lat);
+      const lngs = streetNodes.map((n) => n.position.lng);
+      const latSpan = Math.max(...lats) - Math.min(...lats);
+      const lngSpan = Math.max(...lngs) - Math.min(...lngs);
+      const sorted = [...streetNodes].sort((a, b) =>
+        lngSpan >= latSpan
+          ? a.position.lng - b.position.lng || a.position.lat - b.position.lat
+          : a.position.lat - b.position.lat || a.position.lng - b.position.lng,
+      );
+      streetEndpointKeys.add(posKey(sorted[0].position.lat, sorted[0].position.lng));
+      streetEndpointKeys.add(posKey(sorted[sorted.length - 1].position.lat, sorted[sorted.length - 1].position.lng));
+    }
+  }
+
+  function isAnchorNode(mn: MapNode): boolean {
+    return Boolean(
+      (mn.degree && mn.degree >= 2) ||
+      mn.isEndpoint ||
+      streetEndpointKeys.has(posKey(mn.position.lat, mn.position.lng)),
+    );
+  }
+
   // 1. Create unique nodes
   for (const mn of nodes) {
     const key = posKey(mn.position.lat, mn.position.lng);
-    const isAnchor = Boolean((mn.degree && mn.degree >= 2) || mn.isEndpoint);
-    if (!isAnchor) continue;
+    if (!isAnchorNode(mn)) continue;
 
     if (!positionMap.has(key)) {
       const id = mn.id;
@@ -66,21 +111,43 @@ export function mapNodesToNetworkGraph(nodes: MapNode[]): NetworkGraph {
   }
 
   // 2. Build edges per street (connect consecutive anchors)
+  // Group by connectedStreets so clustered nodes appear in all their streets
   const nodesByStreet = new Map<string, MapNode[]>();
   for (const mn of nodes) {
-    const existing = nodesByStreet.get(mn.streetId) || [];
-    existing.push(mn);
-    nodesByStreet.set(mn.streetId, existing);
+    for (const sid of streetsOf(mn)) {
+      const arr = nodesByStreet.get(sid) || [];
+      arr.push(mn);
+      nodesByStreet.set(sid, arr);
+    }
   }
 
   for (const [streetId, streetNodes] of nodesByStreet) {
-    // Sort by vertex index
-    const sorted = [...streetNodes].sort((a, b) => a.vertexIndex - b.vertexIndex);
+    // Deduplicate by position (same position can appear from multiple MapNodes)
+    const seenPos = new Set<string>();
+    const unique = streetNodes.filter((n) => {
+      const key = posKey(n.position.lat, n.position.lng);
+      if (seenPos.has(key)) return false;
+      seenPos.add(key);
+      return true;
+    });
 
-    // Find anchors in order
-    const anchors = sorted.filter(
-      (n) => Boolean((n.degree && n.degree >= 2) || n.isEndpoint),
+    if (unique.length < 2) continue;
+
+    // Sort geographically along the street's dominant axis.
+    // vertexIndex is unreliable for cross-street nodes after clustering.
+    const lats = unique.map((n) => n.position.lat);
+    const lngs = unique.map((n) => n.position.lng);
+    const latSpan = Math.max(...lats) - Math.min(...lats);
+    const lngSpan = Math.max(...lngs) - Math.min(...lngs);
+
+    const sorted = [...unique].sort((a, b) =>
+      lngSpan >= latSpan
+        ? a.position.lng - b.position.lng || a.position.lat - b.position.lat
+        : a.position.lat - b.position.lat || a.position.lng - b.position.lng,
     );
+
+    // Find anchors in order (intersections + endpoints + street endpoints)
+    const anchors = sorted.filter((n) => isAnchorNode(n));
 
     for (let i = 0; i < anchors.length - 1; i++) {
       const srcNode = anchors[i];
@@ -104,7 +171,8 @@ export function mapNodesToNetworkGraph(nodes: MapNode[]): NetworkGraph {
 
       const slope = calculateSlope(source, target, length);
 
-      const edgeId = uuidv4();
+      const edgeId = `${sourceId}::${targetId}`;
+      if (graph.edges[edgeId]) continue; // skip duplicate (same pair from another street)
       const edge: NetworkEdge = {
         id: edgeId,
         sourceId,
@@ -122,6 +190,18 @@ export function mapNodesToNetworkGraph(nodes: MapNode[]): NetworkGraph {
       graph.edges[edgeId] = edge;
       source.properties.edgeIds.push(edgeId);
       target.properties.edgeIds.push(edgeId);
+    }
+  }
+
+  // Safety net: remove nodes with zero edges and orphan edges
+  for (const [id, node] of Object.entries(graph.nodes)) {
+    if (node.properties.edgeIds.length === 0) {
+      delete graph.nodes[id];
+    }
+  }
+  for (const [eid, edge] of Object.entries(graph.edges)) {
+    if (!graph.nodes[edge.sourceId] || !graph.nodes[edge.targetId]) {
+      delete graph.edges[eid];
     }
   }
 

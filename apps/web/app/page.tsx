@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useTranslation } from "@/i18n";
+import { SewerPipeBackground } from "@/components/landing/SewerPipeBackground";
 
 export default function LandingPage() {
   const tl = useTranslation('landing');
@@ -34,7 +35,8 @@ export default function LandingPage() {
   return (
     <div className="flex flex-1 flex-col">
       {/* Hero */}
-      <section className="flex min-h-[calc(100dvh-3rem)] flex-col items-center justify-center gap-6 px-6 text-center">
+      <section className="relative flex min-h-[calc(100dvh-3rem)] flex-col items-center justify-center gap-6 overflow-hidden px-6 text-center">
+        <SewerPipeBackground />
         <h1
           className="text-5xl font-bold tracking-tight md:text-6xl"
           style={{ fontFamily: "var(--font-baskerville)" }}

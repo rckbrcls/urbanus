@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clipFeatureCollectionToBbox } from "@urbanus/geo";
 
 const OVERPASS_API_URL = "https://overpass-api.de/api/interpreter";
 
@@ -122,14 +123,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Converter para GeoJSON
+    // Converter para GeoJSON e clipar ao bounding box
     const geojson = convertToGeoJSON(data);
+    const clipped = clipFeatureCollectionToBbox(geojson as GeoJSON.FeatureCollection, {
+      southWest: { lat: south, lng: west },
+      northEast: { lat: north, lng: east },
+    });
 
     return NextResponse.json({
       type: "FeatureCollection",
-      features: geojson.features,
+      features: clipped.features,
       metadata: {
-        totalStreets: geojson.features.length,
+        totalStreets: clipped.features.length,
         areaKm2: areaKm2,
         bounds: { south, north, west, east },
       },

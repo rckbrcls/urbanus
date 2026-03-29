@@ -7,7 +7,6 @@ with spatial attributes. Also saves processed graphs back to PostGIS.
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 import networkx as nx
@@ -48,6 +47,7 @@ async def build_graph_from_postgis(
             NodeTable.is_endpoint,
             NodeTable.degree,
         ).where(NodeTable.project_id == project_id)
+        .order_by(NodeTable.id)
     )
     for row in result:
         G.add_node(
@@ -65,6 +65,7 @@ async def build_graph_from_postgis(
     # Load edges
     result = await session.execute(
         select(EdgeTable).where(EdgeTable.project_id == project_id)
+        .order_by(EdgeTable.id)
     )
     for edge in result.scalars():
         # Parse LINESTRING to get source/target from geometry
@@ -232,7 +233,7 @@ async def save_graph_to_postgis(
         )
 
         edge_row = EdgeTable(
-            id=f"e_{uuid.uuid4().hex}",
+            id=f"e_{u}_{v}",
             project_id=project_id,
             geometry=line,
             name=data.get("name"),

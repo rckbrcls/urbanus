@@ -18,18 +18,18 @@ const NODE_COLORS: Record<string, string> = {
 
 /** Map pipe diameter to line width */
 function diameterToWidth(dn: number): number {
-  if (dn <= 150) return 2;
-  if (dn <= 300) return 3;
-  if (dn <= 500) return 4;
-  return 5;
+  if (dn <= 150) return 3;
+  if (dn <= 300) return 5;
+  if (dn <= 500) return 7;
+  return 9;
 }
 
-/** Map pipe diameter to color (blue gradient — thicker = darker) */
+/** Map pipe diameter to color (blue gradient — thicker = darker, more saturated) */
 function diameterToColor(dn: number): string {
-  if (dn <= 150) return '#64b5f6';
-  if (dn <= 200) return '#42a5f5';
-  if (dn <= 300) return '#2196f3';
-  if (dn <= 500) return '#1976d2';
+  if (dn <= 150) return '#42a5f5';
+  if (dn <= 200) return '#2196f3';
+  if (dn <= 300) return '#1976d2';
+  if (dn <= 500) return '#1565c0';
   return '#0d47a1';
 }
 
@@ -87,13 +87,13 @@ export default function SewerNetworkLayers({ network }: SewerNetworkLayersProps)
   const pipesPaint: LineLayerSpecification['paint'] = {
     'line-color': ['get', 'color'],
     'line-width': ['get', 'width'],
-    'line-opacity': 0.85,
+    'line-opacity': 0.95,
   };
 
   const nodesPaint: CircleLayerSpecification['paint'] = {
-    'circle-radius': 4,
+    'circle-radius': 6,
     'circle-color': ['get', 'color'],
-    'circle-stroke-width': 1,
+    'circle-stroke-width': 1.5,
     'circle-stroke-color': '#ffffff',
   };
 

@@ -34,7 +34,7 @@ export const ptBR: Dictionary = {
       autoProcess: {
         title: 'Processamento automático',
         description:
-          'Nosso pipeline de 8 etapas classifica nós, roteia o esgoto gravitacionalmente e dimensiona tubos conforme a NBR 9649.',
+          'Nosso pipeline de 8 etapas classifica nós, roteia o esgoto gravitacionalmente e dimensiona tubos automaticamente.',
       },
       editExport: {
         title: 'Edite e exporte',
@@ -49,9 +49,9 @@ export const ptBR: Dictionary = {
           'Da classificação de nós ao dimensionamento hidráulico — um fluxo completo de projeto de esgoto automatizado de ponta a ponta.',
       },
       nbr: {
-        title: 'Conforme NBR 9649',
+        title: 'Conforme Normas Técnicas',
         description:
-          'Equação de Manning, declividades mínimas, profundidades máximas e dimensionamento de tubos seguem as normas brasileiras de esgoto sanitário.',
+          'Equação de Manning, declividades mínimas, profundidades máximas e dimensionamento de tubos seguem normas de engenharia de esgoto sanitário.',
       },
       openData: {
         title: 'Dados Abertos',
@@ -110,7 +110,7 @@ export const ptBR: Dictionary = {
     pipelineRetry: 'Tentar novamente',
     exportGeoJSON: 'Exportar GeoJSON',
     deleteProject: 'Excluir projeto',
-    runPipeline: 'Executar pipeline (NBR 9649)',
+    runPipeline: 'Executar pipeline',
   },
   pipeline: {
     networkSummary: 'Resumo da Rede',

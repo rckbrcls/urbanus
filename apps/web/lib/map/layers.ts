@@ -51,15 +51,30 @@ export const EDGES_PAINT: LineLayerSpecification['paint'] = {
     ['boolean', ['feature-state', 'error'], false], '#ef4444',
     ['boolean', ['feature-state', 'selected'], false], '#f97316',
     ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',
-    '#64748b', // default — slate
+    // Highway-based colors (consistent with HIGHWAY_COLORS from MapView)
+    ['==', ['get', 'highway'], 'motorway'], '#e11d48',
+    ['==', ['get', 'highway'], 'trunk'], '#f97316',
+    ['==', ['get', 'highway'], 'primary'], '#eab308',
+    ['==', ['get', 'highway'], 'secondary'], '#22c55e',
+    ['==', ['get', 'highway'], 'tertiary'], '#3b82f6',
+    ['==', ['get', 'highway'], 'residential'], '#8b5cf6',
+    '#a1a1aa', // default/unclassified (zinc-400 — visible on dark maps)
   ] as unknown as string,
   'line-width': [
     'case',
-    ['boolean', ['feature-state', 'selected'], false], 4,
-    ['boolean', ['feature-state', 'hovered'], false], 3,
-    2,
+    ['boolean', ['feature-state', 'selected'], false], 5,
+    ['boolean', ['feature-state', 'hovered'], false], 4,
+    ['any',
+      ['==', ['get', 'highway'], 'motorway'],
+      ['==', ['get', 'highway'], 'trunk'],
+    ], 4,
+    ['any',
+      ['==', ['get', 'highway'], 'primary'],
+      ['==', ['get', 'highway'], 'secondary'],
+    ], 3,
+    2.5, // tertiary, residential, default
   ] as unknown as number,
-  'line-opacity': 0.8,
+  'line-opacity': 0.9,
 };
 
 export const EDGES_LAYOUT: LineLayerSpecification['layout'] = {
