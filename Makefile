@@ -11,7 +11,7 @@ dev-web:
 	pnpm turbo run dev --filter @urbanus/web
 
 dev-api:
-	cd apps/api && uv run uvicorn urbanus_api.main:app --reload --host 0.0.0.0 --port 8000
+	cd apps/api && env $$(grep -v '^#' ../../.env | xargs) uv run uvicorn urbanus_api.main:app --reload --host 0.0.0.0 --port 8000
 
 build:
 	pnpm turbo run build
