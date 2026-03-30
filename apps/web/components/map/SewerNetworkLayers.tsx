@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
 import type { SewerNetwork } from '@/types/sewer';
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
+import FlowArrows from './FlowArrows';
 
 export type SewerViewMode = 'type' | 'elevation';
 
@@ -178,7 +179,11 @@ export default function SewerNetworkLayers({
       };
 
   const elevationLabelLayout: SymbolLayerSpecification['layout'] = {
-    'text-field': ['concat', ['to-string', ['round', ['get', 'elevation']]], 'm'],
+    'text-field': [
+      'case',
+      ['==', ['get', 'elevation_normalized'], -1], 'N/A',
+      ['concat', ['to-string', ['round', ['get', 'elevation']]], 'm'],
+    ],
     'text-size': 10,
     'text-offset': [0, 1.5],
     'text-allow-overlap': false,
@@ -212,6 +217,9 @@ export default function SewerNetworkLayers({
           />
         )}
       </Source>
+
+      {/* Flow direction arrows (gravity-based from RSPH routing) */}
+      <FlowArrows edgesGeoJSON={edgesGeoJSON} />
     </>
   );
 }

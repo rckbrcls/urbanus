@@ -561,6 +561,40 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
           )}
         </div>
       </div>
+
+      {/* Elevation view toggle — bottom left, only when sewer network is visible */}
+      {pipelineResult && (
+        <div className="absolute bottom-6 left-4 z-10 flex flex-col gap-2">
+          <div className="flex items-center gap-2 rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
+            <Mountain className="h-3.5 w-3.5 text-muted-foreground" />
+            <label htmlFor="elevation-toggle" className="text-xs font-medium text-muted-foreground select-none">
+              {te.elevationView}
+            </label>
+            <Switch
+              id="elevation-toggle"
+              size="sm"
+              checked={sewerViewMode === 'elevation'}
+              onCheckedChange={(checked) => setSewerViewMode(checked ? 'elevation' : 'type')}
+            />
+          </div>
+
+          {/* Elevation color legend */}
+          {sewerViewMode === 'elevation' && sewerElevationRange && (
+            <div className="rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
+              <div
+                className="h-2 w-full rounded-full"
+                style={{
+                  background: 'linear-gradient(to right, #313695, #4575b4, #fee090, #f46d43, #a50026)',
+                }}
+              />
+              <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                <span>{sewerElevationRange.min.toFixed(0)}m</span>
+                <span>{sewerElevationRange.max.toFixed(0)}m</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -95,6 +95,62 @@ def _elevation_stats(elevations: list[float | None]) -> dict[str, Any]:
     return {"min": mn, "max": mx, "avg": avg, "range": mx - mn}
 
 
+def _interpolate_missing_elevations(elevations: list[float | None]) -> list[float | None]:
+    """Fill None values by interpolating from nearest valid neighbors.
+
+    Boundary vertices created by bbox clipping often lack valid elevation
+    (DEM edge artifacts return 0 or nodata). This fills gaps by linearly
+    interpolating from the closest valid vertices on the same LineString.
+
+    Also treats 0 as suspicious if valid neighbors are much higher (>50m).
+    """
+    n = len(elevations)
+    if n == 0:
+        return elevations
+
+    # First pass: detect spurious zeros (0 where neighbors are much higher)
+    result = list(elevations)
+    valid = [e for e in result if e is not None and e != 0]
+    if valid:
+        median_valid = sorted(valid)[len(valid) // 2]
+        for i in range(n):
+            if result[i] is not None and result[i] == 0 and median_valid > 50:
+                result[i] = None
+
+    # Second pass: interpolate None from nearest valid neighbors
+    for i in range(n):
+        if result[i] is not None:
+            continue
+
+        # Find nearest valid left neighbor
+        left_val, left_dist = None, 0
+        for j in range(i - 1, -1, -1):
+            if result[j] is not None:
+                left_val = result[j]
+                left_dist = i - j
+                break
+
+        # Find nearest valid right neighbor
+        right_val, right_dist = None, 0
+        for j in range(i + 1, n):
+            if result[j] is not None:
+                right_val = result[j]
+                right_dist = j - i
+                break
+
+        if left_val is not None and right_val is not None:
+            # Linear interpolation between neighbors
+            total = left_dist + right_dist
+            result[i] = left_val * (right_dist / total) + right_val * (left_dist / total)
+        elif left_val is not None:
+            result[i] = left_val
+        elif right_val is not None:
+            result[i] = right_val
+        # else: no valid neighbors at all, stays None
+
+    return result
+
+
 def enrich_geojson(
     geojson: dict[str, Any],
     south: float,
@@ -138,6 +194,7 @@ def enrich_geojson(
 
                 pairs = [(float(c[0]), float(c[1])) for c in coords]
                 elevations = _sample_elevations_at(src, pairs, no_val)
+                elevations = _interpolate_missing_elevations(elevations)
                 stats = _elevation_stats(elevations)
 
                 props = dict(f.get("properties") or {})

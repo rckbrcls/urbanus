@@ -63,11 +63,11 @@ def rsph_sewer_routing(
     reused_edges: set[tuple[str, str]] = set()
     unreachable: list[str] = []
 
-    # Sort by elevation descending (highest first → longest paths first)
+    # Sort by elevation descending (highest first → longest paths first).
+    # Nodes without elevation (z=None) go last — they must not be treated as z=0.
     sorted_nodes = sorted(
         mandatory_nodes - {outlet},
-        key=lambda n: G.nodes[n].get("z", 0) or 0,
-        reverse=True,
+        key=lambda n: (G.nodes[n].get("z") is None, -(G.nodes[n].get("z") or 0)),
     )
 
     for node in sorted_nodes:

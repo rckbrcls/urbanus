@@ -12,7 +12,6 @@ import { useGraphEditor } from '@/hooks/useGraphEditor';
 import BboxOverlay from './BboxOverlay';
 import GraphLayers from './GraphLayers';
 import GhostEdge from './GhostEdge';
-import FlowArrows from './FlowArrows';
 import SewerNetworkLayers, { type SewerViewMode } from './SewerNetworkLayers';
 import type { SewerNetwork } from '@/types/sewer';
 
@@ -95,13 +94,12 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures, sew
       {/* Bounding box overlay */}
       {bounds && <BboxOverlay bounds={bounds} />}
 
-      {/* Graph layers — dimmed when sewer overlay is active */}
-      <GraphLayers nodesGeoJSON={nodesGeoJSON} edgesGeoJSON={edgesGeoJSON} dimmed={!!sewerNetwork} />
+      {/* Graph layers — hidden when sewer network replaces them */}
+      {!sewerNetwork && (
+        <GraphLayers nodesGeoJSON={nodesGeoJSON} edgesGeoJSON={edgesGeoJSON} />
+      )}
 
-      {/* Flow direction arrows */}
-      <FlowArrows edgesGeoJSON={edgesGeoJSON} />
-
-      {/* Sewer network overlay (after pipeline processing) */}
+      {/* Sewer network + flow arrows (after pipeline processing) */}
       {sewerNetwork && (
         <SewerNetworkLayers
           network={sewerNetwork}

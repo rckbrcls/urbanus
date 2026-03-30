@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import List
 
+import networkx as nx
+
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +28,7 @@ from urbanus_api.core.graph.sanitization import (
     enforce_min_pv_spacing,
 )
 from urbanus_api.core.graph.accessories import assign_accessory_types
+from urbanus_api.core.graph.coverage import ensure_full_coverage
 from urbanus_api.core.elevation.extrema import detect_extrema
 from urbanus_api.core.routing.rsph import rsph_sewer_routing
 from urbanus_api.core.optimizer.low_points import resolve_low_points
@@ -119,6 +122,26 @@ async def nodes_extract(req: NodesExtractRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _sanitize_spurious_zero_elevations(G: nx.Graph, threshold: float = 50.0) -> None:
+    """Replace elevation=0 with None when surrounding nodes are much higher.
+
+    Common for boundary nodes where DEM returns 0 (edge artifact).
+    If median neighbor elevation is > threshold meters above 0, mark as None.
+    """
+    for node in list(G.nodes):
+        z = G.nodes[node].get("z")
+        if z is not None and z == 0:
+            neighbor_elevs = [
+                G.nodes[nb].get("z")
+                for nb in G.neighbors(node)
+                if G.nodes[nb].get("z") is not None and G.nodes[nb].get("z") != 0
+            ]
+            if neighbor_elevs:
+                median_z = sorted(neighbor_elevs)[len(neighbor_elevs) // 2]
+                if median_z > threshold:
+                    G.nodes[node]["z"] = None
+
+
 @app.post("/projects/{project_id}/process")
 async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_db)):
     """Execute the full 8-step sewer network pipeline.
@@ -137,25 +160,25 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Load graph from PostGIS (existing processed data)
-    G = await build_graph_from_postgis(project_id, db)
-
-    # Fallback: build from streets_geojson if PostGIS has no graph data yet
+    # Always rebuild from streets_geojson (the source of truth).
+    # PostGIS stores the RESULT of processing, not the input — loading it
+    # as input would lose edges on each reprocessing.
+    streets_geojson = project.streets_geojson
+    if not streets_geojson or not isinstance(streets_geojson, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="No streets data. Select an area and extract streets first.",
+        )
+    clean_geojson = {k: v for k, v in streets_geojson.items() if not k.startswith("_")}
+    G = build_graph_from_geojson(clean_geojson)
     if len(G.nodes) == 0:
-        streets_geojson = project.streets_geojson
-        if not streets_geojson or not isinstance(streets_geojson, dict):
-            raise HTTPException(
-                status_code=400,
-                detail="No streets data. Select an area and extract streets first.",
-            )
-        # Filter out metadata keys (prefixed with _)
-        clean_geojson = {k: v for k, v in streets_geojson.items() if not k.startswith("_")}
-        G = build_graph_from_geojson(clean_geojson)
-        if len(G.nodes) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Could not extract graph from streets data.",
-            )
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract graph from streets data.",
+        )
+
+    # Sanity check: elevation=0 surrounded by high neighbors is a DEM edge artifact
+    _sanitize_spurious_zero_elevations(G)
 
     # Etapa 1: Classification (already done during extraction)
     mandatory = {
@@ -207,6 +230,9 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
 
     # Etapa 7: Resolve low points
     tree, pump_stations = resolve_low_points(tree, unreachable, G, outlet)
+
+    # Etapa 7.5: Ensure full street coverage — every street needs a collector
+    ensure_full_coverage(tree, G)
 
     # Etapa 8: Hydraulic dimensioning
     pipes = dimension_network(tree)
