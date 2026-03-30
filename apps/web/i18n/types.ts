@@ -81,6 +81,7 @@ export interface Dictionary {
     exportGeoJSON: string;
     deleteProject: string;
     runPipeline: string;
+    elevationView: string;
   };
   pipeline: {
     networkSummary: string;

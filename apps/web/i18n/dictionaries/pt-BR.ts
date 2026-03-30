@@ -111,6 +111,7 @@ export const ptBR: Dictionary = {
     exportGeoJSON: 'Exportar GeoJSON',
     deleteProject: 'Excluir projeto',
     runPipeline: 'Executar pipeline',
+    elevationView: 'Elevação',
   },
   pipeline: {
     networkSummary: 'Resumo da Rede',

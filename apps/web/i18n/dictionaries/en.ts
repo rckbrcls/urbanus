@@ -111,6 +111,7 @@ export const en: Dictionary = {
     exportGeoJSON: 'Export GeoJSON',
     deleteProject: 'Delete project',
     runPipeline: 'Run pipeline',
+    elevationView: 'Elevation',
   },
   pipeline: {
     networkSummary: 'Network Summary',

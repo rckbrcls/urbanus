@@ -5,7 +5,7 @@ import type { Project } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2, Mountain } from 'lucide-react';
 
 import {
   AlertDialog,
@@ -28,7 +28,9 @@ import { mapNodesToNetworkGraph } from '@/lib/graph/serialization';
 import type { EditingMode } from '@/lib/graph/types';
 import { usePipelineStore } from '@/stores/pipelineStore';
 import { PipelineResultsPanel } from '@/components/pipeline/PipelineResultsPanel';
+import { Switch } from '@/components/ui/switch';
 import { useTranslation } from '@/i18n';
+import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
 
 // Dynamic imports (no SSR — MapLibre uses WebGL)
 const GraphMapView = dynamic(() => import('@/components/map/GraphMapView'), {
@@ -85,6 +87,9 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const pipelineError = usePipelineStore((s) => s.error);
   const processProject = usePipelineStore((s) => s.processProject);
   const resetPipeline = usePipelineStore((s) => s.reset);
+
+  // Sewer view mode
+  const [sewerViewMode, setSewerViewMode] = useState<SewerViewMode>('type');
 
   const nodesApiService = useRef(NodesApiService.getInstance()).current;
 
@@ -201,6 +206,22 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   const nodeCount = Object.keys(graphNodes).length;
 
+  // Elevation range from the sewer network (for gradient coloring)
+  const sewerElevationRange = useMemo(() => {
+    if (!pipelineResult) return null;
+    let min = Infinity;
+    let max = -Infinity;
+    let hasElev = false;
+    for (const node of pipelineResult.nodes) {
+      if (node.elevation != null) {
+        if (node.elevation < min) min = node.elevation;
+        if (node.elevation > max) max = node.elevation;
+        hasElev = true;
+      }
+    }
+    return hasElev ? { min, max } : null;
+  }, [pipelineResult]);
+
   const elevationStats = useMemo(() => {
     let min = Infinity;
     let max = -Infinity;
@@ -252,6 +273,8 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
           bounds={project.bounds}
           streetFeatures={project.streets as unknown as GeoJSON.FeatureCollection}
           sewerNetwork={pipelineResult}
+          sewerViewMode={sewerViewMode}
+          sewerElevationRange={sewerElevationRange}
         />
       </div>
 
