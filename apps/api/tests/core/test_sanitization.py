@@ -143,7 +143,7 @@ class TestDetectGradeBreaks:
         # diff = 0.09 > 0.03 threshold
 
         G = detect_grade_breaks(G)
-        assert G.nodes["B"].get("pv_obrigatorio") is True
+        assert G.nodes["B"].get("node_type") == "ROSA"
 
     def test_gradual_slope_unchanged(self):
         """Consistent slope → no marking."""
@@ -172,7 +172,7 @@ class TestSubdivideSteepEdges:
         G = subdivide_steep_edges(G, max_slope=0.15)
 
         assert G.number_of_nodes() > 2
-        rosa = [n for n in G.nodes if G.nodes[n].get("pv_obrigatorio")]
+        rosa = [n for n in G.nodes if G.nodes[n].get("node_type") == "ROSA"]
         assert len(rosa) >= 1
 
     def test_gentle_slope_unchanged(self):

@@ -264,7 +264,8 @@ def detect_grade_breaks(
 
         if abs(slope1 - slope2) > threshold:
             ndata["node_type"] = "ROSA"
-            ndata["pv_obrigatorio"] = True
+            # NOT pv_obrigatorio — the optimizer checks slope break
+            # before merging and will keep this node if truly needed.
 
     return G
 
@@ -328,7 +329,8 @@ def subdivide_steep_edges(
             new_id = f"steep_{u}_{v}_{i}"
             G.add_node(
                 new_id, x=new_lng, y=new_lat, z=new_z,
-                node_type="ROSA", pv_obrigatorio=True,
+                node_type="ROSA",
+                # NOT pv_obrigatorio — optimizer decides based on slope.
             )
 
             seg_length = length / n_segments

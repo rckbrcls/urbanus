@@ -87,58 +87,6 @@ def ensure_full_coverage(tree: nx.DiGraph, G: nx.Graph) -> None:
     tree.remove_nodes_from(isolated)
 
 
-def reduce_pass_through_nodes(tree: nx.DiGraph, max_edge_length: float) -> None:
-    """Remove non-mandatory degree-2 pass-through nodes, merging their edges.
-
-    A pass-through node has exactly 1 incoming and 1 outgoing edge — the pipe
-    just runs through it without branching. Removing it and merging the two
-    edges into one eliminates an unnecessary manhole (PV), reducing cost.
-
-    Only removes a node when:
-    - It is NOT ``pv_obrigatorio``
-    - It has exactly 1 predecessor and 1 successor (simple pass-through)
-    - The merged edge length ≤ ``max_edge_length``
-
-    Nodes with 2+ incoming or 2+ outgoing edges are real junctions and are
-    kept regardless of their ``pv_obrigatorio`` flag.
-
-    Args:
-        tree: Directed sewer network (modified in-place).
-        max_edge_length: Maximum allowed length for merged edge (m).
-    """
-    changed = True
-    while changed:
-        changed = False
-        for node in list(tree.nodes):
-            if node not in tree:
-                continue
-            if tree.nodes[node].get("pv_obrigatorio"):
-                continue
-            if tree.in_degree(node) != 1 or tree.out_degree(node) != 1:
-                continue
-
-            pred = next(tree.predecessors(node))
-            succ = next(tree.successors(node))
-            if pred == succ:
-                continue
-
-            d1 = tree.edges[pred, node].get("length_m", 0)
-            d2 = tree.edges[node, succ].get("length_m", 0)
-            merged_length = d1 + d2
-
-            if merged_length > max_edge_length:
-                continue
-
-            e1 = dict(tree.edges[pred, node])
-            e2 = dict(tree.edges[node, succ])
-            merged_data = {**e1, **e2, "length_m": merged_length}
-
-            tree.remove_node(node)
-            if not tree.has_edge(pred, succ):
-                tree.add_edge(pred, succ, **merged_data)
-            changed = True
-
-
 def _is_connected_to_tree_core(tree: nx.DiGraph, node: str) -> bool:
     """Check if a node has any outgoing edges in the tree (i.e., is already routed)."""
     return tree.has_node(node) and tree.out_degree(node) > 0

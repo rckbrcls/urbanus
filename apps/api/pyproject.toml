@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
+optimization = ["scipy>=1.9"]
 
 [tool.uv.sources]
 urbanus-geo = { workspace = true }

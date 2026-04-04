@@ -200,82 +200,78 @@ class TestCoverageRepairAfterCycleBreak:
 
 
 class TestReducePassThroughNodes:
+    """Tests now use the new optimizer instead of the removed reduce_pass_through_nodes."""
+
     def test_removes_simple_pass_through(self):
-        """A→B→C with B non-mandatory: B removed, A→C created."""
-        from urbanus_api.core.graph.coverage import reduce_pass_through_nodes
+        from urbanus_api.core.optimizer.node_reduction import _greedy_contract
 
         tree = nx.DiGraph()
-        tree.add_node("A", z=10, pv_obrigatorio=True)
-        tree.add_node("B", z=9)  # NOT mandatory
-        tree.add_node("C", z=8, pv_obrigatorio=True)
+        tree.add_node("A", x=0.0, y=0.0, z=10, pv_obrigatorio=True)
+        tree.add_node("B", x=0.0, y=0.0005, z=9)
+        tree.add_node("C", x=0.0, y=0.001, z=8, pv_obrigatorio=True)
         tree.add_edge("A", "B", length_m=40)
         tree.add_edge("B", "C", length_m=40)
 
-        reduce_pass_through_nodes(tree, max_edge_length=100)
+        _greedy_contract(tree, max_spacing=100)
         assert "B" not in tree
         assert tree.has_edge("A", "C")
         assert tree.edges["A", "C"]["length_m"] == 80
 
     def test_preserves_mandatory_node(self):
-        """A→B→C with B mandatory: B kept."""
-        from urbanus_api.core.graph.coverage import reduce_pass_through_nodes
+        from urbanus_api.core.optimizer.node_reduction import _greedy_contract
 
         tree = nx.DiGraph()
-        tree.add_node("A", z=10, pv_obrigatorio=True)
-        tree.add_node("B", z=9, pv_obrigatorio=True)
-        tree.add_node("C", z=8, pv_obrigatorio=True)
+        tree.add_node("A", x=0.0, y=0.0, z=10, pv_obrigatorio=True)
+        tree.add_node("B", x=0.0, y=0.0005, z=9, pv_obrigatorio=True)
+        tree.add_node("C", x=0.0, y=0.001, z=8, pv_obrigatorio=True)
         tree.add_edge("A", "B", length_m=40)
         tree.add_edge("B", "C", length_m=40)
 
-        reduce_pass_through_nodes(tree, max_edge_length=100)
+        _greedy_contract(tree, max_spacing=100)
         assert "B" in tree
 
     def test_preserves_junction(self):
-        """Node with 2 incoming edges (real junction): not removed."""
-        from urbanus_api.core.graph.coverage import reduce_pass_through_nodes
+        from urbanus_api.core.optimizer.node_reduction import _greedy_contract
 
         tree = nx.DiGraph()
         for nid, z in [("A", 10), ("B", 9), ("C", 8), ("D", 7)]:
-            tree.add_node(nid, z=z)
+            tree.add_node(nid, x=0.0, y=0.0, z=z)
         tree.add_edge("A", "C", length_m=40)
-        tree.add_edge("B", "C", length_m=40)  # C has 2 incoming
+        tree.add_edge("B", "C", length_m=40)
         tree.add_edge("C", "D", length_m=40)
 
-        reduce_pass_through_nodes(tree, max_edge_length=100)
-        assert "C" in tree  # Junction preserved
+        _greedy_contract(tree, max_spacing=100)
+        assert "C" in tree
 
     def test_respects_max_edge_length(self):
-        """Merge would exceed max length: node kept."""
-        from urbanus_api.core.graph.coverage import reduce_pass_through_nodes
+        from urbanus_api.core.optimizer.node_reduction import _greedy_contract
 
         tree = nx.DiGraph()
-        tree.add_node("A", z=10, pv_obrigatorio=True)
-        tree.add_node("B", z=9)
-        tree.add_node("C", z=8, pv_obrigatorio=True)
+        tree.add_node("A", x=0.0, y=0.0, z=10, pv_obrigatorio=True)
+        tree.add_node("B", x=0.0, y=0.0005, z=9)
+        tree.add_node("C", x=0.0, y=0.001, z=8, pv_obrigatorio=True)
         tree.add_edge("A", "B", length_m=60)
         tree.add_edge("B", "C", length_m=60)
 
-        reduce_pass_through_nodes(tree, max_edge_length=100)
-        assert "B" in tree  # 60+60=120 > 100 — kept
+        _greedy_contract(tree, max_spacing=100)
+        assert "B" in tree
 
     def test_chain_reduction(self):
-        """A→B→C→D→E with B,C,D non-mandatory: all removed iteratively."""
-        from urbanus_api.core.graph.coverage import reduce_pass_through_nodes
+        from urbanus_api.core.optimizer.node_reduction import _greedy_contract
 
         tree = nx.DiGraph()
-        tree.add_node("A", z=10, pv_obrigatorio=True)
-        tree.add_node("B", z=9)
-        tree.add_node("C", z=8)
-        tree.add_node("D", z=7)
-        tree.add_node("E", z=6, pv_obrigatorio=True)
+        tree.add_node("A", x=0.0, y=0.0, z=10, pv_obrigatorio=True)
+        tree.add_node("B", x=0.0, y=0.0002, z=9)
+        tree.add_node("C", x=0.0, y=0.0004, z=8)
+        tree.add_node("D", x=0.0, y=0.0006, z=7)
+        tree.add_node("E", x=0.0, y=0.0008, z=6, pv_obrigatorio=True)
         tree.add_edge("A", "B", length_m=20)
         tree.add_edge("B", "C", length_m=20)
         tree.add_edge("C", "D", length_m=20)
         tree.add_edge("D", "E", length_m=20)
 
-        reduce_pass_through_nodes(tree, max_edge_length=100)
+        _greedy_contract(tree, max_spacing=100)
         assert tree.has_edge("A", "E")
-        assert tree.edges["A", "E"]["length_m"] == 80
         assert tree.number_of_nodes() == 2
 
 

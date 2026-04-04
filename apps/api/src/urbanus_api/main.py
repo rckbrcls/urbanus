@@ -20,15 +20,14 @@ from urbanus_api.core.graph.classification import (
 )
 from urbanus_api.core.graph.builder import build_graph_from_postgis, build_graph_from_geojson, save_graph_to_postgis
 from urbanus_api.core.graph.sanitization import (
-    sanitize_long_edges,
-    subdivide_steep_edges,
     remove_redundant_nodes,
     resolve_curve_clusters,
     detect_grade_breaks,
     enforce_min_pv_spacing,
 )
 from urbanus_api.core.graph.accessories import assign_accessory_types
-from urbanus_api.core.graph.coverage import ensure_full_coverage, reduce_pass_through_nodes
+from urbanus_api.core.graph.coverage import ensure_full_coverage
+from urbanus_api.core.optimizer.node_reduction import optimize_node_placement
 from urbanus_api.core.elevation.extrema import detect_extrema
 from urbanus_api.core.routing.rsph import rsph_sewer_routing
 from urbanus_api.core.optimizer.low_points import resolve_low_points
@@ -219,11 +218,10 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
     # Etapa 1.5: Enforce direction changes > 45° → PV obrigatório
     enforce_direction_changes(G)
 
-    # Etapa 2: Subdivide long edges
-    G = sanitize_long_edges(G)
-
-    # Etapa 2.5: Subdivide steep edges (terrain slope > 15%)
-    G = subdivide_steep_edges(G)
+    # Etapas 2/2.5 (subdivisão) removidas — criavam centenas de nós
+    # intermediários que inflavam a rede. O RSPH funciona com arestas
+    # longas e o optimize_node_placement._enforce_spacing cuida do
+    # espaçamento máximo no final.
 
     # Etapa 3: Remove redundant nodes
     G = remove_redundant_nodes(G)
@@ -272,12 +270,9 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
         # The tree is now a DAG, so re-adding edges is safe.
         ensure_full_coverage(tree, G)
 
-    # Etapa 7.8: Minimize nodes — remove non-mandatory pass-through nodes.
-    # Degree-2 nodes (1 in, 1 out) that aren't mandatory PVs are just pipe
-    # running straight through — no manhole needed.  Merge their edges as
-    # long as the result doesn't exceed MAX_PV_SPACING.
-    from urbanus_geo.constants import MAX_PV_SPACING
-    reduce_pass_through_nodes(tree, max_edge_length=MAX_PV_SPACING)
+    # Etapa 7.8: Optimize node placement — minimize PVs using greedy
+    # contraction with junction simplification + MILP refinement.
+    optimize_node_placement(tree, outlet=outlet)
 
     # Etapa 8: Hydraulic dimensioning
     pipes = dimension_network(tree)

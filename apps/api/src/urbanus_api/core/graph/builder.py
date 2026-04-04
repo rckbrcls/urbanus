@@ -290,8 +290,15 @@ def _add_edge_for_line(
             )
         return
 
-    if G.has_edge(first_id, last_id):
-        return
+    # Skip if already reachable through intermediate nodes (e.g. a street
+    # A→X→B already has edges A-X and X-B — adding A-B is redundant and
+    # creates junctions that inflate the final node count).
+    if first_id in G and last_id in G:
+        try:
+            if nx.has_path(G, first_id, last_id):
+                return
+        except nx.NetworkXError:
+            pass
 
     length = haversine_fn(first_lat, first_lng, last_lat, last_lng)
     G.add_edge(
