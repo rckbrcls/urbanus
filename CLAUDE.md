@@ -74,7 +74,9 @@ apps/api/src/urbanus_api/
 Orquestração (Makefile):
 ```bash
 make install    # pnpm install + uv sync
-make dev        # dev-web + dev-api em paralelo
+make dev        # Next.js + FastAPI em paralelo (concurrently, output colorido)
+make dev-web    # apenas frontend (Next.js)
+make dev-api    # apenas backend (FastAPI)
 make build      # turbo build (JS/TS)
 make lint       # turbo lint + ruff (Python)
 make type-check # turbo type-check

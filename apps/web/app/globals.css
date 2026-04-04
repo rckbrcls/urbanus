@@ -150,3 +150,53 @@
     --sidebar-ring: oklch(0.439 0 0);
   }
 }
+
+/* ── Landing page animations ── */
+:root {
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Feature card hover — gated to pointer devices */
+@media (hover: hover) and (pointer: fine) {
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px oklch(0 0 0 / 8%);
+  }
+  .dark .card-hover:hover {
+    box-shadow: 0 4px 12px oklch(0 0 0 / 25%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes fade-up {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes reveal-up {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}

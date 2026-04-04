@@ -116,11 +116,10 @@ def _cluster_nearby_nodes(
             rep["pvObrigatorio"] = True
             rep["nodeType"] = "ROSA"
             rep["accessoryType"] = "PV"
-        # Recalculate: if merged degree >= 2, it's an intersection → ROSA
-        if rep["degree"] >= 2 and not rep.get("pvObrigatorio"):
-            rep["nodeType"] = "ROSA"
-            rep["pvObrigatorio"] = True
-            rep["accessoryType"] = "PV"
+        # Intersections are structural (for graph connectivity) but NOT
+        # mandatory PVs — the pipeline will decide which actually need PVs
+        # based on tree topology (junctions, direction changes, etc.).
+        # Only mark as intersection for graph construction purposes.
 
         merged.append(rep)
 
@@ -181,110 +180,124 @@ def extract_nodes(
     """
     features = geojson.get("features", [])
 
+    # Pre-compute a stable ID per feature so both passes use the same value
+    # (avoids generating different UUIDs on each iteration for features without id).
+    feature_ids: list[str] = []
+    for feature in features:
+        props = feature.get("properties", {})
+        feature_ids.append(str(props.get("id", str(uuid.uuid4()))))
+
     # Passo 1: Mapear posições -> street_ids (para calcular degree)
     position_map: dict[str, dict[str, Any]] = {}
     total_vertices = 0
 
-    for feature in features:
+    for feature, street_id in zip(features, feature_ids):
         geometry = feature.get("geometry", {})
-        if geometry.get("type") != "LineString":
+        geom_type = geometry.get("type")
+
+        if geom_type == "LineString":
+            coord_lines = [geometry.get("coordinates", [])]
+        elif geom_type == "MultiLineString":
+            coord_lines = geometry.get("coordinates", [])
+        else:
             continue
 
         props = feature.get("properties", {})
-        street_id = str(props.get("id", str(uuid.uuid4())))
         street_name = props.get("name") or "Unnamed"
-        coordinates = geometry.get("coordinates", [])
 
-        for coord in coordinates:
-            total_vertices += 1
-            if len(coord) < 2:
-                continue
+        for coordinates in coord_lines:
+            for coord in coordinates:
+                total_vertices += 1
+                if len(coord) < 2:
+                    continue
 
-            lng, lat = coord[0], coord[1]
-            pos_key = f"{lat:.6f},{lng:.6f}"
+                lng, lat = coord[0], coord[1]
+                pos_key = f"{lat:.6f},{lng:.6f}"
 
-            if pos_key not in position_map:
-                position_map[pos_key] = {"street_ids": set(), "street_names": set()}
+                if pos_key not in position_map:
+                    position_map[pos_key] = {"street_ids": set(), "street_names": set()}
 
-            position_map[pos_key]["street_ids"].add(street_id)
-            position_map[pos_key]["street_names"].add(street_name)
+                position_map[pos_key]["street_ids"].add(street_id)
+                position_map[pos_key]["street_names"].add(street_name)
 
     # Passo 2: Construir nós
     nodes = []
 
-    for feature in features:
+    for feature, street_id in zip(features, feature_ids):
         geometry = feature.get("geometry", {})
-        if geometry.get("type") != "LineString":
+        geom_type = geometry.get("type")
+
+        if geom_type == "LineString":
+            coord_lines = [geometry.get("coordinates", [])]
+        elif geom_type == "MultiLineString":
+            coord_lines = geometry.get("coordinates", [])
+        else:
             continue
 
         props = feature.get("properties", {})
-        street_id = str(props.get("id", str(uuid.uuid4())))
         street_name = props.get("name") or "Unnamed"
         highway = props.get("highway") or None
-        coordinates = geometry.get("coordinates", [])
         elevations = props.get("vertex_elevations", [])
 
-        for i, coord in enumerate(coordinates):
-            if len(coord) < 2:
-                continue
+        for coordinates in coord_lines:
+            for i, coord in enumerate(coordinates):
+                if len(coord) < 2:
+                    continue
 
-            lng, lat = coord[0], coord[1]
-            pos_key = f"{lat:.6f},{lng:.6f}"
+                lng, lat = coord[0], coord[1]
+                pos_key = f"{lat:.6f},{lng:.6f}"
 
-            entry = position_map.get(pos_key, {"street_ids": set(), "street_names": set()})
-            degree = len(entry["street_ids"])
-            is_intersection = degree >= 2
-            is_endpoint = i == 0 or i == len(coordinates) - 1
+                entry = position_map.get(pos_key, {"street_ids": set(), "street_names": set()})
+                degree = len(entry["street_ids"])
+                is_intersection = degree >= 2
+                is_endpoint = i == 0 or i == len(coordinates) - 1
 
-            # Filtrar por modo
-            if mode == "intersections" and not (is_intersection or is_endpoint):
-                continue
+                # Filtrar por modo
+                if mode == "intersections" and not (is_intersection or is_endpoint):
+                    continue
 
-            elevation = None
-            if i < len(elevations) and elevations[i] is not None:
-                elevation = elevations[i]
+                elevation = None
+                if i < len(elevations) and elevations[i] is not None:
+                    elevation = elevations[i]
 
-            # Classificação de nó (Etapa 1)
-            node_type = None
-            pv_obrigatorio = False
+                # Classificação de nó (Etapa 1)
+                node_type = None
+                pv_obrigatorio = False
 
-            if is_intersection and degree >= 2:
-                node_type = "ROSA"
-                pv_obrigatorio = True
-            elif is_endpoint:
-                node_type = "ROSA"
-                pv_obrigatorio = True
+                if is_endpoint:
+                    node_type = "ROSA"
+                    pv_obrigatorio = True
 
-            # Detecção de queda abrupta (> 0.50m entre vértices adjacentes)
-            if elevation is not None and not pv_obrigatorio:
-                for di in [-1, 1]:
-                    ni = i + di
-                    if 0 <= ni < len(elevations) and elevations[ni] is not None:
-                        if abs(elevation - elevations[ni]) > 0.50:
-                            node_type = "ROSA"
-                            pv_obrigatorio = True
-                            break
+                # Detecção de queda abrupta (> 0.50m entre vértices adjacentes)
+                if elevation is not None and not pv_obrigatorio:
+                    for di in [-1, 1]:
+                        ni = i + di
+                        if 0 <= ni < len(elevations) and elevations[ni] is not None:
+                            if abs(elevation - elevations[ni]) > 0.50:
+                                node_type = "ROSA"
+                                pv_obrigatorio = True
+                                break
 
-            node = {
-                "id": str(uuid.uuid4()),
-                "position": {"lat": lat, "lng": lng},
-                "elevation": elevation,
-                "degree": degree,
-                "isIntersection": is_intersection,
-                "isEndpoint": is_endpoint,
-                "connectedStreets": sorted(entry["street_ids"]),
-                "streetNames": sorted(entry["street_names"] - {"Unnamed"}),
-                "streetId": street_id,
-                "streetName": street_name,
-                "highway": highway,
-                "vertexIndex": i,
-                "isHighestElevation": False,
-                "isLowestElevation": False,
-                "nodeType": node_type,
-                "pvObrigatorio": pv_obrigatorio,
-                "accessoryType": "PV" if pv_obrigatorio else None,
-            }
-            nodes.append(node)
+                node = {
+                    "id": str(uuid.uuid4()),
+                    "position": {"lat": lat, "lng": lng},
+                    "elevation": elevation,
+                    "degree": degree,
+                    "isIntersection": is_intersection,
+                    "isEndpoint": is_endpoint,
+                    "connectedStreets": sorted(entry["street_ids"]),
+                    "streetNames": sorted(entry["street_names"] - {"Unnamed"}),
+                    "streetId": street_id,
+                    "streetName": street_name,
+                    "highway": highway,
+                    "vertexIndex": i,
+                    "isHighestElevation": False,
+                    "isLowestElevation": False,
+                    "nodeType": node_type,
+                    "pvObrigatorio": pv_obrigatorio,
+                    "accessoryType": "PV" if pv_obrigatorio else None,
+                }
+                nodes.append(node)
 
     # Passo 3.5: Clustering espacial — merge nós dentro de SNAP_DISTANCE_METERS
     nodes = _cluster_nearby_nodes(nodes, snap_distance=SNAP_DISTANCE_METERS)

@@ -36,6 +36,11 @@ function safeQuery(map: maplibregl.Map, point: maplibregl.PointLike, layers: str
   return map.queryRenderedFeatures(point, { layers: existing });
 }
 
+/** Check whether a source has been added to the map style. */
+function sourceExists(map: maplibregl.Map, source: string): boolean {
+  return !!map.getSource(source);
+}
+
 interface UseGraphEditorOptions {
   mapRef: React.RefObject<MapRef | null>;
   streetFeatures?: GeoJSON.FeatureCollection | null;
@@ -73,13 +78,11 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
     const map = mapRef.current?.getMap();
     if (!map || !prevHoveredRef.current) return;
 
-    try {
+    if (sourceExists(map, prevHoveredRef.current.source)) {
       map.setFeatureState(
         { source: prevHoveredRef.current.source, id: prevHoveredRef.current.id },
         { hovered: false },
       );
-    } catch {
-      // Feature may no longer exist
     }
     prevHoveredRef.current = null;
   }, [mapRef]);
@@ -90,11 +93,9 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
       if (!map) return;
 
       clearHoverState();
-      try {
+      if (sourceExists(map, source)) {
         map.setFeatureState({ source, id }, { hovered: true });
         prevHoveredRef.current = { source, id };
-      } catch {
-        // Ignore
       }
     },
     [mapRef, clearHoverState],
@@ -104,29 +105,22 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
     (nodeIds: string[], edgeIds: string[] = []) => {
       const map = mapRef.current?.getMap();
       if (!map) return;
+      if (!sourceExists(map, 'graph-nodes') || !sourceExists(map, 'graph-edges')) return;
 
       // Clear old selection state
       for (const nid of Object.keys(nodes)) {
-        try {
-          map.setFeatureState({ source: 'graph-nodes', id: nid }, { selected: false });
-        } catch { /* ignore */ }
+        map.setFeatureState({ source: 'graph-nodes', id: nid }, { selected: false });
       }
       for (const eid of Object.keys(edges)) {
-        try {
-          map.setFeatureState({ source: 'graph-edges', id: eid }, { selected: false });
-        } catch { /* ignore */ }
+        map.setFeatureState({ source: 'graph-edges', id: eid }, { selected: false });
       }
 
       // Set new selection
       for (const nid of nodeIds) {
-        try {
-          map.setFeatureState({ source: 'graph-nodes', id: nid }, { selected: true });
-        } catch { /* ignore */ }
+        map.setFeatureState({ source: 'graph-nodes', id: nid }, { selected: true });
       }
       for (const eid of edgeIds) {
-        try {
-          map.setFeatureState({ source: 'graph-edges', id: eid }, { selected: true });
-        } catch { /* ignore */ }
+        map.setFeatureState({ source: 'graph-edges', id: eid }, { selected: true });
       }
     },
     [mapRef, nodes, edges],

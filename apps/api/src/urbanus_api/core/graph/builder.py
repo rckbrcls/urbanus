@@ -174,9 +174,205 @@ def build_graph_from_geojson(geojson: dict) -> nx.Graph:
                 length_m=length,
                 name=src.get("streetName"),
                 highway=src.get("highway"),
+                street_id=street_id,
             )
 
+    # Ensure every street has at least one edge — streets without anchors
+    # (e.g. clipped segments with no intersections) would otherwise be missing
+    # entirely, leaving houses without sewer coverage.
+    _ensure_street_coverage(G, geojson, pos_to_id, haversine)
+
+    # Connect disconnected components — OSM streets may not share exact vertices
+    # at intersections, leaving the graph fragmented into isolated clusters.
+    _connect_components(G, haversine)
+
     return G
+
+
+def _ensure_street_coverage(
+    G: nx.Graph,
+    geojson: dict,
+    pos_to_id: dict[str, str],
+    haversine_fn,
+) -> None:
+    """Guarantee every GeoJSON feature has at least one edge in G.
+
+    For each LineString/MultiLineString feature, checks whether an edge
+    already connects its first and last vertices. If not, creates one.
+
+    Handles three previously-missing cases:
+    - Features without ``properties.id`` (no longer rely on street_id matching)
+    - Circular / very short streets where first==last (uses midpoint vertex)
+    - MultiLineString geometries (processes each line segment)
+    """
+    import uuid
+
+    features = geojson.get("features") or []
+    for f in features:
+        geom = f.get("geometry", {})
+        geom_type = geom.get("type")
+
+        # Collect coordinate arrays (one per line segment)
+        if geom_type == "LineString":
+            coord_lines = [geom.get("coordinates", [])]
+        elif geom_type == "MultiLineString":
+            coord_lines = geom.get("coordinates", [])
+        else:
+            continue
+
+        props = f.get("properties", {})
+        elevations = props.get("vertex_elevations", [])
+        street_id = str(props.get("id", ""))
+
+        for coords in coord_lines:
+            if len(coords) < 2:
+                continue
+
+            _add_edge_for_line(
+                G, coords, elevations, props, street_id,
+                pos_to_id, haversine_fn,
+            )
+
+
+def _add_edge_for_line(
+    G: nx.Graph,
+    coords: list,
+    elevations: list,
+    props: dict,
+    street_id: str,
+    pos_to_id: dict[str, str],
+    haversine_fn,
+) -> None:
+    """Add an edge for a single coordinate line if none exists yet."""
+    import uuid
+
+    first = coords[0]
+    last = coords[-1]
+
+    first_lat, first_lng = float(first[1]), float(first[0])
+    last_lat, last_lng = float(last[1]), float(last[0])
+
+    first_key = f"{first_lat:.5f},{first_lng:.5f}"
+    last_key = f"{last_lat:.5f},{last_lng:.5f}"
+
+    first_id = _get_or_create_node(
+        G, pos_to_id, first_key, first_lng, first_lat,
+        elevations[0] if elevations else None,
+    )
+    last_id = _get_or_create_node(
+        G, pos_to_id, last_key, last_lng, last_lat,
+        elevations[-1] if elevations else None,
+    )
+
+    # Same node after clustering — use midpoint vertex to keep coverage
+    if first_id == last_id:
+        if len(coords) < 3:
+            return  # 2-vertex line that collapsed to a single node — too short
+        mid_idx = len(coords) // 2
+        mid = coords[mid_idx]
+        mid_lat, mid_lng = float(mid[1]), float(mid[0])
+        mid_key = f"{mid_lat:.5f},{mid_lng:.5f}"
+        mid_id = _get_or_create_node(
+            G, pos_to_id, mid_key, mid_lng, mid_lat,
+            elevations[mid_idx] if mid_idx < len(elevations) else None,
+            node_type="VERDE",
+            is_endpoint=False,
+        )
+        if mid_id == first_id:
+            return  # midpoint also collapsed — street too short
+        if not G.has_edge(first_id, mid_id):
+            G.add_edge(
+                first_id, mid_id,
+                length_m=haversine_fn(first_lat, first_lng, mid_lat, mid_lng),
+                name=props.get("name"),
+                highway=props.get("highway"),
+                street_id=street_id,
+            )
+        return
+
+    if G.has_edge(first_id, last_id):
+        return
+
+    length = haversine_fn(first_lat, first_lng, last_lat, last_lng)
+    G.add_edge(
+        first_id, last_id,
+        length_m=length,
+        name=props.get("name"),
+        highway=props.get("highway"),
+        street_id=street_id,
+    )
+
+
+def _get_or_create_node(
+    G: nx.Graph,
+    pos_to_id: dict[str, str],
+    pos_key: str,
+    lng: float,
+    lat: float,
+    elevation: float | None,
+    node_type: str = "ROSA",
+    is_endpoint: bool = True,
+) -> str:
+    """Return the node ID at ``pos_key``, creating the node if needed."""
+    import uuid
+
+    node_id = pos_to_id.get(pos_key)
+    if node_id:
+        return node_id
+
+    node_id = str(uuid.uuid4())
+    pos_to_id[pos_key] = node_id
+    G.add_node(
+        node_id,
+        x=lng, y=lat, z=elevation,
+        node_type=node_type,
+        pv_obrigatorio=is_endpoint,
+        is_endpoint=is_endpoint,
+        is_intersection=False,
+        degree=1,
+    )
+    return node_id
+
+
+def _connect_components(G: nx.Graph, haversine_fn) -> None:
+    """Connect disconnected graph components by adding edges between nearest nodes.
+
+    OSM streets often don't share exact vertex positions at intersections.
+    After clustering (5m), some components remain disconnected. This finds the
+    closest pair of nodes between each small component and the largest component,
+    and adds a connecting edge.
+    """
+    components = list(nx.connected_components(G))
+    if len(components) <= 1:
+        return
+
+    # Sort by size descending — largest component is the "main" network
+    components.sort(key=len, reverse=True)
+    main_component = components[0]
+
+    for comp in components[1:]:
+        best_dist = float("inf")
+        best_pair = None
+
+        # Find closest node pair between this component and the main
+        for node_a in comp:
+            a_data = G.nodes[node_a]
+            lat_a, lng_a = a_data.get("y", 0), a_data.get("x", 0)
+
+            for node_b in main_component:
+                b_data = G.nodes[node_b]
+                lat_b, lng_b = b_data.get("y", 0), b_data.get("x", 0)
+
+                dist = haversine_fn(lat_a, lng_a, lat_b, lng_b)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_pair = (node_a, node_b)
+
+        if best_pair:
+            u, v = best_pair
+            G.add_edge(u, v, length_m=best_dist, name=None, highway=None)
+            # Absorb this component into main for next iterations
+            main_component = main_component | comp
 
 
 async def save_graph_to_postgis(

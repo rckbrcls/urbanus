@@ -28,7 +28,7 @@ from urbanus_api.core.graph.sanitization import (
     enforce_min_pv_spacing,
 )
 from urbanus_api.core.graph.accessories import assign_accessory_types
-from urbanus_api.core.graph.coverage import ensure_full_coverage
+from urbanus_api.core.graph.coverage import ensure_full_coverage, reduce_pass_through_nodes
 from urbanus_api.core.elevation.extrema import detect_extrema
 from urbanus_api.core.routing.rsph import rsph_sewer_routing
 from urbanus_api.core.optimizer.low_points import resolve_low_points
@@ -142,6 +142,31 @@ def _sanitize_spurious_zero_elevations(G: nx.Graph, threshold: float = 50.0) -> 
                     G.nodes[node]["z"] = None
 
 
+def _break_cycles(tree: nx.DiGraph) -> None:
+    """Remove edges to break all cycles, preferring to cut uphill edges."""
+    while True:
+        try:
+            cycle = nx.find_cycle(tree)
+        except nx.NetworkXNoCycle:
+            break
+
+        # Find the worst edge: the one going most uphill (smallest elevation drop)
+        worst_edge = None
+        worst_score = float("inf")
+        for u, v in cycle:
+            z_u = tree.nodes[u].get("z")
+            z_v = tree.nodes[v].get("z")
+            drop = (z_u - z_v) if (z_u is not None and z_v is not None) else 0.0
+            if drop < worst_score:
+                worst_score = drop
+                worst_edge = (u, v)
+
+        if worst_edge is None:
+            worst_edge = cycle[-1][:2]
+
+        tree.remove_edge(*worst_edge)
+
+
 @app.post("/projects/{project_id}/process")
 async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_db)):
     """Execute the full 8-step sewer network pipeline.
@@ -179,6 +204,11 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
 
     # Sanity check: elevation=0 surrounded by high neighbors is a DEM edge artifact
     _sanitize_spurious_zero_elevations(G)
+
+    # Sanitization modifies G in-place but preserves street coverage —
+    # every original street edge is represented by one or more edges in the
+    # sanitized graph. ensure_full_coverage will use this sanitized G
+    # so that node IDs match the RSPH tree (no shortcut mismatch).
 
     # Etapa 1: Classification (already done during extraction)
     mandatory = {
@@ -231,8 +261,23 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
     # Etapa 7: Resolve low points
     tree, pump_stations = resolve_low_points(tree, unreachable, G, outlet)
 
-    # Etapa 7.5: Ensure full street coverage — every street needs a collector
+    # Etapa 7.5: Ensure full street coverage — every street needs a collector.
+    # Uses sanitized G so node IDs match the RSPH tree exactly.
     ensure_full_coverage(tree, G)
+
+    # Safety net: ensure tree is a DAG before dimensioning
+    if not nx.is_directed_acyclic_graph(tree):
+        _break_cycles(tree)
+        # Cycle breaking may have removed coverage edges — repair.
+        # The tree is now a DAG, so re-adding edges is safe.
+        ensure_full_coverage(tree, G)
+
+    # Etapa 7.8: Minimize nodes — remove non-mandatory pass-through nodes.
+    # Degree-2 nodes (1 in, 1 out) that aren't mandatory PVs are just pipe
+    # running straight through — no manhole needed.  Merge their edges as
+    # long as the result doesn't exceed MAX_PV_SPACING.
+    from urbanus_geo.constants import MAX_PV_SPACING
+    reduce_pass_through_nodes(tree, max_edge_length=MAX_PV_SPACING)
 
     # Etapa 8: Hydraulic dimensioning
     pipes = dimension_network(tree)

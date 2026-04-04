@@ -30,6 +30,15 @@ from urbanus_geo.types import PumpStation
 from urbanus_api.core.routing.cost import edge_cost
 
 
+def _would_create_cycle(tree: nx.DiGraph, src: str, dst: str) -> bool:
+    """Return True if adding edge src→dst would create a cycle."""
+    if src == dst:
+        return True
+    if not tree.has_node(dst) or not tree.has_node(src):
+        return False
+    return nx.has_path(tree, dst, src)
+
+
 def resolve_low_points(
     tree: nx.DiGraph,
     unreachable: list[str],
@@ -84,9 +93,24 @@ def resolve_low_points(
                     tree.add_node(u, **G.nodes[u])
                 if not tree.has_node(v):
                     tree.add_node(v, **G.nodes[v])
-                if not tree.has_edge(u, v):
-                    edata = G.edges.get((u, v), {})
-                    tree.add_edge(u, v, **edata)
+
+                # Skip if edge already exists in either direction
+                if tree.has_edge(u, v) or tree.has_edge(v, u):
+                    continue
+
+                # Determine gravity direction
+                z_u = G.nodes[u].get("z")
+                z_v = G.nodes[v].get("z")
+                if z_u is not None and z_v is not None and z_v > z_u:
+                    src, dst = v, u  # Reverse: flow high→low
+                else:
+                    src, dst = u, v  # Default: follow path order
+
+                if _would_create_cycle(tree, src, dst):
+                    continue
+
+                edata = G.edges.get((u, v), {})
+                tree.add_edge(src, dst, **edata)
 
         elif best[0] == "pump":
             # Add pump station
@@ -96,7 +120,7 @@ def resolve_low_points(
                 tree.add_node(node_id, **G.nodes[node_id])
             # Find nearest tree node to connect via pressure
             nearest = _find_nearest_tree_node(G, tree, node_id)
-            if nearest:
+            if nearest and not _would_create_cycle(tree, node_id, nearest):
                 tree.add_edge(
                     node_id,
                     nearest,
@@ -109,7 +133,7 @@ def resolve_low_points(
             if not tree.has_node(node_id):
                 tree.add_node(node_id, **G.nodes[node_id], extra_depth=MAX_GRAVITY_DEPTH)
             nearest = _find_nearest_tree_node(G, tree, node_id)
-            if nearest:
+            if nearest and not _would_create_cycle(tree, node_id, nearest):
                 tree.add_edge(node_id, nearest, **G.edges.get((node_id, nearest), {}))
 
     return tree, pump_stations

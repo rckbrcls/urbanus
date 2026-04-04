@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
+  ChevronRight,
   GitBranch,
   Layers,
   MapPin,
@@ -14,6 +15,7 @@ import {
 import Link from "next/link";
 import { useTranslation } from "@/i18n";
 import { SewerPipeBackground } from "@/components/landing/SewerPipeBackground";
+import { useInView } from "@/hooks/use-in-view";
 
 export default function LandingPage() {
   const tl = useTranslation('landing');
@@ -32,47 +34,93 @@ export default function LandingPage() {
     { icon: Layers, ...tl.featureCards.interactiveEditing },
   ];
 
+  const [stepsRef, stepsInView] = useInView();
+  const [featuresRef, featuresInView] = useInView();
+
   return (
     <div className="flex flex-1 flex-col">
       {/* Hero */}
       <section className="relative flex min-h-[calc(100dvh-3rem)] flex-col items-center justify-center gap-6 overflow-hidden px-6 text-center">
         <SewerPipeBackground />
         <h1
-          className="text-5xl font-bold tracking-tight md:text-6xl"
-          style={{ fontFamily: "var(--font-baskerville)" }}
+          className="text-5xl font-bold tracking-tight md:text-6xl opacity-0"
+          style={{
+            fontFamily: "var(--font-baskerville)",
+            animation: "fade-up 600ms var(--ease-out-strong) forwards",
+          }}
         >
           Urbanus
         </h1>
-        <p className="max-w-xl text-lg text-muted-foreground">
+        <p
+          className="max-w-xl text-lg text-muted-foreground opacity-0"
+          style={{
+            animation: "fade-up 600ms var(--ease-out-strong) 80ms forwards",
+          }}
+        >
           {tl.tagline}
         </p>
-        <Button asChild size="lg" className="mt-2 gap-2">
-          <Link href="/map">
-            {tl.startDesigning}
-            <ArrowRight className="size-4" />
-          </Link>
-        </Button>
+        <div
+          className="opacity-0"
+          style={{
+            animation: "fade-up 600ms var(--ease-out-strong) 160ms forwards",
+          }}
+        >
+          <Button asChild size="lg" className="mt-2 gap-2 active:scale-[0.97] transition-transform duration-150">
+            <Link href="/map">
+              {tl.startDesigning}
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </div>
       </section>
 
       {/* How it works */}
-      <section className="flex min-h-[calc(100dvh-3rem)] flex-col justify-center border-t px-6 py-20">
+      <section
+        ref={stepsRef}
+        className="flex min-h-[calc(100dvh-3rem)] flex-col justify-center border-t px-6 py-20"
+      >
         <div className="mx-auto max-w-4xl">
-          <h2 className="mb-12 text-center text-sm font-medium uppercase tracking-widest text-muted-foreground">
+          <h2
+            className="mb-12 text-center text-sm font-medium uppercase tracking-widest text-muted-foreground"
+            style={stepsInView ? {
+              animation: "reveal-up 500ms var(--ease-out-strong) forwards",
+            } : { opacity: 0 }}
+          >
             {tl.howItWorks}
           </h2>
-          <div className="grid gap-10 md:grid-cols-3">
+          <div className="grid gap-10 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-start">
             {steps.map((step, i) => (
-              <div key={step.title} className="flex flex-col items-center text-center">
-                <div className="mb-4 flex size-12 items-center justify-center rounded-lg border bg-card text-foreground">
-                  <step.icon className="size-5" />
+              <div key={step.title} className="contents">
+                <div
+                  className="flex flex-col items-center text-center"
+                  style={stepsInView ? {
+                    opacity: 0,
+                    animation: `reveal-up 500ms var(--ease-out-strong) ${i * 100}ms forwards`,
+                  } : { opacity: 0 }}
+                >
+                  <div className="mb-3 flex size-6 items-center justify-center rounded-full bg-foreground text-background text-xs font-mono font-semibold">
+                    {i + 1}
+                  </div>
+                  <div className="mb-4 flex size-12 items-center justify-center rounded-lg border bg-card text-foreground">
+                    <step.icon className="size-5" />
+                  </div>
+                  <h3 className="mb-2 text-base font-semibold">{step.title}</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {step.description}
+                  </p>
                 </div>
-                <span className="mb-1 text-xs font-medium text-muted-foreground">
-                  {tl.step} {i + 1}
-                </span>
-                <h3 className="mb-2 text-base font-semibold">{step.title}</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {step.description}
-                </p>
+                {/* Connector between steps — desktop only */}
+                {i < steps.length - 1 && (
+                  <div
+                    className="hidden md:flex items-center justify-center pt-10 text-muted-foreground/40"
+                    style={stepsInView ? {
+                      opacity: 0,
+                      animation: `reveal-up 500ms var(--ease-out-strong) ${i * 100 + 50}ms forwards`,
+                    } : { opacity: 0 }}
+                  >
+                    <ChevronRight className="size-5" />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -80,16 +128,28 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section className="flex min-h-[calc(100dvh-3rem)] flex-col justify-center border-t px-6 py-20">
+      <section
+        ref={featuresRef}
+        className="flex min-h-[calc(100dvh-3rem)] flex-col justify-center border-t px-6 py-20"
+      >
         <div className="mx-auto max-w-4xl">
-          <h2 className="mb-12 text-center text-sm font-medium uppercase tracking-widest text-muted-foreground">
+          <h2
+            className="mb-12 text-center text-sm font-medium uppercase tracking-widest text-muted-foreground"
+            style={featuresInView ? {
+              animation: "reveal-up 500ms var(--ease-out-strong) forwards",
+            } : { opacity: 0 }}
+          >
             {tl.features}
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
-            {features.map((feature) => (
+            {features.map((feature, i) => (
               <div
                 key={feature.title}
-                className="rounded-lg border bg-card p-6"
+                className="card-hover rounded-lg border bg-card p-6 transition-[transform,box-shadow] duration-200 ease-out"
+                style={featuresInView ? {
+                  opacity: 0,
+                  animation: `reveal-up 500ms var(--ease-out-strong) ${i * 80}ms forwards`,
+                } : { opacity: 0 }}
               >
                 <div className="mb-3 flex size-9 items-center justify-center rounded-md border bg-background text-foreground">
                   <feature.icon className="size-4" />
