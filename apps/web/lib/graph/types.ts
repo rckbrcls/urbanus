@@ -31,6 +31,9 @@ export interface NetworkNode {
     isIntersection?: boolean;
     isHighestElevation?: boolean;
     isLowestElevation?: boolean;
+    isCollectionPoint?: boolean;
+    pvObrigatorio?: boolean;
+    accessoryType?: string;
     connectedStreets?: string[];
   };
 }

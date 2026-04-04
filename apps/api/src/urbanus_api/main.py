@@ -253,8 +253,21 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
     if outlet is None:
         raise HTTPException(status_code=400, detail="No nodes with elevation data found")
 
-    # Etapa 6: RSPH gravity routing
-    tree, unreachable = rsph_sewer_routing(G, outlet, mandatory)
+    # Identify collection points — AZUL_ESCURO nodes are natural low points
+    # where sewage accumulates. The outlet is always a collection point.
+    collection_points = {
+        n for n, d in G.nodes(data=True)
+        if d.get("node_type") == "AZUL_ESCURO"
+    } | {outlet}
+
+    # Mark collection points in node data
+    for cp in collection_points:
+        if cp in G:
+            G.nodes[cp]["is_collection_point"] = True
+            G.nodes[cp]["pv_obrigatorio"] = True
+
+    # Etapa 6: RSPH gravity routing (multi-outlet via super-sink)
+    tree, unreachable = rsph_sewer_routing(G, outlet, mandatory, collection_points)
 
     # Etapa 7: Resolve low points
     tree, pump_stations = resolve_low_points(tree, unreachable, G, outlet)
@@ -298,6 +311,7 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
             degree=tree.degree(n),
             is_intersection=d.get("is_intersection", False),
             is_endpoint=d.get("is_endpoint", False),
+            is_collection_point=d.get("is_collection_point", False),
             accessory_type=d.get("accessory_type"),
         ))
 
@@ -312,6 +326,7 @@ async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_
             cost=d.get("cost"),
             name=d.get("name"),
             highway=d.get("highway"),
+            waypoints=d.get("waypoints"),
         ))
 
     result = SewerNetwork(

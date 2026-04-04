@@ -78,6 +78,31 @@ export interface GraphStoreAccessor {
   updateNodeEdgeIds(nodeId: string, edgeIds: string[]): void;
 }
 
+// ============ BATCH COMMAND ============
+
+export class BatchCommand implements GraphCommand {
+  readonly description: string;
+  private commands: GraphCommand[];
+
+  constructor(commands: GraphCommand[], description?: string) {
+    this.commands = commands;
+    this.description = description ?? `Batch (${commands.length} actions)`;
+  }
+
+  execute(): void {
+    for (const cmd of this.commands) {
+      cmd.execute();
+    }
+  }
+
+  undo(): void {
+    // Undo in reverse order
+    for (let i = this.commands.length - 1; i >= 0; i--) {
+      this.commands[i].undo();
+    }
+  }
+}
+
 // ============ CONCRETE COMMANDS ============
 
 export class AddNodeCommand implements GraphCommand {

@@ -23,6 +23,7 @@ import {
   AddEdgeCommand,
   RemoveEdgeCommand,
   SplitEdgeCommand,
+  BatchCommand,
 } from '@/lib/graph/commands';
 import { calculateEdgeLength, calculateSlope } from '@/lib/graph/operations';
 import { snapToNearest } from '@/lib/map/snapping';
@@ -61,6 +62,10 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
   const [isDragging, setIsDragging] = useState(false);
   const dragNodeRef = useRef<string | null>(null);
   const dragStartCoords = useRef<[number, number, number] | null>(null);
+
+  // Box selection state (shift+drag)
+  const [boxSelect, setBoxSelect] = useState<{ start: [number, number]; end: [number, number] } | null>(null);
+  const boxSelectStartRef = useRef<[number, number] | null>(null);
 
   // Ghost edge state (add-edge mode)
   const [ghostEdgeFrom, setGhostEdgeFrom] = useState<[number, number] | null>(null);
@@ -138,6 +143,12 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
         setGhostEdgeTo([e.lngLat.lng, e.lngLat.lat]);
       }
 
+      // Box selection drag
+      if (isDragging && boxSelectStartRef.current) {
+        setBoxSelect({ start: boxSelectStartRef.current, end: [e.lngLat.lng, e.lngLat.lat] });
+        return;
+      }
+
       // Node drag
       if (isDragging && dragNodeRef.current) {
         moveNode(dragNodeRef.current, [e.lngLat.lng, e.lngLat.lat, NaN]);
@@ -170,6 +181,16 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
       const map = mapRef.current?.getMap();
       if (!map) return;
 
+      // Shift+drag → box selection
+      if (e.originalEvent.shiftKey) {
+        e.preventDefault();
+        boxSelectStartRef.current = [e.lngLat.lng, e.lngLat.lat];
+        setBoxSelect({ start: [e.lngLat.lng, e.lngLat.lat], end: [e.lngLat.lng, e.lngLat.lat] });
+        setIsDragging(true);
+        map.dragPan.disable();
+        return;
+      }
+
       const features = safeQuery(map, e.point, ['graph-nodes-layer']);
       if (features.length === 0) return;
 
@@ -191,16 +212,43 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
 
   const handleMouseUp = useCallback(
     (e: MapMouseEvent) => {
-      if (!isDragging || !dragNodeRef.current || !dragStartCoords.current) return;
-
       const map = mapRef.current?.getMap();
       if (!map) return;
+
+      // Finish box selection
+      if (isDragging && boxSelectStartRef.current) {
+        const start = boxSelectStartRef.current;
+        const end: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+        const minLng = Math.min(start[0], end[0]);
+        const maxLng = Math.max(start[0], end[0]);
+        const minLat = Math.min(start[1], end[1]);
+        const maxLat = Math.max(start[1], end[1]);
+
+        // Find all nodes inside the box
+        const selected: string[] = [];
+        for (const [id, node] of Object.entries(nodes)) {
+          const [lng, lat] = node.coordinates;
+          if (lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat) {
+            selected.push(id);
+          }
+        }
+
+        setSelection(selected);
+        syncSelectionState(selected);
+        boxSelectStartRef.current = null;
+        setBoxSelect(null);
+        setIsDragging(false);
+        map.dragPan.enable();
+        return;
+      }
+
+      // Finish node drag
+      if (!isDragging || !dragNodeRef.current || !dragStartCoords.current) return;
 
       const nodeId = dragNodeRef.current;
       const oldCoords = dragStartCoords.current;
       const newCoords: [number, number, number] = [e.lngLat.lng, e.lngLat.lat, oldCoords[2]];
 
-      // Commit via command
       execute(new MoveNodeCommand(accessor, nodeId, oldCoords, newCoords));
 
       dragNodeRef.current = null;
@@ -208,7 +256,7 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
       setIsDragging(false);
       map.dragPan.enable();
     },
-    [isDragging, mapRef, execute, accessor],
+    [isDragging, mapRef, execute, accessor, nodes, setSelection, syncSelectionState],
   );
 
   const handleClick = useCallback(
@@ -382,11 +430,20 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
       if (e.key === 'Escape') {
-        // Cancel add-edge
         addEdgeSourceRef.current = null;
         setGhostEdgeFrom(null);
         setGhostEdgeTo(null);
+        setSelection([]);
+        syncSelectionState([]);
+      }
+      // Delete/Backspace → remove all selected nodes as a single batch
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeIds.length > 0) {
+        e.preventDefault();
+        const cmds = selectedNodeIds.map((id) => new RemoveNodeCommand(accessor, id));
+        execute(new BatchCommand(cmds, `Delete ${cmds.length} nodes`));
         setSelection([]);
         syncSelectionState([]);
       }
@@ -402,12 +459,13 @@ export function useGraphEditor({ mapRef, streetFeatures }: UseGraphEditorOptions
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setSelection, syncSelectionState]);
+  }, [setSelection, syncSelectionState, selectedNodeIds, execute, accessor]);
 
   return {
     isDragging,
     ghostEdgeFrom,
     ghostEdgeTo,
+    boxSelect,
     handleClick,
     handleMouseDown,
     handleMouseMove,

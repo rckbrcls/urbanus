@@ -19,6 +19,7 @@ export const NODES_PAINT: CircleLayerSpecification['paint'] = {
     ['boolean', ['feature-state', 'selected'], false], '#f97316',
     ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',
     // By classification
+    ['==', ['get', 'isCollectionPoint'], true], '#00bcd4',
     ['==', ['get', 'isHighestElevation'], true], '#ef4444',
     ['==', ['get', 'isLowestElevation'], true], '#06b6d4',
     ['==', ['get', 'isEndpoint'], true], '#f59e0b',
@@ -89,6 +90,70 @@ export const GHOST_EDGE_PAINT: LineLayerSpecification['paint'] = {
   'line-width': 2,
   'line-dasharray': [4, 4],
   'line-opacity': 0.6,
+};
+
+// ============ ELEVATION VIEW ============
+
+/** Topographic color ramp (RdYlBu reversed): blue=low → red=high */
+const ELEVATION_COLOR = [
+  'case',
+  ['==', ['get', 'elevation_normalized'], -1], '#9e9e9e',
+  [
+    'interpolate', ['linear'], ['get', 'elevation_normalized'],
+    0.0, '#313695',
+    0.25, '#4575b4',
+    0.5, '#fee090',
+    0.75, '#f46d43',
+    1.0, '#a50026',
+  ],
+] as unknown;
+
+export const NODES_ELEVATION_PAINT: CircleLayerSpecification['paint'] = {
+  'circle-radius': [
+    'case',
+    ['boolean', ['feature-state', 'selected'], false], 10,
+    ['boolean', ['feature-state', 'hovered'], false], 9,
+    ['==', ['get', 'isCollectionPoint'], true], 10,
+    7,
+  ] as unknown as number,
+  'circle-color': ELEVATION_COLOR as string,
+  'circle-opacity': 1,
+  'circle-stroke-width': [
+    'case',
+    ['boolean', ['feature-state', 'selected'], false], 3,
+    ['boolean', ['feature-state', 'hovered'], false], 2,
+    1,
+  ] as unknown as number,
+  'circle-stroke-color': '#ffffff',
+};
+
+export const EDGES_ELEVATION_PAINT: LineLayerSpecification['paint'] = {
+  'line-color': ELEVATION_COLOR as string,
+  'line-width': [
+    'case',
+    ['boolean', ['feature-state', 'selected'], false], 5,
+    ['boolean', ['feature-state', 'hovered'], false], 4,
+    3,
+  ] as unknown as number,
+  'line-opacity': 0.9,
+};
+
+export const ELEVATION_LABEL_LAYOUT: SymbolLayerSpecification['layout'] = {
+  'text-field': [
+    'case',
+    ['==', ['get', 'elevation_normalized'], -1], '',
+    ['concat', ['to-string', ['round', ['get', 'elevation']]], 'm'],
+  ],
+  'text-size': 10,
+  'text-offset': [0, 1.5],
+  'text-allow-overlap': false,
+  'text-optional': true,
+};
+
+export const ELEVATION_LABEL_PAINT: SymbolLayerSpecification['paint'] = {
+  'text-color': '#1e293b',
+  'text-halo-color': '#ffffff',
+  'text-halo-width': 1.5,
 };
 
 // ============ FLOW ARROWS ============

@@ -43,6 +43,7 @@ class SewerNode(BaseModel):
     degree: int = 0
     is_intersection: bool = False
     is_endpoint: bool = False
+    is_collection_point: bool = False
     accessory_type: AccessoryType | None = None
 
 
@@ -55,6 +56,7 @@ class SewerEdge(BaseModel):
     cost: float | None = None
     name: str | None = None
     highway: str | None = None
+    waypoints: list[list[float]] | None = None  # [[lng, lat], ...] intermediate points
 
 
 class PipeSegment(BaseModel):

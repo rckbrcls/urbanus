@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback } from 'react';
-import MapGL, { type MapRef } from 'react-map-gl/maplibre';
+import MapGL, { Source, Layer, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { useMapStyle } from '@/hooks/useMapStyle';
@@ -42,6 +42,7 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures, sew
     isDragging,
     ghostEdgeFrom,
     ghostEdgeTo,
+    boxSelect,
     handleClick,
     handleMouseDown,
     handleMouseMove,
@@ -82,35 +83,72 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures, sew
       style={{ width: '100%', height: '100%' }}
       attributionControl={{ compact: true }}
       cursor={
-        editingMode === 'add-node'
-          ? 'crosshair'
-          : editingMode === 'delete'
+        isDragging
+          ? 'grabbing'
+          : editingMode === 'add-node'
             ? 'crosshair'
-            : isDragging
-              ? 'grabbing'
+            : editingMode === 'delete'
+              ? 'crosshair'
               : undefined
       }
     >
       {/* Bounding box overlay */}
       {bounds && <BboxOverlay bounds={bounds} />}
 
-      {/* Graph layers — hidden when sewer network replaces them */}
-      {!sewerNetwork && (
-        <GraphLayers nodesGeoJSON={nodesGeoJSON} edgesGeoJSON={edgesGeoJSON} />
-      )}
+      {/* Graph layers — always rendered for editing */}
+      <GraphLayers
+        nodesGeoJSON={nodesGeoJSON}
+        edgesGeoJSON={edgesGeoJSON}
+        viewMode={sewerNetwork ? sewerViewMode : undefined}
+        elevationRange={sewerNetwork ? sewerElevationRange : undefined}
+      />
 
-      {/* Sewer network + flow arrows (after pipeline processing) */}
+      {/* Flow arrows overlay when processed network exists */}
       {sewerNetwork && (
         <SewerNetworkLayers
           network={sewerNetwork}
           viewMode={sewerViewMode}
           elevationRange={sewerElevationRange}
+          overlayOnly
         />
       )}
 
       {/* Ghost edge (add-edge mode) */}
       {ghostEdgeFrom && ghostEdgeTo && (
         <GhostEdge from={ghostEdgeFrom} to={ghostEdgeTo} />
+      )}
+
+      {/* Box selection rectangle */}
+      {boxSelect && (
+        <Source
+          id="box-select"
+          type="geojson"
+          data={{
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[
+                [boxSelect.start[0], boxSelect.start[1]],
+                [boxSelect.end[0], boxSelect.start[1]],
+                [boxSelect.end[0], boxSelect.end[1]],
+                [boxSelect.start[0], boxSelect.end[1]],
+                [boxSelect.start[0], boxSelect.start[1]],
+              ]],
+            },
+          }}
+        >
+          <Layer
+            id="box-select-fill"
+            type="fill"
+            paint={{ 'fill-color': '#3b82f6', 'fill-opacity': 0.1 }}
+          />
+          <Layer
+            id="box-select-border"
+            type="line"
+            paint={{ 'line-color': '#3b82f6', 'line-width': 1.5, 'line-dasharray': [4, 4] }}
+          />
+        </Source>
       )}
     </MapGL>
   );

@@ -12,6 +12,9 @@ interface SewerNetworkLayersProps {
   network: SewerNetwork;
   viewMode?: SewerViewMode;
   elevationRange?: { min: number; max: number } | null;
+  selectedNodeId?: string | null;
+  /** When true, only renders flow arrows — nodes/edges are handled by GraphLayers */
+  overlayOnly?: boolean;
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -80,6 +83,8 @@ export default function SewerNetworkLayers({
   network,
   viewMode = 'type',
   elevationRange,
+  selectedNodeId,
+  overlayOnly = false,
 }: SewerNetworkLayersProps) {
   const isElevation = viewMode === 'elevation';
   const range = elevationRange
@@ -101,7 +106,9 @@ export default function SewerNetworkLayers({
         elevation: n.elevation,
         elevation_normalized: normalizeElevation(n.elevation, min, range),
         pv_obrigatorio: n.pv_obrigatorio,
-        color: NODE_COLORS[n.node_type ?? ''] ?? '#9e9e9e',
+        is_collection_point: n.is_collection_point ?? false,
+        is_selected: n.id === selectedNodeId,
+        color: n.is_collection_point ? '#00bcd4' : (NODE_COLORS[n.node_type ?? ''] ?? '#9e9e9e'),
       },
     }));
 
@@ -129,6 +136,7 @@ export default function SewerNetworkLayers({
           type: 'LineString',
           coordinates: [
             [src?.lng ?? 0, src?.lat ?? 0],
+            ...(e.waypoints ?? []),
             [tgt?.lng ?? 0, tgt?.lat ?? 0],
           ],
         },
@@ -172,10 +180,29 @@ export default function SewerNetworkLayers({
         'circle-stroke-color': '#ffffff',
       }
     : {
-        'circle-radius': 6,
-        'circle-color': ['get', 'color'],
-        'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#ffffff',
+        'circle-radius': [
+          'case',
+          ['boolean', ['feature-state', 'hovered'], false], 9,
+          ['==', ['get', 'is_collection_point'], true], 10,
+          6,
+        ] as unknown as number,
+        'circle-color': [
+          'case',
+          ['==', ['get', 'is_selected'], true], '#ffab00',
+          ['get', 'color'],
+        ] as unknown as string,
+        'circle-stroke-width': [
+          'case',
+          ['boolean', ['feature-state', 'hovered'], false], 3,
+          ['==', ['get', 'is_collection_point'], true], 3,
+          1.5,
+        ] as unknown as number,
+        'circle-stroke-color': [
+          'case',
+          ['==', ['get', 'is_selected'], true], '#ff6f00',
+          ['==', ['get', 'is_collection_point'], true], '#004d40',
+          '#ffffff',
+        ] as unknown as string,
       };
 
   const elevationLabelLayout: SymbolLayerSpecification['layout'] = {
@@ -195,6 +222,11 @@ export default function SewerNetworkLayers({
     'text-halo-color': '#ffffff',
     'text-halo-width': 1.5,
   };
+
+  if (overlayOnly) {
+    // Only render flow arrows — nodes/edges are handled by GraphLayers
+    return <FlowArrows edgesGeoJSON={edgesGeoJSON} />;
+  }
 
   return (
     <>

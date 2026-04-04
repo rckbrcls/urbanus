@@ -13,6 +13,7 @@ export interface SewerNode {
   degree: number;
   is_intersection: boolean;
   is_endpoint: boolean;
+  is_collection_point: boolean;
   accessory_type: AccessoryType | null;
 }
 
@@ -25,6 +26,7 @@ export interface SewerEdge {
   cost: number | null;
   name: string | null;
   highway: string | null;
+  waypoints: [number, number][] | null;
 }
 
 export interface PipeSegment {

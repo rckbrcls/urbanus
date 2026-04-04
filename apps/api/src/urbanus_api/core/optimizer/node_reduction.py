@@ -88,12 +88,24 @@ def _is_through_pipe(
 def _merge_edge_pair(
     tree: nx.DiGraph, pred: str, node: str, succ: str,
 ) -> None:
-    """Remove *node* and merge pred->node + node->succ into pred->succ."""
+    """Remove *node* and merge pred->node + node->succ into pred->succ.
+
+    Preserves the removed node's position as a waypoint so that the
+    merged edge can be rendered following the original street path
+    instead of a straight line.
+    """
     d1 = tree.edges[pred, node].get("length_m", 0)
     d2 = tree.edges[node, succ].get("length_m", 0)
     e1 = dict(tree.edges[pred, node])
     e2 = dict(tree.edges[node, succ])
     merged = {**e1, **e2, "length_m": d1 + d2}
+
+    # Accumulate waypoints: existing waypoints from both edges + the node position
+    wp1 = list(e1.get("waypoints") or [])
+    node_data = tree.nodes[node]
+    node_pos = [node_data.get("x", 0), node_data.get("y", 0)]
+    wp2 = list(e2.get("waypoints") or [])
+    merged["waypoints"] = wp1 + [node_pos] + wp2
 
     tree.remove_edge(pred, node)
     tree.remove_edge(node, succ)
@@ -151,18 +163,27 @@ def _simplify_junctions(tree: nx.DiGraph, max_spacing: float) -> None:
             pred, succ = best_pair
             _merge_edge_pair(tree, pred, node, succ)
 
-            # Redirect remaining edges so node can be fully removed
+            # Redirect remaining edges so node can be fully removed,
+            # preserving the node position as a waypoint.
             if node in tree:
+                node_pos = [tree.nodes[node].get("x", 0), tree.nodes[node].get("y", 0)]
+
                 for x in list(tree.predecessors(node)):
                     edata = dict(tree.edges[x, node])
                     tree.remove_edge(x, node)
                     if x != succ and not tree.has_edge(x, succ):
+                        wp = list(edata.get("waypoints") or [])
+                        wp.append(node_pos)
+                        edata["waypoints"] = wp
                         tree.add_edge(x, succ, **edata)
 
                 for y in list(tree.successors(node)):
                     edata = dict(tree.edges[node, y])
                     tree.remove_edge(node, y)
                     if y != pred and not tree.has_edge(pred, y):
+                        wp = list(edata.get("waypoints") or [])
+                        wp.insert(0, node_pos)
+                        edata["waypoints"] = wp
                         tree.add_edge(pred, y, **edata)
 
                 if tree.in_degree(node) == 0 and tree.out_degree(node) == 0:
@@ -369,6 +390,108 @@ def _enforce_spacing(tree: nx.DiGraph, max_spacing: float) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 4 — Spatial clustering of close nodes
+# ---------------------------------------------------------------------------
+
+def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> None:
+    """Merge nodes that are spatially close (within *radius* metres).
+
+    Uses Union-Find to group nearby nodes, then merges each group into a
+    single representative (the one with highest degree).  All edges from
+    other members are redirected to the representative.
+
+    The outlet node is never absorbed into another node.
+    """
+    from urbanus_geo.calculations import haversine
+
+    nodes = list(tree.nodes)
+    n = len(nodes)
+    if n < 2:
+        return
+
+    # Union-Find
+    parent = {nd: nd for nd in nodes}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    # Build clusters within radius
+    coords = {
+        nd: (tree.nodes[nd].get("y", 0), tree.nodes[nd].get("x", 0))
+        for nd in nodes
+    }
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = nodes[i], nodes[j]
+            dist = haversine(coords[a][0], coords[a][1], coords[b][0], coords[b][1])
+            if dist <= radius:
+                union(a, b)
+
+    # Group by cluster root
+    clusters: dict[str, list[str]] = {}
+    for nd in nodes:
+        root = find(nd)
+        clusters.setdefault(root, []).append(nd)
+
+    for members in clusters.values():
+        if len(members) < 2:
+            continue
+
+        # Pick representative: outlet > highest total degree > first
+        rep = members[0]
+        for m in members:
+            if m == outlet:
+                rep = m
+                break
+            if (tree.in_degree(m) + tree.out_degree(m)) > (tree.in_degree(rep) + tree.out_degree(rep)):
+                rep = m
+
+        # Redirect all edges from other members to rep, preserving waypoints
+        member_set = set(members)
+        for m in members:
+            if m == rep:
+                continue
+            if m not in tree:
+                continue
+
+            m_pos = [tree.nodes[m].get("x", 0), tree.nodes[m].get("y", 0)]
+
+            for pred in list(tree.predecessors(m)):
+                edata = dict(tree.edges[pred, m])
+                tree.remove_edge(pred, m)
+                if pred in member_set or pred == rep:
+                    continue
+                if not tree.has_edge(pred, rep):
+                    # Append m's position as waypoint so the line follows the street
+                    wp = list(edata.get("waypoints") or [])
+                    wp.append(m_pos)
+                    edata["waypoints"] = wp
+                    tree.add_edge(pred, rep, **edata)
+
+            for succ in list(tree.successors(m)):
+                edata = dict(tree.edges[m, succ])
+                tree.remove_edge(m, succ)
+                if succ in member_set or succ == rep:
+                    continue
+                if not tree.has_edge(rep, succ):
+                    wp = list(edata.get("waypoints") or [])
+                    wp.insert(0, m_pos)
+                    edata["waypoints"] = wp
+                    tree.add_edge(rep, succ, **edata)
+
+            if m in tree and tree.in_degree(m) == 0 and tree.out_degree(m) == 0:
+                tree.remove_node(m)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -400,10 +523,30 @@ def optimize_node_placement(
     # max_spacing ensures every merge produces a net node reduction.
     _greedy_contract(tree, max_spacing)
 
-    # Phase 2: MILP refine with real spacing
+    # Phase 2: Merge spatially clustered nodes (< 20m apart)
+    _merge_close_nodes(tree, radius=20.0, outlet=outlet)
+
+    # Safety: spatial merging can create cycles — break them
+    if not nx.is_directed_acyclic_graph(tree):
+        while True:
+            try:
+                cycle = nx.find_cycle(tree)
+            except nx.NetworkXNoCycle:
+                break
+            # Remove the edge with smallest elevation drop (most uphill)
+            worst = min(
+                cycle,
+                key=lambda e: (
+                    (tree.nodes[e[0]].get("z", 0) or 0)
+                    - (tree.nodes[e[1]].get("z", 0) or 0)
+                ),
+            )
+            tree.remove_edge(worst[0], worst[1])
+
+    # Phase 3: MILP refine with real spacing
     _milp_refine(tree, max_spacing)
 
-    # Phase 3 (spacing enforcement) is intentionally skipped.
+    # Phase 4 (spacing enforcement) is intentionally skipped.
     # The graph already has nodes at every street intersection (~100-150m
     # apart), which satisfies NBR 9649 spacing (80-120m range).
     # Running _enforce_spacing would ADD nodes on every edge > 100m,

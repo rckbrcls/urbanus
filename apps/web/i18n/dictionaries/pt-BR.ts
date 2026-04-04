@@ -80,6 +80,7 @@ export const ptBR: Dictionary = {
       select: 'Selecionar',
       move: 'Mover',
       addNode: 'Adicionar Nó',
+      addEdge: 'Conectar',
       delete: 'Excluir',
       split: 'Dividir',
     },

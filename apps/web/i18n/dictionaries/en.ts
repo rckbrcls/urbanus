@@ -80,6 +80,7 @@ export const en: Dictionary = {
       select: 'Select',
       move: 'Move',
       addNode: 'Add Node',
+      addEdge: 'Connect',
       delete: 'Delete',
       split: 'Split',
     },

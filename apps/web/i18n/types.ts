@@ -51,6 +51,7 @@ export interface Dictionary {
       select: string;
       move: string;
       addNode: string;
+      addEdge: string;
       delete: string;
       split: string;
     };

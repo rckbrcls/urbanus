@@ -5,7 +5,8 @@ import type { Project } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2, Mountain } from 'lucide-react';
+import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2, Mountain, Eye, EyeOff, Droplets, Cable, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { sewerNetworkToGraph } from '@/lib/graph/sewerConversion';
 
 import {
   AlertDialog,
@@ -29,6 +30,8 @@ import type { EditingMode } from '@/lib/graph/types';
 import { usePipelineStore } from '@/stores/pipelineStore';
 import { PipelineResultsPanel } from '@/components/pipeline/PipelineResultsPanel';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { Kbd } from '@/components/ui/kbd';
 import { useTranslation } from '@/i18n';
 import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
 
@@ -63,6 +66,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const didInitRef = useRef(false);
 
   // Graph store
@@ -87,6 +91,12 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const pipelineError = usePipelineStore((s) => s.error);
   const processProject = usePipelineStore((s) => s.processProject);
   const resetPipeline = usePipelineStore((s) => s.reset);
+  const toggleView = usePipelineStore((s) => s.toggleView);
+  const hasCachedResult = usePipelineStore((s) => s._cachedResult !== null);
+  const getGraph = useGraphStore((s) => s.getGraph);
+
+  // Save pre-processing graph so we can restore on toggle
+  const preProcessGraphRef = useRef<ReturnType<typeof getGraph> | null>(null);
 
   // Sewer view mode
   const [sewerViewMode, setSewerViewMode] = useState<SewerViewMode>('type');
@@ -99,6 +109,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     { mode: 'select', label: te.modes.select, icon: <MousePointer className="h-4 w-4" />, shortcut: 'V' },
     { mode: 'move', label: te.modes.move, icon: <Move className="h-4 w-4" />, shortcut: 'M' },
     { mode: 'add-node', label: te.modes.addNode, icon: <Plus className="h-4 w-4" />, shortcut: 'A' },
+    { mode: 'add-edge', label: te.modes.addEdge ?? 'Edge', icon: <Cable className="h-4 w-4" />, shortcut: 'E' },
     { mode: 'delete', label: te.modes.delete, icon: <X className="h-4 w-4" />, shortcut: 'D' },
     { mode: 'split-edge', label: te.modes.split, icon: <Scissors className="h-4 w-4" />, shortcut: 'S' },
   ], [te.modes]);
@@ -146,7 +157,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      const modeMap: Record<string, EditingMode> = { v: 'select', m: 'move', a: 'add-node', d: 'delete', s: 'split-edge' };
+      const modeMap: Record<string, EditingMode> = { v: 'select', m: 'move', a: 'add-node', e: 'add-edge', d: 'delete', s: 'split-edge' };
       const mode = modeMap[e.key.toLowerCase()];
       if (mode) setMode(mode);
     };
@@ -158,9 +169,38 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   const handleProcess = useCallback(async () => {
     if (!project) return;
+    // Save current graph so we can restore on undo
+    preProcessGraphRef.current = getGraph();
     await processProject(project.id);
+    // Load processed result into graphStore so the same editor works
+    const result = usePipelineStore.getState().result;
+    if (result) {
+      const graph = sewerNetworkToGraph(result);
+      loadGraph(graph);
+      clearCommands();
+    }
     setActiveTab('pipeline');
-  }, [project, processProject]);
+  }, [project, processProject, getGraph, loadGraph, clearCommands]);
+
+  const handleToggleView = useCallback(() => {
+    const currentResult = usePipelineStore.getState().result;
+    if (currentResult) {
+      // Switching TO pre-processing view: restore original graph
+      if (preProcessGraphRef.current) {
+        loadGraph(preProcessGraphRef.current);
+        clearCommands();
+      }
+    } else {
+      // Switching TO processed view: load sewer network into graph
+      const cached = usePipelineStore.getState()._cachedResult;
+      if (cached) {
+        const graph = sewerNetworkToGraph(cached);
+        loadGraph(graph);
+        clearCommands();
+      }
+    }
+    toggleView();
+  }, [toggleView, loadGraph, clearCommands]);
 
   const handleSave = useCallback(async () => {
     if (!project) return;
@@ -278,8 +318,9 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
         />
       </div>
 
-      {/* Overlay stats — top left */}
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+      {/* Top bar — nav card + toolbar card, same row */}
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+        {/* Nav card */}
         <div className="flex items-center gap-2 rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
           <button
             onClick={() => router.push('/projects')}
@@ -288,55 +329,77 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="h-4 w-px bg-border" />
-          <span className="text-xs font-medium text-foreground">{project.name}</span>
+          <span className="text-xs font-medium text-foreground truncate max-w-[10rem]">{project.name}</span>
           {hasChanges && <span className="text-xs text-amber-500">*</span>}
-        </div>
-        <div className="rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
-          <span className="text-xs font-medium text-muted-foreground">
+          <div className="h-4 w-px bg-border" />
+          <span className="text-xs text-muted-foreground">
             {project.areaKm2.toFixed(2)} km² &middot; {nodeCount} {te.nodes}
             {selectedNodeIds.length > 0 && ` \u00b7 ${selectedNodeIds.length} ${te.selected}`}
           </span>
         </div>
+        {/* Toolbar card */}
+        <TooltipProvider>
+        <div className="flex items-center gap-1 rounded-2xl border border-border bg-background/90 p-1 backdrop-blur-sm">
+          {MODES.map(({ mode, label, icon, shortcut }) => (
+            <Tooltip key={mode}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setMode(mode)}
+                  className={`rounded-xl p-2 transition-colors ${
+                    editingMode === mode
+                      ? 'bg-foreground/10 text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {icon}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <span className="flex items-center gap-2">{label}{shortcut && <Kbd>{shortcut}</Kbd>}</span>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+          <div className="mx-1 h-4 w-px bg-border" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={commandUndo}
+                disabled={!canUndo}
+                className="rounded-xl p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+              >
+                <Undo2 className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom"><span className="flex items-center gap-2">Undo <Kbd>Ctrl+Z</Kbd></span></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={commandRedo}
+                disabled={!canRedo}
+                className="rounded-xl p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+              >
+                <Redo2 className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom"><span className="flex items-center gap-2">Redo <Kbd>Ctrl+Shift+Z</Kbd></span></TooltipContent>
+          </Tooltip>
+        </div>
+        </TooltipProvider>
       </div>
 
-      {/* Edit Mode Toolbar — top center */}
-      <div className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-border bg-background/90 p-1 backdrop-blur-sm">
-        {MODES.map(({ mode, label, icon, shortcut }) => (
-          <button
-            key={mode}
-            onClick={() => setMode(mode)}
-            title={`${label}${shortcut ? ` (${shortcut})` : ''}`}
-            className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
-              editingMode === mode
-                ? 'bg-foreground/10 font-medium text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {icon}
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
-        <div className="mx-1 h-4 w-px bg-border" />
+      {/* Sidebar open button — fixed at right edge when sidebar is hidden */}
+      {!sidebarOpen && (
         <button
-          onClick={commandUndo}
-          disabled={!canUndo}
-          className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
-          title="Undo (Ctrl+Z)"
+          onClick={() => setSidebarOpen(true)}
+          className="absolute top-4 right-4 z-10 rounded-2xl border border-border bg-background/90 p-2.5 backdrop-blur-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <Undo2 className="h-4 w-4" />
+          <PanelRightOpen className="h-4 w-4" />
         </button>
-        <button
-          onClick={commandRedo}
-          disabled={!canRedo}
-          className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
-          title="Redo (Ctrl+Shift+Z)"
-        >
-          <Redo2 className="h-4 w-4" />
-        </button>
-      </div>
+      )}
 
-      {/* Floating Sidebar — right */}
-      <div className="absolute top-4 right-4 bottom-4 z-10 flex w-80 flex-col overflow-hidden rounded-2xl border border-border bg-background/90 backdrop-blur-sm">
+      {/* Floating Sidebar — right (slide in/out) */}
+      <div className={`absolute top-4 right-4 bottom-4 z-10 flex w-80 flex-col overflow-hidden rounded-2xl border border-border bg-background/90 backdrop-blur-sm transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-[calc(100%+1rem)]'}`}>
         {/* Action buttons */}
         <div className="flex items-center gap-1.5 border-b border-border p-3">
           <button
@@ -360,6 +423,15 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             )}
             {pipelineStatus === 'processing' ? tc.processing : tc.process}
           </button>
+          {(pipelineResult || hasCachedResult) && (
+            <button
+              onClick={handleToggleView}
+              className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              title={pipelineResult ? "Ver grafo original" : "Ver rede processada"}
+            >
+              {pipelineResult ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          )}
           <button
             onClick={handleExport}
             className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground"
@@ -394,6 +466,14 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          <div className="flex-1" />
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            title="Fechar painel"
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Tabs */}

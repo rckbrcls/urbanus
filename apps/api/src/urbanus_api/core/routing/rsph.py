@@ -24,14 +24,21 @@ def rsph_sewer_routing(
     G: nx.Graph,
     outlet: str,
     mandatory_nodes: set[str],
+    collection_points: set[str] | None = None,
 ) -> tuple[nx.DiGraph, list[str]]:
     """Executa RSPH para rotear esgoto por gravidade.
+
+    Supports multiple collection points via a virtual super-sink.
+    Each mandatory node is routed to the nearest collection point
+    (determined by Dijkstra cost), not necessarily to the global outlet.
 
     Args:
         G: Grafo não-direcionado com atributos (x, y, z) nos nós
            e (length_m) nas arestas.
         outlet: ID do nó de descarga (ponto mais baixo).
         mandatory_nodes: Conjunto de IDs de nós que devem ser conectados.
+        collection_points: IDs dos pontos de coleta. If None, uses only
+            the outlet as the single collection point.
 
     Returns:
         Tupla (tree, unreachable):
@@ -57,16 +64,27 @@ def rsph_sewer_routing(
             DG.add_edge(u, v, **data)
             DG.add_edge(v, u, **data)
 
-    # 2. Iteratively connect mandatory nodes to outlet
+    # 2. Virtual super-sink for multiple collection points
+    sinks = collection_points or set()
+    sinks = sinks | {outlet}  # outlet is always a collection point
+
+    SUPER_SINK = "__super_sink__"
+    DG.add_node(SUPER_SINK)
+    for cp in sinks:
+        if cp in DG:
+            DG.add_edge(cp, SUPER_SINK, length_m=0)
+
+    # 3. Iteratively connect mandatory nodes to nearest collection point
     tree = nx.DiGraph()
-    tree.add_node(outlet, **DG.nodes[outlet])
+    for cp in sinks:
+        if cp in G:
+            tree.add_node(cp, **G.nodes[cp])
     reused_edges: set[tuple[str, str]] = set()
     unreachable: list[str] = []
 
     # Sort by elevation descending (highest first → longest paths first).
-    # Nodes without elevation (z=None) go last — they must not be treated as z=0.
     sorted_nodes = sorted(
-        mandatory_nodes - {outlet},
+        mandatory_nodes - sinks,
         key=lambda n: (G.nodes[n].get("z") is None, -(G.nodes[n].get("z") or 0)),
     )
 
@@ -76,20 +94,21 @@ def rsph_sewer_routing(
             continue
 
         try:
-            # Dijkstra with custom weight function
             path = nx.dijkstra_path(
                 DG,
                 node,
-                outlet,
+                SUPER_SINK,
                 weight=lambda u, v, d: edge_cost(u, v, d, G, reused_edges),
             )
         except nx.NetworkXNoPath:
             unreachable.append(node)
             continue
 
-        # Add path to tree
+        # Add path to tree (excluding the virtual super-sink)
         for i in range(len(path) - 1):
             u, v = path[i], path[i + 1]
+            if v == SUPER_SINK:
+                break  # Don't add super-sink to real tree
             if not tree.has_node(u):
                 tree.add_node(u, **DG.nodes[u])
             if not tree.has_node(v):
@@ -97,5 +116,8 @@ def rsph_sewer_routing(
             if not tree.has_edge(u, v):
                 tree.add_edge(u, v, **DG.edges[u, v])
             reused_edges.add((u, v))
+
+    # Cleanup: remove super-sink
+    DG.remove_node(SUPER_SINK)
 
     return tree, unreachable
