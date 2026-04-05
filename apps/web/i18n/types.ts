@@ -45,6 +45,26 @@ export interface Dictionary {
     noProjectsDescription: string;
     goToMap: string;
     streets: string;
+    filters: {
+      search: string;
+      sortBy: string;
+      sortNewest: string;
+      sortOldest: string;
+      sortNameAZ: string;
+      sortNameZA: string;
+      sortLargestArea: string;
+      sortSmallestArea: string;
+      sortMostStreets: string;
+      sortFewestStreets: string;
+      minArea: string;
+      maxArea: string;
+      gridView: string;
+      listView: string;
+      projectCount: string;
+      projectCountFiltered: string;
+      clearFilters: string;
+      noResults: string;
+    };
   };
   editor: {
     modes: {

@@ -6,7 +6,7 @@ import type { SewerNetwork } from '@/types/sewer';
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import FlowArrows from './FlowArrows';
 
-export type SewerViewMode = 'type' | 'elevation';
+export type SewerViewMode = 'default' | 'elevation' | 'streets';
 
 interface SewerNetworkLayersProps {
   network: SewerNetwork;
@@ -81,7 +81,7 @@ const EDGE_ELEVATION_COLOR_EXPR = [
 
 export default function SewerNetworkLayers({
   network,
-  viewMode = 'type',
+  viewMode = 'default',
   elevationRange,
   selectedNodeId,
   overlayOnly = false,

@@ -99,8 +99,8 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures, sew
       <GraphLayers
         nodesGeoJSON={nodesGeoJSON}
         edgesGeoJSON={edgesGeoJSON}
-        viewMode={sewerNetwork ? sewerViewMode : undefined}
-        elevationRange={sewerNetwork ? sewerElevationRange : undefined}
+        viewMode={sewerViewMode}
+        elevationRange={sewerElevationRange}
       />
 
       {/* Flow arrows overlay when processed network exists */}

@@ -428,12 +428,18 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
         nd: (tree.nodes[nd].get("y", 0), tree.nodes[nd].get("x", 0))
         for nd in nodes
     }
+    # Quick filter: ~0.0002 degrees ≈ 20m at equator
+    deg_threshold = radius / 111_000
     for i in range(n):
+        ai = coords[nodes[i]]
         for j in range(i + 1, n):
-            a, b = nodes[i], nodes[j]
-            dist = haversine(coords[a][0], coords[a][1], coords[b][0], coords[b][1])
+            bj = coords[nodes[j]]
+            # Fast euclidean pre-filter in degrees
+            if abs(ai[0] - bj[0]) > deg_threshold or abs(ai[1] - bj[1]) > deg_threshold:
+                continue
+            dist = haversine(ai[0], ai[1], bj[0], bj[1])
             if dist <= radius:
-                union(a, b)
+                union(nodes[i], nodes[j])
 
     # Group by cluster root
     clusters: dict[str, list[str]] = {}

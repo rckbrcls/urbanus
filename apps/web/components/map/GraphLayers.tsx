@@ -3,15 +3,16 @@
 import { useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
 import {
-  NODES_PAINT, EDGES_PAINT, EDGES_LAYOUT,
+  NODES_PAINT, EDGES_DEFAULT_PAINT, EDGES_STREETS_PAINT, EDGES_LAYOUT,
   NODES_ELEVATION_PAINT, EDGES_ELEVATION_PAINT,
   ELEVATION_LABEL_LAYOUT, ELEVATION_LABEL_PAINT,
 } from '@/lib/map/layers';
+import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
 
 interface GraphLayersProps {
   nodesGeoJSON: GeoJSON.FeatureCollection;
   edgesGeoJSON: GeoJSON.FeatureCollection;
-  viewMode?: 'type' | 'elevation';
+  viewMode?: SewerViewMode;
   elevationRange?: { min: number; max: number } | null;
 }
 
@@ -38,6 +39,9 @@ export default function GraphLayers({
   elevationRange,
 }: GraphLayersProps) {
   const isElevation = viewMode === 'elevation' && elevationRange;
+  const edgesPaint = isElevation ? EDGES_ELEVATION_PAINT
+    : viewMode === 'streets' ? EDGES_STREETS_PAINT
+    : EDGES_DEFAULT_PAINT;
   const min = elevationRange?.min ?? 0;
   const range = elevationRange ? elevationRange.max - elevationRange.min || 1 : 1;
 
@@ -107,7 +111,7 @@ export default function GraphLayers({
         <Layer
           id="graph-edges-layer"
           type="line"
-          paint={isElevation ? EDGES_ELEVATION_PAINT : EDGES_PAINT}
+          paint={edgesPaint}
           layout={EDGES_LAYOUT}
         />
       </Source>

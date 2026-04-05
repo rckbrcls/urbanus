@@ -1,15 +1,61 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import ProjectCard from '@/components/ProjectCard';
+import ProjectListItem from '@/components/ProjectListItem';
+import ProjectsToolbar, { type SortOption, type ViewMode } from '@/components/ProjectsToolbar';
 import { useProjects } from '../../stores/useProjectStore';
 import { useTranslation } from '@/i18n';
 
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ProjectsPage() {
   const { data: projects = [], isLoading } = useProjects();
   const t = useTranslation('projects');
+
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [minArea, setMinArea] = useState('');
+  const [maxArea, setMaxArea] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+
+  const filteredProjects = useMemo(() => {
+    let result = [...projects];
+
+    // Filter by name
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter((p) => p.name.toLowerCase().includes(q));
+    }
+
+    // Filter by area range
+    const min = parseFloat(minArea);
+    const max = parseFloat(maxArea);
+    if (!isNaN(min)) {
+      result = result.filter((p) => p.areaKm2 >= min);
+    }
+    if (!isNaN(max)) {
+      result = result.filter((p) => p.areaKm2 <= max);
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'newest': return b.createdAt - a.createdAt;
+        case 'oldest': return a.createdAt - b.createdAt;
+        case 'name-az': return a.name.localeCompare(b.name);
+        case 'name-za': return b.name.localeCompare(a.name);
+        case 'area-desc': return b.areaKm2 - a.areaKm2;
+        case 'area-asc': return a.areaKm2 - b.areaKm2;
+        case 'streets-desc': return b.stats.streetCount - a.stats.streetCount;
+        case 'streets-asc': return a.stats.streetCount - b.stats.streetCount;
+        default: return 0;
+      }
+    });
+
+    return result;
+  }, [projects, search, sortBy, minArea, maxArea]);
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 pb-6 pt-20">
@@ -30,7 +76,25 @@ export default function ProjectsPage() {
         </Link>
       </div>
 
-      {/* Grid */}
+      {/* Toolbar */}
+      {projects.length > 0 && (
+        <ProjectsToolbar
+          search={search}
+          onSearchChange={setSearch}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          minArea={minArea}
+          onMinAreaChange={setMinArea}
+          maxArea={maxArea}
+          onMaxAreaChange={setMaxArea}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          filteredCount={filteredProjects.length}
+          totalCount={projects.length}
+        />
+      )}
+
+      {/* Content */}
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
@@ -51,10 +115,21 @@ export default function ProjectsPage() {
             {t.goToMap}
           </Link>
         </div>
-      ) : (
+      ) : filteredProjects.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-zinc-500">
+          <Search className="mb-2 h-8 w-8" />
+          <p className="text-sm">{t.filters.noResults}</p>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {projects.map((project) => (
+          {filteredProjects.map((project) => (
             <ProjectCard key={project.id} project={project} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {filteredProjects.map((project) => (
+            <ProjectListItem key={project.id} project={project} />
           ))}
         </div>
       )}

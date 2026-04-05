@@ -14,6 +14,22 @@ const NODE_TYPE_COLORS: Record<string, string> = {
   AZUL_ESCURO: '#1565c0',
 };
 
+const NODE_TYPE_LABELS: Record<string, string> = {
+  ROSA: 'Obrigatório (interseção/confluência)',
+  VERDE: 'Intermediário',
+  AMARELO: 'Ponto alto',
+  AZUL_ESCURO: 'Ponto baixo (coleta)',
+  OTHER: 'Outro',
+};
+
+const ACCESSORY_LABELS: Record<string, string> = {
+  PV: 'Poço de Visita',
+  TIL: 'Terminal de Inspeção e Limpeza',
+  TL: 'Terminal de Limpeza',
+  CP: 'Caixa de Passagem',
+  NONE: 'Sem acessório',
+};
+
 export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
   const t = useTranslation('pipeline');
 
@@ -75,7 +91,7 @@ export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: NODE_TYPE_COLORS[type] || '#9e9e9e' }}
                   />
-                  <span className="text-zinc-700 dark:text-zinc-300">{type}</span>
+                  <span className="text-zinc-700 dark:text-zinc-300">{NODE_TYPE_LABELS[type] ?? type}</span>
                 </div>
                 <span className="font-mono text-zinc-500">{count}</span>
               </div>
@@ -93,7 +109,7 @@ export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
             .sort((a, b) => b[1] - a[1])
             .map(([type, count]) => (
               <div key={type} className="flex items-center justify-between rounded px-2 py-1 text-xs">
-                <span className="text-zinc-700 dark:text-zinc-300">{type}</span>
+                <span className="text-zinc-700 dark:text-zinc-300">{ACCESSORY_LABELS[type] ?? type}</span>
                 <span className="font-mono text-zinc-500">{count}</span>
               </div>
             ))}
@@ -110,7 +126,7 @@ export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
             .sort((a, b) => Number(a[0]) - Number(b[0]))
             .map(([dn, count]) => (
               <div key={dn} className="flex items-center justify-between rounded px-2 py-1 text-xs">
-                <span className="text-zinc-700 dark:text-zinc-300">DN {dn}</span>
+                <span className="text-zinc-700 dark:text-zinc-300">{dn} mm</span>
                 <span className="font-mono text-zinc-500">{count}</span>
               </div>
             ))}

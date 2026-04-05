@@ -4,6 +4,7 @@ from typing import List
 
 import networkx as nx
 
+from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -166,35 +167,72 @@ def _break_cycles(tree: nx.DiGraph) -> None:
         tree.remove_edge(*worst_edge)
 
 
-@app.post("/projects/{project_id}/process")
-async def process_sewer_network(project_id: str, db: AsyncSession = Depends(get_db)):
-    """Execute the full 8-step sewer network pipeline.
+class ProcessRequest(BaseModel):
+    """Optional request body for processing with an edited graph."""
+    nodes: list[dict] | None = None
+    edges: list[dict] | None = None
 
-    1. Classification — mandatory nodes (ROSA)
-    2. Sanitization — subdivide long edges (VERDE)
-    3. Sanitization — remove redundant nodes (VERMELHO)
-    4. Sanitization — resolve curve clusters
-    5. Elevation — detect maxima (AMARELO) and minima (AZUL_ESCURO)
-    6. Routing — RSPH gravity routing
-    7. Optimization — resolve low points (pumps or deep excavation)
-    8. Dimensioning — pipe sizing (Manning, NBR 9649)
+    model_config = {"extra": "allow"}
+
+
+def _build_graph_from_edited(data: ProcessRequest) -> nx.Graph:
+    """Build a NetworkX graph from an edited node/edge list sent by the frontend."""
+    G = nx.Graph()
+    for n in data.nodes or []:
+        G.add_node(
+            n["id"],
+            x=n.get("lng", n.get("x", 0)),
+            y=n.get("lat", n.get("y", 0)),
+            z=n.get("elevation", n.get("z")),
+            node_type=n.get("node_type") or n.get("nodeType"),
+            pv_obrigatorio=n.get("pv_obrigatorio") or n.get("pvObrigatorio", False),
+            is_intersection=n.get("is_intersection") or n.get("isIntersection", False),
+            is_endpoint=n.get("is_endpoint") or n.get("isEndpoint", False),
+            is_collection_point=n.get("is_collection_point") or n.get("isCollectionPoint", False),
+        )
+    for e in data.edges or []:
+        src = e.get("source_node_id") or e.get("sourceId", "")
+        tgt = e.get("target_node_id") or e.get("targetId", "")
+        if src and tgt and src in G and tgt in G:
+            G.add_edge(
+                src, tgt,
+                length_m=e.get("length_m") or e.get("length", 0),
+                name=e.get("name") or e.get("streetName"),
+                highway=e.get("highway"),
+                street_id=e.get("street_id") or e.get("streetId", ""),
+            )
+    return G
+
+
+@app.post("/projects/{project_id}/process")
+async def process_sewer_network(
+    project_id: str,
+    body: ProcessRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Execute the full sewer network pipeline.
+
+    If a request body with nodes/edges is provided, uses that edited graph
+    instead of rebuilding from the stored streets_geojson.
     """
     repo = ProjectRepository(db)
     project = await repo.get_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Always rebuild from streets_geojson (the source of truth).
-    # PostGIS stores the RESULT of processing, not the input — loading it
-    # as input would lose edges on each reprocessing.
-    streets_geojson = project.streets_geojson
-    if not streets_geojson or not isinstance(streets_geojson, dict):
-        raise HTTPException(
-            status_code=400,
-            detail="No streets data. Select an area and extract streets first.",
-        )
-    clean_geojson = {k: v for k, v in streets_geojson.items() if not k.startswith("_")}
-    G = build_graph_from_geojson(clean_geojson)
+    # Use edited graph if provided, otherwise rebuild from streets_geojson
+    if body and body.nodes:
+        G = _build_graph_from_edited(body)
+    else:
+        streets_geojson = project.streets_geojson
+        if not streets_geojson or not isinstance(streets_geojson, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="No streets data. Select an area and extract streets first.",
+            )
+        clean_geojson = {k: v for k, v in streets_geojson.items() if not k.startswith("_")}
+        G = build_graph_from_geojson(clean_geojson)
+
     if len(G.nodes) == 0:
         raise HTTPException(
             status_code=400,

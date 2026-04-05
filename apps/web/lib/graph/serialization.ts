@@ -252,6 +252,8 @@ export function networkGraphToGeoJSON(graph: NetworkGraph): GraphGeoJSON {
         id: e.id,
         properties: {
           id: e.id,
+          sourceId: e.sourceId,
+          targetId: e.targetId,
           ...e.properties,
         },
         geometry: {

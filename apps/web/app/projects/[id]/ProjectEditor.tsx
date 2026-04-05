@@ -99,7 +99,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const preProcessGraphRef = useRef<ReturnType<typeof getGraph> | null>(null);
 
   // Sewer view mode
-  const [sewerViewMode, setSewerViewMode] = useState<SewerViewMode>('type');
+  const [sewerViewMode, setSewerViewMode] = useState<SewerViewMode>('default');
 
   const nodesApiService = useRef(NodesApiService.getInstance()).current;
 
@@ -171,7 +171,31 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     if (!project) return;
     // Save current graph so we can restore on undo
     preProcessGraphRef.current = getGraph();
-    await processProject(project.id);
+
+    // Build edited graph payload from current graphStore
+    const currentGraph = getGraph();
+    const editedNodes = Object.values(currentGraph.nodes).map((n) => ({
+      id: n.id,
+      lng: n.coordinates[0],
+      lat: n.coordinates[1],
+      elevation: n.properties.elevation,
+      node_type: n.properties.nodeType,
+      pv_obrigatorio: n.properties.pvObrigatorio ?? false,
+      is_intersection: n.properties.isIntersection ?? false,
+      is_endpoint: n.properties.isEndpoint ?? false,
+      is_collection_point: n.properties.isCollectionPoint ?? false,
+    }));
+    const editedEdges = Object.values(currentGraph.edges).map((e) => ({
+      id: e.id,
+      sourceId: e.sourceId,
+      targetId: e.targetId,
+      length: e.properties.length,
+      streetName: e.properties.streetName,
+      highway: e.properties.highway,
+    }));
+
+    await processProject(project.id, { nodes: editedNodes, edges: editedEdges });
+
     // Load processed result into graphStore so the same editor works
     const result = usePipelineStore.getState().result;
     if (result) {
@@ -246,21 +270,21 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   const nodeCount = Object.keys(graphNodes).length;
 
-  // Elevation range from the sewer network (for gradient coloring)
+  // Elevation range from graph nodes (works before and after processing)
   const sewerElevationRange = useMemo(() => {
-    if (!pipelineResult) return null;
     let min = Infinity;
     let max = -Infinity;
     let hasElev = false;
-    for (const node of pipelineResult.nodes) {
-      if (node.elevation != null) {
-        if (node.elevation < min) min = node.elevation;
-        if (node.elevation > max) max = node.elevation;
+    for (const node of Object.values(graphNodes)) {
+      const elev = node.properties.elevation;
+      if (elev != null) {
+        if (elev < min) min = elev;
+        if (elev > max) max = elev;
         hasElev = true;
       }
     }
     return hasElev ? { min, max } : null;
-  }, [pipelineResult]);
+  }, [graphNodes]);
 
   const elevationStats = useMemo(() => {
     let min = Infinity;
@@ -384,6 +408,24 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             </TooltipTrigger>
             <TooltipContent side="bottom"><span className="flex items-center gap-2">Redo <Kbd>Ctrl+Shift+Z</Kbd></span></TooltipContent>
           </Tooltip>
+          <div className="mx-1 h-4 w-px bg-border" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5 rounded-xl px-2 py-1.5">
+                <Mountain className="h-4 w-4 text-muted-foreground" />
+                <select
+                  value={sewerViewMode}
+                  onChange={(e) => setSewerViewMode(e.target.value as SewerViewMode)}
+                  className="bg-transparent text-xs font-medium text-foreground outline-none cursor-pointer"
+                >
+                  <option value="default">Padrão</option>
+                  <option value="elevation">Elevação</option>
+                  <option value="streets">Ruas</option>
+                </select>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Modo de visualização</TooltipContent>
+          </Tooltip>
         </div>
         </TooltipProvider>
       </div>
@@ -400,29 +442,8 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
       {/* Floating Sidebar — right (slide in/out) */}
       <div className={`absolute top-4 right-4 bottom-4 z-10 flex w-80 flex-col overflow-hidden rounded-2xl border border-border bg-background/90 backdrop-blur-sm transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-[calc(100%+1rem)]'}`}>
-        {/* Action buttons */}
-        <div className="flex items-center gap-1.5 border-b border-border p-3">
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !hasChanges}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-40"
-          >
-            <Save className="h-3.5 w-3.5" />
-            {isSaving ? tc.saving : tc.save}
-          </button>
-          <button
-            onClick={handleProcess}
-            disabled={pipelineStatus === 'processing'}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-500/20 disabled:opacity-40 dark:text-emerald-400"
-            title={te.runPipeline}
-          >
-            {pipelineStatus === 'processing' ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Network className="h-3.5 w-3.5" />
-            )}
-            {pipelineStatus === 'processing' ? tc.processing : tc.process}
-          </button>
+        {/* Action buttons — row 1: icon buttons */}
+        <div className="flex items-center gap-1 border-b border-border px-3 py-1.5">
           {(pipelineResult || hasCachedResult) && (
             <button
               onClick={handleToggleView}
@@ -466,13 +487,36 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          <div className="flex-1" />
           <button
             onClick={() => setSidebarOpen(false)}
-            className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            className="ml-auto rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground"
             title="Fechar painel"
           >
             <PanelRightClose className="h-4 w-4" />
+          </button>
+        </div>
+        {/* Action buttons — row 2: Save + Process */}
+        <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !hasChanges}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-40"
+          >
+            <Save className="h-3.5 w-3.5" />
+            {isSaving ? tc.saving : tc.save}
+          </button>
+          <button
+            onClick={handleProcess}
+            disabled={pipelineStatus === 'processing'}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-500/20 disabled:opacity-40 dark:text-emerald-400"
+            title={te.runPipeline}
+          >
+            {pipelineStatus === 'processing' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Network className="h-3.5 w-3.5" />
+            )}
+            {pipelineStatus === 'processing' ? tc.processing : tc.process}
           </button>
         </div>
 
@@ -487,16 +531,6 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             }`}
           >
             {te.overview}
-          </button>
-          <button
-            onClick={() => setActiveTab('streets')}
-            className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors ${
-              activeTab === 'streets'
-                ? 'border-b-2 border-foreground text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {te.streetsTab}
           </button>
           <button
             onClick={() => setActiveTab('pipeline')}
@@ -587,20 +621,6 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             </div>
           )}
 
-          {activeTab === 'streets' && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium text-foreground">{te.highwayLegend}</h3>
-              <div className="space-y-1.5">
-                {Object.entries(HIGHWAY_COLORS).map(([type, color]) => (
-                  <div key={type} className="flex items-center justify-between rounded-xl border border-border p-2">
-                    <span className="text-xs capitalize text-muted-foreground">{type}</span>
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {activeTab === 'pipeline' && (
             <div className="space-y-4">
               {pipelineStatus === 'idle' && (
@@ -642,37 +662,31 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
         </div>
       </div>
 
-      {/* Elevation view toggle — bottom left, only when sewer network is visible */}
-      {pipelineResult && (
-        <div className="absolute bottom-6 left-4 z-10 flex flex-col gap-2">
-          <div className="flex items-center gap-2 rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
-            <Mountain className="h-3.5 w-3.5 text-muted-foreground" />
-            <label htmlFor="elevation-toggle" className="text-xs font-medium text-muted-foreground select-none">
-              {te.elevationView}
-            </label>
-            <Switch
-              id="elevation-toggle"
-              size="sm"
-              checked={sewerViewMode === 'elevation'}
-              onCheckedChange={(checked) => setSewerViewMode(checked ? 'elevation' : 'type')}
-            />
+      {/* Legends — bottom left, contextual */}
+      {sewerViewMode === 'elevation' && sewerElevationRange && (
+        <div className="absolute bottom-6 left-4 z-10 rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm w-48">
+          <div
+            className="h-2 w-full rounded-full"
+            style={{
+              background: 'linear-gradient(to right, #313695, #4575b4, #fee090, #f46d43, #a50026)',
+            }}
+          />
+          <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+            <span>{sewerElevationRange.min.toFixed(0)}m</span>
+            <span>{sewerElevationRange.max.toFixed(0)}m</span>
           </div>
-
-          {/* Elevation color legend */}
-          {sewerViewMode === 'elevation' && sewerElevationRange && (
-            <div className="rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
-              <div
-                className="h-2 w-full rounded-full"
-                style={{
-                  background: 'linear-gradient(to right, #313695, #4575b4, #fee090, #f46d43, #a50026)',
-                }}
-              />
-              <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-                <span>{sewerElevationRange.min.toFixed(0)}m</span>
-                <span>{sewerElevationRange.max.toFixed(0)}m</span>
+        </div>
+      )}
+      {sewerViewMode === 'streets' && (
+        <div className="absolute bottom-6 left-4 z-10 rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
+          <div className="space-y-1">
+            {Object.entries(HIGHWAY_COLORS).map(([type, color]) => (
+              <div key={type} className="flex items-center gap-2 text-[10px]">
+                <div className="h-2 w-4 rounded-full" style={{ backgroundColor: color }} />
+                <span className="capitalize text-muted-foreground">{type}</span>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       )}
     </div>

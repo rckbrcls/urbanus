@@ -46,20 +46,38 @@ export const NODES_PAINT: CircleLayerSpecification['paint'] = {
 
 // ============ EDGES ============
 
-export const EDGES_PAINT: LineLayerSpecification['paint'] = {
+/** Default: neutral uniform color */
+export const EDGES_DEFAULT_PAINT: LineLayerSpecification['paint'] = {
   'line-color': [
     'case',
     ['boolean', ['feature-state', 'error'], false], '#ef4444',
     ['boolean', ['feature-state', 'selected'], false], '#f97316',
     ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',
-    // Highway-based colors (consistent with HIGHWAY_COLORS from MapView)
+    '#60a5fa',
+  ] as unknown as string,
+  'line-width': [
+    'case',
+    ['boolean', ['feature-state', 'selected'], false], 5,
+    ['boolean', ['feature-state', 'hovered'], false], 4,
+    2.5,
+  ] as unknown as number,
+  'line-opacity': 0.9,
+};
+
+/** Streets mode: colored by highway type */
+export const EDGES_STREETS_PAINT: LineLayerSpecification['paint'] = {
+  'line-color': [
+    'case',
+    ['boolean', ['feature-state', 'error'], false], '#ef4444',
+    ['boolean', ['feature-state', 'selected'], false], '#f97316',
+    ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',
     ['==', ['get', 'highway'], 'motorway'], '#e11d48',
     ['==', ['get', 'highway'], 'trunk'], '#f97316',
     ['==', ['get', 'highway'], 'primary'], '#eab308',
     ['==', ['get', 'highway'], 'secondary'], '#22c55e',
     ['==', ['get', 'highway'], 'tertiary'], '#3b82f6',
     ['==', ['get', 'highway'], 'residential'], '#8b5cf6',
-    '#a1a1aa', // default/unclassified (zinc-400 — visible on dark maps)
+    '#a1a1aa',
   ] as unknown as string,
   'line-width': [
     'case',
@@ -73,10 +91,13 @@ export const EDGES_PAINT: LineLayerSpecification['paint'] = {
       ['==', ['get', 'highway'], 'primary'],
       ['==', ['get', 'highway'], 'secondary'],
     ], 3,
-    2.5, // tertiary, residential, default
+    2.5,
   ] as unknown as number,
   'line-opacity': 0.9,
 };
+
+/** @deprecated Use EDGES_DEFAULT_PAINT or EDGES_STREETS_PAINT */
+export const EDGES_PAINT = EDGES_STREETS_PAINT;
 
 export const EDGES_LAYOUT: LineLayerSpecification['layout'] = {
   'line-cap': 'round',
