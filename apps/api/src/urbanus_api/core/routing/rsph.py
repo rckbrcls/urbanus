@@ -15,8 +15,6 @@ O algoritmo:
 from __future__ import annotations
 
 import networkx as nx
-
-from urbanus_geo.calculations import slope_2d
 from urbanus_api.core.routing.cost import edge_cost
 
 

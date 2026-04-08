@@ -69,9 +69,12 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'streets' | 'pipeline'>('overview');
   const [isMounted, setIsMounted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isHydratingProject, setIsHydratingProject] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const didInitRef = useRef(false);
+  const hydratedProjectIdRef = useRef<string | null>(null);
+  const hasHydratedProjectRef = useRef(false);
+  const hydrationRunRef = useRef(0);
   const skipNextGraphChangeRef = useRef(false);
   const skipNextPipelineChangeRef = useRef(false);
 
@@ -128,42 +131,87 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     setIsMounted(true);
     return () => {
       // Cleanup state when leaving page
+      hasHydratedProjectRef.current = false;
+      hydratedProjectIdRef.current = null;
       resetGraph();
       clearCommands();
       resetPipeline();
     };
   }, [resetGraph, clearCommands, resetPipeline]);
 
-  // Initialize graph from project data
+  // Hydrate editor state from the current project before mounting the map.
   useEffect(() => {
-    if (!project || didInitRef.current) {
+    if (!project || hydratedProjectIdRef.current === project.id) {
       return;
     }
 
-    didInitRef.current = true;
+    let cancelled = false;
+    const runId = hydrationRunRef.current + 1;
+    hydrationRunRef.current = runId;
 
-    if (project.sewerNetwork) {
-      skipNextPipelineChangeRef.current = true;
-      skipNextGraphChangeRef.current = true;
-      hydratePipeline(project.sewerNetwork);
-      loadGraph(sewerNetworkToGraph(project.sewerNetwork));
-      setHasChanges(false);
-      setActiveTab('pipeline');
-      return;
-    }
+    hasHydratedProjectRef.current = false;
+    hydratedProjectIdRef.current = null;
+    preProcessGraphRef.current = null;
+    setIsHydratingProject(true);
+    setHasChanges(false);
+    setActiveTab(project.sewerNetwork ? 'pipeline' : 'overview');
 
-    nodesApiService
-      .extractNodes(project.streets as EnrichedFeatureCollection, 'all')
-      .then(({ nodes: extractedNodes }) => {
-        const graph = mapNodesToNetworkGraph(extractedNodes);
-        skipNextGraphChangeRef.current = true;
-        loadGraph(graph);
+    skipNextGraphChangeRef.current = true;
+    resetGraph();
+    clearCommands();
+    skipNextPipelineChangeRef.current = true;
+    resetPipeline();
+
+    const hydrateProject = async () => {
+      try {
+        if (project.sewerNetwork) {
+          if (cancelled || hydrationRunRef.current !== runId) return;
+          skipNextPipelineChangeRef.current = true;
+          skipNextGraphChangeRef.current = true;
+          hydratePipeline(project.sewerNetwork);
+          loadGraph(sewerNetworkToGraph(project.sewerNetwork));
+        } else {
+          const { nodes: extractedNodes } = await nodesApiService.extractNodes(
+            project.streets as EnrichedFeatureCollection,
+            'all',
+          );
+
+          if (cancelled || hydrationRunRef.current !== runId) return;
+
+          const graph = mapNodesToNetworkGraph(extractedNodes);
+          skipNextGraphChangeRef.current = true;
+          loadGraph(graph);
+        }
+
+        hydratedProjectIdRef.current = project.id;
+        hasHydratedProjectRef.current = true;
         setHasChanges(false);
-      })
-      .catch((err) => {
-        console.error('Failed to extract nodes:', err);
-      });
-  }, [project, nodesApiService, loadGraph, hydratePipeline]);
+      } catch (err) {
+        if (cancelled || hydrationRunRef.current !== runId) return;
+
+        hasHydratedProjectRef.current = false;
+        hydratedProjectIdRef.current = null;
+        console.error('Failed to hydrate project graph:', err);
+      } finally {
+        if (cancelled || hydrationRunRef.current !== runId) return;
+        setIsHydratingProject(false);
+      }
+    };
+
+    void hydrateProject();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    project,
+    nodesApiService,
+    loadGraph,
+    hydratePipeline,
+    resetGraph,
+    clearCommands,
+    resetPipeline,
+  ]);
 
   // Track changes when graph mutates
   useEffect(() => {
@@ -174,7 +222,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
           skipNextGraphChangeRef.current = false;
           return;
         }
-        if (didInitRef.current) setHasChanges(true);
+        if (hasHydratedProjectRef.current) setHasChanges(true);
       },
     );
     return unsub;
@@ -188,7 +236,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
           skipNextPipelineChangeRef.current = false;
           return;
         }
-        if (didInitRef.current) setHasChanges(true);
+        if (hasHydratedProjectRef.current) setHasChanges(true);
       },
     );
     return unsub;
@@ -395,7 +443,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   // ============ RENDER ============
 
-  if (!isMounted || isLoading) {
+  if (!isMounted || isLoading || isHydratingProject) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <div className="flex flex-col items-center gap-4">
@@ -424,6 +472,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
       {/* Full-bleed Map */}
       <div className="absolute inset-0">
         <GraphMapView
+          key={project.id}
           center={project.center}
           zoom={project.zoom}
           bounds={project.bounds}
