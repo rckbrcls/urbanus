@@ -143,7 +143,7 @@ Quando o editor esta exibindo uma `SewerNetwork` processada (via `sewerNetworkTo
 - `accessoryType=TL` -> `Cleanout terminal (TL)`
 - `accessoryType=CP` -> `Passing box (CP)`
 
-O painel lateral (`PipelineResultsPanel`) usa a mesma definicao compartilhada em `lib/sewer/renderLegend.ts`, evitando divergencia entre o que o mapa desenha e o que a legenda descreve.
+O painel lateral (`PipelineResultsPanel`) usa as mesmas categorias e cores compartilhadas em `lib/sewer/renderLegend.ts`, e resolve os rotulos pelo dicionario de i18n (`apps/web/i18n/dictionaries/*`), evitando divergencia entre o que o mapa desenha e o que a legenda descreve em cada idioma.
 
 ### Estilos de Nos
 

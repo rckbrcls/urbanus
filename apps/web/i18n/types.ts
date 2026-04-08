@@ -114,6 +114,14 @@ export interface Dictionary {
     unreachable: string;
     nodeTypes: string;
     diameters: string;
+    nodeLabels: {
+      collectionPoint: string;
+      pv: string;
+      til: string;
+      tl: string;
+      cp: string;
+      other: string;
+    };
   };
   mapPage: {
     shiftDragInstruction: string;

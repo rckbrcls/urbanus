@@ -144,6 +144,14 @@ export const en: Dictionary = {
     unreachable: 'Unreachable',
     nodeTypes: 'Map Legend',
     diameters: 'Diameters',
+    nodeLabels: {
+      collectionPoint: 'Collection point',
+      pv: 'Manhole (PV)',
+      til: 'Inspection terminal (TIL)',
+      tl: 'Cleanout terminal (TL)',
+      cp: 'Passing box (CP)',
+      other: 'Other',
+    },
   },
   mapPage: {
     shiftDragInstruction: '+ drag to select (max',

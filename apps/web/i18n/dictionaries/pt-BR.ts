@@ -142,8 +142,16 @@ export const ptBR: Dictionary = {
     pumpStations: 'Elevatórias',
     totalCost: 'Custo Total',
     unreachable: 'Inalcançáveis',
-    nodeTypes: 'Map Legend',
-    diameters: 'Diameters',
+    nodeTypes: 'Legenda do Mapa',
+    diameters: 'Diâmetros',
+    nodeLabels: {
+      collectionPoint: 'Ponto de coleta',
+      pv: 'Poço de visita (PV)',
+      til: 'Terminal de inspeção e limpeza (TIL)',
+      tl: 'Terminal de limpeza (TL)',
+      cp: 'Caixa de passagem (CP)',
+      other: 'Outro',
+    },
   },
   mapPage: {
     shiftDragInstruction: '+ arraste para selecionar (máx',

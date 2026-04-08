@@ -24,15 +24,6 @@ export const RENDERED_NODE_COLORS: Record<RenderedNodeCategory, string> = {
   OTHER: '#a1a1aa',
 };
 
-export const RENDERED_NODE_LABELS: Record<RenderedNodeCategory, string> = {
-  COLLECTION_POINT: 'Collection point',
-  PV: 'Manhole (PV)',
-  TIL: 'Inspection terminal (TIL)',
-  TL: 'Cleanout terminal (TL)',
-  CP: 'Passing box (CP)',
-  OTHER: 'Other',
-};
-
 type RenderableNodeLike = {
   accessory_type?: string | null;
   accessoryType?: string | null;

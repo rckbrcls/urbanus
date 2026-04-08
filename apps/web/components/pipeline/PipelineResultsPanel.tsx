@@ -5,7 +5,6 @@ import { useTranslation } from '@/i18n';
 import {
   getRenderedNodeCategory,
   RENDERED_NODE_COLORS,
-  RENDERED_NODE_LABELS,
   RENDERED_NODE_ORDER,
   type RenderedNodeCategory,
 } from '@/lib/sewer/renderLegend';
@@ -16,6 +15,14 @@ interface PipelineResultsPanelProps {
 
 export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
   const t = useTranslation('pipeline');
+  const renderedNodeLabels: Record<RenderedNodeCategory, string> = {
+    COLLECTION_POINT: t.nodeLabels.collectionPoint,
+    PV: t.nodeLabels.pv,
+    TIL: t.nodeLabels.til,
+    TL: t.nodeLabels.tl,
+    CP: t.nodeLabels.cp,
+    OTHER: t.nodeLabels.other,
+  };
 
   const renderedNodeCount = result.nodes.reduce<Record<RenderedNodeCategory, number>>((acc, node) => {
     const category = getRenderedNodeCategory(node);
@@ -76,7 +83,7 @@ export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: RENDERED_NODE_COLORS[category] }}
                   />
-                  <span className="text-zinc-700 dark:text-zinc-300">{RENDERED_NODE_LABELS[category]}</span>
+                  <span className="text-zinc-700 dark:text-zinc-300">{renderedNodeLabels[category]}</span>
                 </div>
                 <span className="font-mono text-zinc-500">{renderedNodeCount[category]}</span>
               </div>
