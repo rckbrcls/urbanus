@@ -5,7 +5,7 @@
 A versao inicial do projeto usava MongoDB para armazenamento de dados geoespaciais. A migracao para PostgreSQL + PostGIS foi motivada por:
 
 1. **Indices espaciais GiST**: consultas espaciais nativas (`ST_Within`, `ST_Intersects`, `ST_DWithin`) com desempenho superior a indices 2dsphere do MongoDB para operacoes de vizinhanca e contencao
-2. **Integridade referencial**: chaves estrangeiras com cascade delete garantem consistencia entre projetos, nos, arestas e segmentos de tubo
+2. **Integridade referencial**: chaves estrangeiras com cascade delete garantem consistencia entre projetos, nos e arestas
 3. **Tipos geometricos nativos**: `POINT`, `LINESTRING`, `POLYGON` com SRID 4326 (WGS84) sao cidadaos de primeira classe, nao wrappers sobre arrays de coordenadas
 4. **Ecossistema Python**: integracao direta com SQLAlchemy (GeoAlchemy2), Alembic, Shapely e rasterio
 5. **Transacoes ACID**: operacoes de pipeline que modificam centenas de nos/arestas atomicamente
@@ -35,8 +35,6 @@ Armazena metadados do projeto e o GeoJSON bruto das ruas.
 Relacionamentos:
 - `nodes` -> NodeTable (cascade delete)
 - `edges` -> EdgeTable (cascade delete)
-- `pipe_segments` -> PipeSegmentTable (cascade delete)
-- `pump_stations` -> PumpStationTable (cascade delete)
 
 ### Tabela `nodes`
 
@@ -73,7 +71,6 @@ Arestas da rede (trechos entre nos, correspondentes a segmentos de rua).
 | `highway` | Text | -- | Tipo de via OSM (residential, primary, etc.) |
 | `length_m` | Double | -- | Comprimento em metros |
 | `slope` | Double | -- | Declividade m/m |
-| `cost` | Double | -- | Custo de roteamento |
 | `properties` | JSONB | -- | Inclui `source_node_id`, `target_node_id` |
 
 Indices:
@@ -82,68 +79,23 @@ Indices:
 
 O campo `properties` (JSONB) armazena `source_node_id` e `target_node_id` como metadados de conectividade usados pelo runtime para reconstruir e persistir a conectividade da rede processada.
 
-### Tabela `pipe_segments`
-
-Segmentos de tubo dimensionados (resultado da Etapa 8).
-
-| Coluna | Tipo | Constraint | Descricao |
-|--------|------|------------|-----------|
-| `id` | String | PK | UUID do segmento |
-| `project_id` | String | FK -> projects (CASCADE) | Projeto pai |
-| `edge_id` | String | FK -> edges | Aresta correspondente |
-| `diameter_mm` | Integer | default 150 | Diâmetro nominal (DN) |
-| `manning_n` | Double | default 0.013 | Coeficiente de Manning |
-| `slope` | Double | -- | Declividade usada (m/m) |
-| `cover_depth` | Double | -- | Recobrimento (m) |
-| `flow_depth_ratio` | Double | -- | Lâmina relativa y/D |
-| `velocity` | Double | -- | Velocidade (m/s) |
-| `tractive_stress` | Double | -- | Tensao trativa (Pa) |
-| `flow_rate` | Double | -- | Vazao (L/s) |
-| `is_pressurized` | Boolean | default false | Trecho de recalque |
-
-Indice:
-- `idx_pipes_project` (project_id)
-
-### Tabela `pump_stations`
-
-Elevatorias (resultado da Etapa 7).
-
-| Coluna | Tipo | Constraint | Descricao |
-|--------|------|------------|-----------|
-| `id` | String | PK | UUID da elevatoria |
-| `project_id` | String | FK -> projects (CASCADE) | Projeto pai |
-| `node_id` | String | FK -> nodes | No associado |
-| `capacity_ls` | Double | -- | Capacidade (L/s) |
-| `head_m` | Double | -- | Altura manometrica (m) |
-| `capex` | Double | -- | CAPEX (R$) |
-| `annual_opex` | Double | -- | OPEX anual (R$) |
-| `npv` | Double | -- | Valor Presente Liquido (R$) |
-
 ## Diagrama de Relacionamentos
 
 ```
 projects (1)
     |
     +--< nodes (N)
-    |       |
-    |       +--< pump_stations (0..1)
     |
     +--< edges (N)
-    |       |
-    |       +--< pipe_segments (0..1)
-    |
-    +--< pipe_segments (N)  [via project_id direto]
-    |
-    +--< pump_stations (N)  [via project_id direto]
 ```
 
-Todas as relacoes usam `ON DELETE CASCADE` no `project_id`. Ao deletar um projeto, todos os nos, arestas, segmentos de tubo e elevatorias associados sao removidos automaticamente.
+Todas as relacoes usam `ON DELETE CASCADE` no `project_id`. Ao deletar um projeto, todos os nos e arestas associados sao removidos automaticamente.
 
 ## Migracao Alembic
 
 Arquivo: `apps/api/migrations/versions/001_initial_schema.py`
 
-A migracao inicial cria as 5 tabelas com suas geometrias, constraints e indices. O PostGIS extension e habilitado automaticamente pela imagem Docker `postgis/postgis:16-3.4`.
+A migracao inicial cria as 3 tabelas ativas (`projects`, `nodes`, `edges`) com suas geometrias, constraints e indices. O PostGIS extension e habilitado automaticamente pela imagem Docker `postgis/postgis:16-3.4`.
 
 Comando para aplicar:
 

@@ -1,12 +1,10 @@
 /**
  * Sewer-specific graph analysis functions.
  *
- * Hydrology / hydraulic calculations specific to the sewer network domain.
- * Uses shared hydraulic constants from @urbanus/constants.
+ * Sewer graph analysis helpers.
  */
 
 import type { NetworkGraph } from './types';
-import { HYDRAULICS } from '@urbanus/constants';
 import { buildAdjacency } from './operations';
 
 /**
@@ -29,7 +27,6 @@ export function calculateSWMMSlope(
  */
 export function validateSlopeConstraints(
   slope: number | null,
-  diameterMm: number = HYDRAULICS.MIN_DIAMETER_COLLECTOR,
 ): { valid: boolean; warnings: string[] } {
   if (slope === null) return { valid: true, warnings: ['No elevation data'] };
 
@@ -39,21 +36,15 @@ export function validateSlopeConstraints(
   if (slope < 0) {
     return {
       valid: false,
-      warnings: [`Adverse slope: ${(slope * 100).toFixed(2)}% — requires pump station`],
+      warnings: [`Adverse slope: ${(slope * 100).toFixed(2)}%`],
     };
   }
 
-  // Minimum slope to meet tractive stress (simplified)
-  // tau = gamma * Rh * S >= tau_min
-  // For circular pipe at max depth ratio 0.75, Rh ≈ D/4
-  const dMeters = diameterMm / 1000;
-  const rh = dMeters / 4;
-  const minStress = diameterMm <= 100 ? HYDRAULICS.MIN_TRACTIVE_STRESS_PVC : HYDRAULICS.MIN_TRACTIVE_STRESS;
-  const minSlope = minStress / (HYDRAULICS.GAMMA_WATER * rh);
+  const minSlope = 0.005;
 
   if (slope < minSlope) {
     warnings.push(
-      `Slope ${(slope * 100).toFixed(3)}% below minimum ${(minSlope * 100).toFixed(3)}% for DN${diameterMm}`,
+      `Slope ${(slope * 100).toFixed(3)}% below minimum ${(minSlope * 100).toFixed(3)}%`,
     );
     return { valid: false, warnings };
   }

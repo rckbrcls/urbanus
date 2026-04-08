@@ -50,33 +50,9 @@ class SewerEdge(BaseModel):
     target_node_id: str
     length_m: float
     slope: float | None = None   # m/m (positivo = desce na direção do fluxo)
-    cost: float | None = None
     name: str | None = None
     highway: str | None = None
     waypoints: list[list[float]] | None = None  # [[lng, lat], ...] intermediate points
-
-
-class PipeSegment(BaseModel):
-    edge_id: str
-    diameter_mm: int = 150       # DN
-    manning_n: float = 0.013
-    slope: float                 # m/m
-    cover_depth: float           # m (recobrimento)
-    flow_depth_ratio: float | None = None  # y/D
-    velocity: float | None = None          # m/s
-    tractive_stress: float | None = None   # Pa
-    flow_rate: float | None = None         # L/s
-    is_pressurized: bool = False           # True = elevatória
-
-
-class PumpStation(BaseModel):
-    id: str
-    node_id: str
-    capacity_ls: float     # L/s
-    head_m: float          # m
-    capex: float           # R$
-    annual_opex: float     # R$
-    npv: float | None = None  # VPL calculado
 
 
 class SewerNetwork(BaseModel):
@@ -84,7 +60,4 @@ class SewerNetwork(BaseModel):
     project_id: str
     nodes: list[SewerNode]
     edges: list[SewerEdge]
-    pipes: list[PipeSegment]
-    pump_stations: list[PumpStation]
     unreachable_nodes: list[str]  # IDs de nós sem gravidade
-    total_cost: float | None = None

@@ -82,7 +82,7 @@ na preview da home e na rede processada agora usam expressoes de raio
 dependentes do zoom do MapLibre, com limites minimo e maximo, para evitar que
 ocupem area demais quando o usuario afasta muito o mapa. O resumo exibido no
 painel de pipeline foi reduzido a metricas operacionais da rede: nós,
-segmentos, extensao, elevatorias e inalcançaveis. O frontend nao mostra mais
+segmentos, extensao e inalcançaveis. O frontend nao mostra mais elevatorias,
 custo total nem contagem por diametro de tubo nesse painel.
 
 ## Persistencia de projeto

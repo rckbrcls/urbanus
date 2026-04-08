@@ -9,19 +9,14 @@ from __future__ import annotations
 
 import networkx as nx
 
-from urbanus_geo.types import PipeSegment
-
 
 def assign_accessory_types(
     tree: nx.DiGraph,
-    pipes: list[PipeSegment],
 ) -> nx.DiGraph:
     """Assign PV to all nodes in the sewer tree.
 
     Args:
         tree: Directed tree (result of Etapas 1-8).
-        pipes: Dimensioned pipe segments from Etapa 8. Unused here but kept
-            for API compatibility with the processing pipeline.
 
     Returns:
         Tree with updated 'accessory_type' node attributes.

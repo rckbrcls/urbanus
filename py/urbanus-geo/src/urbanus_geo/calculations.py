@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import math
 
-from urbanus_geo.constants import GAMMA_WATER, MANNING_N_DEFAULT
-
 KM_PER_DEGREE_LAT = 111.32
 
 
@@ -12,60 +10,6 @@ def area_km2(south: float, north: float, west: float, east: float) -> float:
     avg_lat = (north + south) / 2
     km_per_deg_lon = KM_PER_DEGREE_LAT * max(0.01, abs(math.cos(math.radians(avg_lat))))
     return (north - south) * KM_PER_DEGREE_LAT * (east - west) * km_per_deg_lon
-
-
-# === Hidráulica (Manning / NBR 9649) ===
-
-
-def manning_velocity(rh: float, slope: float, n: float = MANNING_N_DEFAULT) -> float:
-    """V = (1/n) × R_h^(2/3) × I^(1/2) — Fórmula de Manning.
-
-    Args:
-        rh: Raio hidráulico (m).
-        slope: Declividade (m/m), deve ser > 0.
-        n: Coeficiente de Manning.
-
-    Returns:
-        Velocidade (m/s).
-    """
-    if slope <= 0 or rh <= 0:
-        return 0.0
-    return (1.0 / n) * (rh ** (2.0 / 3.0)) * math.sqrt(slope)
-
-
-def hydraulic_radius_partial(diameter: float, depth: float) -> float:
-    """Raio hidráulico para seção circular parcialmente cheia.
-
-    Args:
-        diameter: Diâmetro interno do tubo (m).
-        depth: Profundidade da lâmina d'água (m).
-
-    Returns:
-        Raio hidráulico R_h (m).
-    """
-    if diameter <= 0 or depth <= 0 or depth > diameter:
-        return 0.0
-    y_over_d = depth / diameter
-    theta = 2.0 * math.acos(1.0 - 2.0 * y_over_d)
-    area = (diameter ** 2 / 8.0) * (theta - math.sin(theta))
-    perimeter = (diameter / 2.0) * theta
-    if perimeter == 0:
-        return 0.0
-    return area / perimeter
-
-
-def tractive_stress(rh: float, slope: float, gamma: float = GAMMA_WATER) -> float:
-    """τ = γ × R_h × I — Tensão trativa (Pa).
-
-    Args:
-        rh: Raio hidráulico (m).
-        slope: Declividade (m/m).
-        gamma: Peso específico da água (N/m³).
-
-    Returns:
-        Tensão trativa (Pa).
-    """
-    return gamma * rh * slope
 
 
 def min_slope(qi_ls: float) -> float:
@@ -119,30 +63,6 @@ def peak_flow(
         Vazão de pico (L/s).
     """
     return k1 * k2 * q_d + q_inf + q_c
-
-
-def pump_npv(
-    capex: float,
-    annual_opex: float,
-    years: int = 20,
-    rate: float = 0.10,
-) -> float:
-    """VPL = CAPEX + Σ(OPEX / (1+r)^t) — Valor presente líquido de elevatória.
-
-    Args:
-        capex: Custo de investimento (R$).
-        annual_opex: Custo operacional anual (R$).
-        years: Horizonte de análise (anos).
-        rate: Taxa de desconto anual.
-
-    Returns:
-        VPL total (R$).
-    """
-    total = capex
-    for t in range(1, years + 1):
-        total += annual_opex / ((1.0 + rate) ** t)
-    return total
-
 
 # === Geoespacial ===
 

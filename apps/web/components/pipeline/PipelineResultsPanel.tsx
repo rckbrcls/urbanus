@@ -52,7 +52,6 @@ export function PipelineResultsPanel({
           <Stat label={t.nodes} value={result.nodes.length} />
           <Stat label={t.segments} value={result.edges.length} />
           <Stat label={t.length} value={`${(totalLength / 1000).toFixed(2)} km`} />
-          <Stat label={t.pumpStations} value={result.pump_stations.length} />
           <Stat label={t.unreachable} value={result.unreachable_nodes.length} />
         </div>
       </div>
@@ -89,25 +88,6 @@ export function PipelineResultsPanel({
             ))}
         </div>
       </div>
-
-      {/* Pump Stations */}
-      {result.pump_stations.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            {t.pumpStations}
-          </h3>
-          <div className="space-y-2">
-            {result.pump_stations.map((ps) => (
-              <div key={ps.id} className="rounded-lg bg-orange-50 p-2 text-xs dark:bg-orange-900/20">
-                <p className="font-medium text-orange-900 dark:text-orange-100">{ps.id}</p>
-                <p className="text-orange-600 dark:text-orange-400">
-                  {ps.capacity_ls} L/s | H={ps.head_m}m | VPL R$ {((ps.npv ?? 0) / 1000).toFixed(0)}k
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -15,9 +15,8 @@ apps/api/src/urbanus_api/
 └── core/
     ├── graph/                 # classificacao, sanitizacao, cobertura, acessorios
     ├── elevation/             # deteccao de extremos
-    ├── routing/               # RSPH e custo
-    ├── hydraulics/            # dimensionamento e custo total
-    └── optimizer/             # low points e reducao de nos
+    ├── routing/               # RSPH e pesos de roteamento
+    └── optimizer/             # reducao de nos
 ```
 
 ## Superficie HTTP suportada
@@ -88,7 +87,7 @@ O processamento agora aceita **apenas** o grafo editado vindo do frontend. Nao e
 1. Carrega o projeto pelo ID.
 2. Exige body JSON com `nodes` e `edges`.
 3. Reconstrui `G: nx.Graph` apenas a partir do payload editado.
-4. Executa classificacao complementar, sanitizacao, extremos, roteamento, low points, cobertura, reducao de nos, hidraulica e acessorios.
+4. Executa classificacao complementar, sanitizacao, extremos, roteamento, cobertura, reducao de nos e acessorios.
 5. Serializa `SewerNetwork`.
 6. Persiste o resultado no PostGIS e atualiza `streets_geojson._sewerNetwork`.
 7. Retorna o payload serializado.
@@ -104,7 +103,7 @@ Erros de contrato retornam `400` com mensagens explicitas como:
 `repositories.py` concentra dois blocos:
 
 - `ProjectRepository`: upsert/list/get/delete do projeto e merge de metadados em `streets_geojson`
-- `save_sewer_network_to_postgis(...)`: limpa e repopula `nodes`, `edges`, `pipe_segments` e `pump_stations` para o projeto
+- `save_sewer_network_to_postgis(...)`: limpa e repopula `nodes` e `edges` para o projeto
 
 Isso deixa a camada `core/` focada no algoritmo, sem helper de persistencia misturado ao pipeline.
 

@@ -37,8 +37,6 @@ class ProjectTable(Base):
 
     edges = relationship("EdgeTable", back_populates="project", cascade="all, delete-orphan")
     nodes = relationship("NodeTable", back_populates="project", cascade="all, delete-orphan")
-    pipe_segments = relationship("PipeSegmentTable", back_populates="project", cascade="all, delete-orphan")
-    pump_stations = relationship("PumpStationTable", back_populates="project", cascade="all, delete-orphan")
 
 
 class EdgeTable(Base):
@@ -51,7 +49,6 @@ class EdgeTable(Base):
     highway = Column(Text)
     length_m = Column(Double)
     slope = Column(Double)
-    cost = Column(Double)
     properties = Column(JSONB)
 
     project = relationship("ProjectTable", back_populates="edges")
@@ -83,41 +80,3 @@ class NodeTable(Base):
         Index("idx_nodes_project", "project_id"),
         Index("idx_nodes_geom", "geometry", postgresql_using="gist"),
     )
-
-
-class PipeSegmentTable(Base):
-    __tablename__ = "pipe_segments"
-
-    id = Column(String, primary_key=True)
-    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    edge_id = Column(String, ForeignKey("edges.id"))
-    diameter_mm = Column(Integer, nullable=False, default=150)
-    manning_n = Column(Double, nullable=False, default=0.013)
-    slope = Column(Double)
-    cover_depth = Column(Double)
-    flow_depth_ratio = Column(Double)
-    velocity = Column(Double)
-    tractive_stress = Column(Double)
-    flow_rate = Column(Double)
-    is_pressurized = Column(Boolean, default=False)
-
-    project = relationship("ProjectTable", back_populates="pipe_segments")
-
-    __table_args__ = (
-        Index("idx_pipes_project", "project_id"),
-    )
-
-
-class PumpStationTable(Base):
-    __tablename__ = "pump_stations"
-
-    id = Column(String, primary_key=True)
-    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    node_id = Column(String, ForeignKey("nodes.id"))
-    capacity_ls = Column(Double)
-    head_m = Column(Double)
-    capex = Column(Double)
-    annual_opex = Column(Double)
-    npv = Column(Double)
-
-    project = relationship("ProjectTable", back_populates="pump_stations")

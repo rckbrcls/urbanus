@@ -1,5 +1,7 @@
 # 06 -- Formulas Hidraulicas e Normas
 
+> Status em 2026-04-08: o backend ativo nao executa mais dimensionamento de tubos, precificacao nem elevatorias. Este documento permanece apenas como referencia historica e normativa.
+
 ## Normas de Referencia
 
 | Norma | Titulo | Escopo |

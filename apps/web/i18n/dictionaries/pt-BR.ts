@@ -21,7 +21,7 @@ export const ptBR: Dictionary = {
   },
   landing: {
     tagline:
-      'Projeto automatizado de redes de esgoto sanitário — da seleção no mapa ao dimensionamento hidráulico, com dados abertos e verificações de engenharia.',
+      'Automated sanitary sewer network design — from map selection to gravity-based network generation, powered by open data and engineering checks.',
     startDesigning: 'Começar',
     howItWorks: 'Como funciona',
     features: 'Funcionalidades',
@@ -34,7 +34,7 @@ export const ptBR: Dictionary = {
       autoProcess: {
         title: 'Processamento automático',
         description:
-          'Nosso pipeline de 8 etapas classifica nós, roteia o esgoto gravitacionalmente e dimensiona tubos automaticamente.',
+          'Nosso pipeline de processamento classifica nós, roteia o esgoto gravitacionalmente e monta a rede automaticamente.',
       },
       editExport: {
         title: 'Edite e exporte',
@@ -44,14 +44,14 @@ export const ptBR: Dictionary = {
     },
     featureCards: {
       pipeline: {
-        title: 'Pipeline de 8 Etapas',
+        title: '8-Step Pipeline',
         description:
-          'Da classificação de nós ao dimensionamento hidráulico — um fluxo completo de projeto de esgoto automatizado de ponta a ponta.',
+          'From node classification to gravity routing — a complete sewer design workflow automated end to end.',
       },
       standards: {
-        title: 'Verificações de Engenharia',
+        title: 'Engineering Checks',
         description:
-          'Equação de Manning, validação de declividade, limites de profundidade e dimensionamento de tubos são aplicados automaticamente ao longo do fluxo.',
+          'Slope validation, elevation-aware routing, and network coverage checks are applied automatically throughout the workflow.',
       },
       openData: {
         title: 'Dados Abertos',
@@ -139,7 +139,6 @@ export const ptBR: Dictionary = {
     nodes: 'Nós',
     segments: 'Trechos',
     length: 'Extensão',
-    pumpStations: 'Elevatórias',
     unreachable: 'Inalcançáveis',
   },
   mapPage: {

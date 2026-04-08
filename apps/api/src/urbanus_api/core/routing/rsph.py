@@ -6,10 +6,10 @@ obrigatórios ao ponto de descarga (outlet) pelo caminho de menor custo.
 
 O algoritmo:
 1. Cria um grafo direcionado (alto → baixo = gravidade).
-2. Para cada nó obrigatório, encontra o caminho mais barato até o outlet.
+2. Para cada nó obrigatório, encontra o caminho de menor custo até o outlet.
 3. Arestas já usadas ganham desconto (REUSE_BONUS) para favorecer
    convergência em troncos coletores.
-4. Nós sem caminho viável ficam em unreachable (resolver na Etapa 7).
+4. Nós sem caminho viável ficam em unreachable.
 """
 
 from __future__ import annotations

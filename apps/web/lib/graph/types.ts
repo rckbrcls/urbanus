@@ -47,7 +47,6 @@ export interface NetworkEdge {
   properties: {
     length: number;
     slope: number | null;
-    diameter?: number;
     material?: string;
     manningN?: number;
     flowDirection?: 'downstream' | 'upstream' | 'unknown';

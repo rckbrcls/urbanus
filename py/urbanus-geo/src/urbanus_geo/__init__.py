@@ -5,8 +5,6 @@ from urbanus_geo.types import (
     AccessoryType,
     SewerNode,
     SewerEdge,
-    PipeSegment,
-    PumpStation,
     SewerNetwork,
 )
 from urbanus_geo.constants import MAX_AREA_KM2, MIN_AREA_KM2, AREA_WARNING_THRESHOLD
@@ -19,8 +17,6 @@ __all__ = [
     "AccessoryType",
     "SewerNode",
     "SewerEdge",
-    "PipeSegment",
-    "PumpStation",
     "SewerNetwork",
     "MAX_AREA_KM2",
     "MIN_AREA_KM2",

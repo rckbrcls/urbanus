@@ -42,7 +42,7 @@ def ensure_full_coverage(tree: nx.DiGraph, G: nx.Graph) -> None:
     - Redundant intermediate nodes (total degree 2, not mandatory)
 
     Args:
-        tree: Árvore de escoamento (resultado do RSPH + low_points).
+        tree: Árvore de escoamento resultante do RSPH.
         G: Grafo original completo (não-direcionado).
     """
     for u, v, data in G.edges(data=True):

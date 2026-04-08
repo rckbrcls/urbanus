@@ -4,14 +4,6 @@ from urbanus_geo.constants import (
     MANNING_N_DEFAULT,
     MANNING_N_PVC,
     GAMMA_WATER,
-    MIN_TRACTIVE_STRESS,
-    MIN_TRACTIVE_STRESS_PVC,
-    MAX_FLOW_DEPTH_RATIO,
-    MAX_VELOCITY,
-    MIN_FLOW_RATE,
-    PIPE_DIAMETERS,
-    MIN_DIAMETER_COLLECTOR,
-    MIN_DIAMETER_LATERAL,
     MIN_COVER_STREET,
     MIN_COVER_SIDEWALK,
     MAX_PV_SPACING,
@@ -24,7 +16,6 @@ from urbanus_geo.constants import (
     DIRECTION_CHANGE_THRESHOLD,
     GRADE_BREAK_THRESHOLD,
     MAX_TERRAIN_SLOPE,
-    PUMP_PENALTY,
     REUSE_BONUS,
 )
 
@@ -38,40 +29,6 @@ class TestHydraulicConstants:
 
     def test_gamma_water(self):
         assert GAMMA_WATER == 9810
-
-    def test_min_tractive_stress(self):
-        assert MIN_TRACTIVE_STRESS == 1.0
-
-    def test_min_tractive_stress_pvc(self):
-        assert MIN_TRACTIVE_STRESS_PVC == 0.6
-
-    def test_max_flow_depth_ratio(self):
-        assert MAX_FLOW_DEPTH_RATIO == 0.75
-
-    def test_max_velocity(self):
-        assert MAX_VELOCITY == 5.0
-
-    def test_min_flow_rate(self):
-        assert MIN_FLOW_RATE == 1.5
-
-
-class TestPipeDiameters:
-    def test_starts_at_100(self):
-        assert PIPE_DIAMETERS[0] == 100
-
-    def test_sorted_ascending(self):
-        assert PIPE_DIAMETERS == sorted(PIPE_DIAMETERS)
-
-    def test_contains_standard_sizes(self):
-        for dn in [100, 150, 200, 300, 400, 600, 1000]:
-            assert dn in PIPE_DIAMETERS
-
-    def test_min_diameter_collector(self):
-        assert MIN_DIAMETER_COLLECTOR == 150
-
-    def test_min_diameter_lateral(self):
-        assert MIN_DIAMETER_LATERAL == 100
-
 
 class TestCoverDepths:
     def test_min_cover_street(self):
@@ -116,9 +73,6 @@ class TestPipelineConstants:
 
     def test_snap_distance(self):
         assert SNAP_DISTANCE_METERS == 5.0
-
-    def test_pump_penalty(self):
-        assert PUMP_PENALTY == 100_000
 
     def test_reuse_bonus(self):
         assert REUSE_BONUS == 0.5

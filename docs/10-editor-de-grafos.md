@@ -43,7 +43,6 @@ interface NetworkEdge {
   properties: {
     length: number;                     // metros
     slope: number | null;               // m/m
-    diameter?: number;                  // mm
     material?: string;
     manningN?: number;
     flowDirection?: 'downstream' | 'upstream' | 'unknown';

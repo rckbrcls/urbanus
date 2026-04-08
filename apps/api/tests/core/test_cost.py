@@ -1,4 +1,4 @@
-"""Tests for edge cost function (core/routing/cost.py)."""
+"""Tests for edge routing cost function (core/routing/cost.py)."""
 
 import math
 
@@ -6,7 +6,7 @@ import networkx as nx
 import pytest
 
 from urbanus_api.core.routing.cost import edge_cost
-from urbanus_geo.constants import PUMP_PENALTY, REUSE_BONUS, SLOPE_PENALTY
+from urbanus_geo.constants import REUSE_BONUS
 
 
 class TestEdgeCost:
@@ -35,11 +35,11 @@ class TestEdgeCost:
         cost = edge_cost("u", "v", data, G)
         assert 0 < cost < float("inf")
 
-    def test_uphill_gets_pump_penalty(self):
-        """Flow against gravity → PUMP_PENALTY."""
+    def test_uphill_returns_inf(self):
+        """Flow against gravity is not considered a valid route."""
         G, data = self._simple_graph(95, 100, 100)
         cost = edge_cost("u", "v", data, G)
-        assert cost >= PUMP_PENALTY * REUSE_BONUS  # at minimum
+        assert math.isinf(cost)
 
     def test_low_slope_gets_penalty(self):
         """Slope < 0.005 → slope penalty."""

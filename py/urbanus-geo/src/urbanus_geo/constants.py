@@ -8,20 +8,6 @@ MANNING_N_DEFAULT = 0.013        # NBR 9649 — todos os materiais (biofilme)
 MANNING_N_PVC = 0.010            # NBR 14486 — PVC novo
 GAMMA_WATER = 9810               # N/m³ — peso específico da água
 
-# Tensão trativa mínima (Pa)
-MIN_TRACTIVE_STRESS = 1.0        # NBR 9649 (n=0.013)
-MIN_TRACTIVE_STRESS_PVC = 0.6    # NBR 14486 (n=0.010)
-
-# Lâmina e velocidade
-MAX_FLOW_DEPTH_RATIO = 0.75      # y/D máximo
-MAX_VELOCITY = 5.0               # m/s
-MIN_FLOW_RATE = 1.5              # L/s — vazão mínima qualquer trecho
-
-# Diâmetros nominais (mm)
-PIPE_DIAMETERS = [100, 150, 200, 250, 300, 400, 500, 600, 800, 1000]
-MIN_DIAMETER_COLLECTOR = 150     # DN mín. coletor
-MIN_DIAMETER_LATERAL = 100       # DN mín. ramal
-
 # Recobrimento mínimo (m)
 MIN_COVER_STREET = 0.90
 MIN_COVER_SIDEWALK = 0.65
@@ -55,17 +41,6 @@ DIRECTION_CHANGE_THRESHOLD = 45.0  # graus — PV obrigatório
 GRADE_BREAK_THRESHOLD = 0.03       # m/m — diferença de declividade que exige PV
 MAX_TERRAIN_SLOPE = 0.15           # m/m — acima disso, subdividir para degraus
 
-# === Custos (elevatórias) ===
-PUMP_CAPEX_MIN = 150_000        # R$ (Q ≤ 7.5 L/s)
-PUMP_CAPEX_MAX = 500_000        # R$
-PUMP_HORIZON_YEARS = 20
-PUMP_DISCOUNT_RATE = 0.10       # 8-12%, usar 10%
-MAX_GRAVITY_DEPTH = 4.5         # m — além disso, elevatória é mais econômica
-
-# === Custo de tubulação (função de custo das arestas) ===
-PIPE_UNIT_COST = 1.0            # custo unitário por metro (normalizado)
-EXCAVATION_A_COEF = 1.0         # C(d) = a×d² + b×d
-EXCAVATION_B_COEF = 0.5
+# === Roteamento ===
 SLOPE_PENALTY = 10.0            # penalidade por declividade insuficiente
-PUMP_PENALTY = 100_000          # penalidade alta para bombeamento
 REUSE_BONUS = 0.5               # desconto RSPH para reutilizar arestas

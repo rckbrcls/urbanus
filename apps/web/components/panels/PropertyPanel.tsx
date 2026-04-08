@@ -5,7 +5,7 @@ import type { NetworkNode, NetworkEdge } from '@/lib/graph/types';
 
 /**
  * Inspector panel for the selected node or edge.
- * Shows coordinates, elevation, slope, diameter, etc.
+ * Shows coordinates, elevation and slope details.
  */
 export default function PropertyPanel() {
   const selectedNodeIds = useGraphStore((s) => s.selectedNodeIds);
@@ -105,9 +105,6 @@ function EdgeProperties({
           value={edge.properties.slope !== null ? `${(edge.properties.slope * 100).toFixed(3)}` : 'N/A'}
           unit="%"
         />
-        {edge.properties.diameter && (
-          <Row label="Diameter" value={String(edge.properties.diameter)} unit="mm" />
-        )}
         {edge.properties.flowDirection && edge.properties.flowDirection !== 'unknown' && (
           <Row label="Flow" value={edge.properties.flowDirection} />
         )}

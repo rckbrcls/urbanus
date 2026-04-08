@@ -57,7 +57,7 @@ URBANUS/
 │       └── src/urbanus_geo/
 │           ├── types.py        # LatLng, SewerNode, etc. (Pydantic)
 │           ├── constants.py    # Constantes NBR 9649 (fonte de verdade Python)
-│           ├── calculations.py # Haversine, Manning, slope, pump_npv
+│           ├── calculations.py # Haversine, slope, vazao e helpers geo
 │           └── __init__.py
 │
 ├── schemas/                    # Placeholder para contratos JSON Schema / OpenAPI

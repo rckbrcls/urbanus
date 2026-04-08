@@ -26,23 +26,6 @@ interface SewerNetworkLayersProps {
   edgeGeometryOverride?: GeoJSON.FeatureCollection | null;
 }
 
-/** Map pipe diameter to line width */
-function diameterToWidth(dn: number): number {
-  if (dn <= 150) return 3;
-  if (dn <= 300) return 5;
-  if (dn <= 500) return 7;
-  return 9;
-}
-
-/** Map pipe diameter to color (blue gradient — thicker = darker, more saturated) */
-function diameterToColor(dn: number): string {
-  if (dn <= 150) return '#42a5f5';
-  if (dn <= 200) return '#2196f3';
-  if (dn <= 300) return '#1976d2';
-  if (dn <= 500) return '#1565c0';
-  return '#0d47a1';
-}
-
 function highwayToColor(highway: string | null | undefined): string {
   if (!highway) return HIGHWAY_COLORS.default;
   return HIGHWAY_COLORS[highway] ?? HIGHWAY_COLORS.default;
@@ -106,7 +89,6 @@ export default function SewerNetworkLayers({
   const edgesGeoJSON = useMemo(() => {
     const nodeLookup = new Map(network.nodes.map((node) => [node.id, node]));
     const processedEdgeLookup = new Map(network.edges.map((edge) => [edge.id, edge]));
-    const pipeLookup = new Map(network.pipes.map((pipe) => [pipe.edge_id, pipe]));
 
     const sourceFeatures = edgeGeometryOverride?.features ?? network.edges.map((edge) => {
       const sourceNode = nodeLookup.get(edge.source_node_id);
@@ -150,10 +132,6 @@ export default function SewerNetworkLayers({
       const targetId = processedEdge?.target_node_id ?? feature.properties?.targetId;
       const sourceNode = sourceId ? nodeLookup.get(String(sourceId)) : undefined;
       const targetNode = targetId ? nodeLookup.get(String(targetId)) : undefined;
-      const pipe = pipeLookup.get(id)
-        ?? (processedEdge
-          ? pipeLookup.get(`${processedEdge.source_node_id}->${processedEdge.target_node_id}`)
-          : undefined);
 
       let avgElevNorm = -1;
       if (sourceNode?.elevation != null && targetNode?.elevation != null) {
@@ -164,9 +142,6 @@ export default function SewerNetworkLayers({
         avgElevNorm = normalizeElevation(targetNode.elevation, min, range);
       }
 
-      const diameterMm =
-        pipe?.diameter_mm
-        ?? (typeof feature.properties?.diameter === 'number' ? feature.properties.diameter : 150);
       const highway = processedEdge?.highway ?? feature.properties?.highway;
       const arrowColor = isElevation
         ? getElevationColor(avgElevNorm)
@@ -185,10 +160,8 @@ export default function SewerNetworkLayers({
           id,
           sourceId: sourceId ?? null,
           targetId: targetId ?? null,
-          diameter_mm: diameterMm,
-          is_pressurized: pipe?.is_pressurized ?? false,
-          width: diameterToWidth(diameterMm),
-          color: pipe?.is_pressurized ? '#ff5722' : diameterToColor(diameterMm),
+          width: 4,
+          color: viewMode === 'streets' ? highwayToColor(highway) : DEFAULT_EDGE_COLOR,
           slope: processedEdge?.slope ?? feature.properties?.slope ?? null,
           avg_elevation_normalized: avgElevNorm,
           elevationColor: getElevationColor(avgElevNorm),
@@ -198,7 +171,7 @@ export default function SewerNetworkLayers({
     }
 
     return { type: 'FeatureCollection' as const, features: edgeFeatures };
-  }, [edgeGeometryOverride, isElevation, min, network.edges, network.nodes, network.pipes, range, viewMode]);
+  }, [edgeGeometryOverride, isElevation, min, network.edges, network.nodes, range, viewMode]);
 
   // ============ PAINT OBJECTS ============
 

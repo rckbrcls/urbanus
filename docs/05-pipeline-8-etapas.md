@@ -18,10 +18,7 @@ A simplificacao atual removeu o fallback historico que reconstruia o grafo a par
 - `SewerNetwork`
   - `nodes`
   - `edges`
-  - `pipes`
-  - `pump_stations`
   - `unreachable_nodes`
-  - `total_cost`
 
 ## Representacoes internas
 
@@ -46,13 +43,10 @@ grafo editado
   -> detect_grade_breaks
   -> selecionar outlet + collection_points
   -> rsph_sewer_routing
-  -> resolve_low_points
   -> ensure_full_coverage
   -> _break_cycles (se necessario)
   -> optimize_node_placement
-  -> dimension_network
   -> assign_accessory_types
-  -> compute_total_cost
   -> save_sewer_network_to_postgis
   -> SewerNetwork
 ```
@@ -111,14 +105,12 @@ Arquivo: `core/routing/rsph.py`
 - gera a espinha dorsal gravitacional
 - devolve `tree` e `unreachable`
 
-### 6. Low points e cobertura
+### 6. Cobertura completa
 
-Arquivos:
+Arquivo:
 
-- `core/optimizer/low_points.py`
 - `core/graph/coverage.py`
 
-- conecta trechos inalcanhaveis com elevatorias quando necessario
 - garante cobertura completa da malha representada por `G`
 
 ### 7. Estabilidade e compressao
@@ -134,18 +126,14 @@ Arquivos:
   coordenada do no removido como `waypoint`; a geometria renderizada passa a
   refletir imediatamente a topologia final simplificada
 
-### 8. Hidraulica e acessorios
+### 8. Acessorios
 
-Arquivos:
+Arquivo:
 
-- `core/hydraulics/dimensioning.py`
-- `core/hydraulics/costing.py`
 - `core/graph/accessories.py`
 
-- dimensiona os tubos
 - classifica todos os nos fisicos como PV
 - destaca pontos de coleta separadamente via `is_collection_point`
-- calcula custo total
 
 ### 9. Persistencia
 

@@ -10,13 +10,10 @@ frontend edited graph
   -> outlet + collection_points + mandatory
   -> rsph_sewer_routing
   -> tree (nx.DiGraph)
-  -> resolve_low_points
   -> ensure_full_coverage
   -> _break_cycles
   -> optimize_node_placement
-  -> dimension_network
   -> assign_accessory_types
-  -> compute_total_cost
   -> save_sewer_network_to_postgis
   -> SewerNetwork
 ```
@@ -36,15 +33,12 @@ frontend edited graph
 | 3 | Detectar extremos | `G` -> `G` | `extrema.py` | `detect_extrema` |
 | 4 | Escolher controles de roteamento | `G` -> conjuntos auxiliares | `main.py` | `process_sewer_network` |
 | 5 | Roteamento gravitacional | `G` -> `tree`, `unreachable` | `rsph.py` | `rsph_sewer_routing` |
-| 6 | Resolver low points | `tree` -> `tree`, `pump_stations` | `low_points.py` | `resolve_low_points` |
-| 7 | Garantir cobertura | `tree` + `G` -> `tree` | `coverage.py` | `ensure_full_coverage` |
-| 8 | Quebrar ciclos | `tree` -> `tree` | `main.py` | `_break_cycles` |
-| 9 | Reduzir nos | `tree` -> `tree` | `node_reduction.py` | `optimize_node_placement` |
-| 10 | Dimensionar hidraulica | `tree` -> `pipes` | `dimensioning.py` | `dimension_network` |
-| 11 | Classificar nos finais | `tree` + `pipes` -> `tree` | `accessories.py` | `assign_accessory_types` |
-| 12 | Calcular custo total | `pipes` + `pump_stations` + `tree` -> `float` | `costing.py` | `compute_total_cost` |
-| 13 | Persistir resultado | `SewerNetwork` -> banco | `repositories.py` | `save_sewer_network_to_postgis` |
-| 14 | Responder ao frontend | objetos processados -> `SewerNetwork` | `main.py` | `process_sewer_network` |
+| 6 | Garantir cobertura | `tree` + `G` -> `tree` | `coverage.py` | `ensure_full_coverage` |
+| 7 | Quebrar ciclos | `tree` -> `tree` | `main.py` | `_break_cycles` |
+| 8 | Reduzir nos | `tree` -> `tree` | `node_reduction.py` | `optimize_node_placement` |
+| 9 | Classificar nos finais | `tree` -> `tree` | `accessories.py` | `assign_accessory_types` |
+| 10 | Persistir resultado | `SewerNetwork` -> banco | `repositories.py` | `save_sewer_network_to_postgis` |
+| 11 | Responder ao frontend | objetos processados -> `SewerNetwork` | `main.py` | `process_sewer_network` |
 
 ## Leituras recomendadas
 
@@ -53,8 +47,6 @@ frontend edited graph
 3. `apps/api/src/urbanus_api/core/graph/sanitization.py`
 4. `apps/api/src/urbanus_api/core/elevation/extrema.py`
 5. `apps/api/src/urbanus_api/core/routing/rsph.py`
-6. `apps/api/src/urbanus_api/core/optimizer/low_points.py`
-7. `apps/api/src/urbanus_api/core/graph/coverage.py`
-8. `apps/api/src/urbanus_api/core/optimizer/node_reduction.py`
-9. `apps/api/src/urbanus_api/core/hydraulics/dimensioning.py`
-10. `apps/api/src/urbanus_api/core/graph/accessories.py`
+6. `apps/api/src/urbanus_api/core/graph/coverage.py`
+7. `apps/api/src/urbanus_api/core/optimizer/node_reduction.py`
+8. `apps/api/src/urbanus_api/core/graph/accessories.py`

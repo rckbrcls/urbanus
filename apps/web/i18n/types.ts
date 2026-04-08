@@ -109,7 +109,6 @@ export interface Dictionary {
     nodes: string;
     segments: string;
     length: string;
-    pumpStations: string;
     unreachable: string;
   };
   mapPage: {

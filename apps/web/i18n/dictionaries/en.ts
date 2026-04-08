@@ -21,7 +21,7 @@ export const en: Dictionary = {
   },
   landing: {
     tagline:
-      'Automated sanitary sewer network design — from map selection to hydraulic dimensioning, powered by open data and engineering checks.',
+      'Automated sanitary sewer network design — from map selection to gravity-based network generation, powered by open data and engineering checks.',
     startDesigning: 'Start Designing',
     howItWorks: 'How it works',
     features: 'Features',
@@ -34,7 +34,7 @@ export const en: Dictionary = {
       autoProcess: {
         title: 'Auto-process',
         description:
-          'Our 8-step pipeline classifies nodes, routes sewage gravitationally, and dimensions pipes automatically.',
+          'Our processing pipeline classifies nodes, routes sewage gravitationally, and builds the network automatically.',
       },
       editExport: {
         title: 'Edit & export',
@@ -46,12 +46,12 @@ export const en: Dictionary = {
       pipeline: {
         title: '8-Step Pipeline',
         description:
-          'From node classification to hydraulic dimensioning — a complete sewer design workflow automated end to end.',
+          'From node classification to gravity routing — a complete sewer design workflow automated end to end.',
       },
       standards: {
         title: 'Engineering Checks',
         description:
-          "Manning's equation, slope validation, depth limits, and pipe sizing are applied automatically throughout the workflow.",
+          'Slope validation, elevation-aware routing, and network coverage checks are applied automatically throughout the workflow.',
       },
       openData: {
         title: 'Open Data',
@@ -139,7 +139,6 @@ export const en: Dictionary = {
     nodes: 'Nodes',
     segments: 'Segments',
     length: 'Length',
-    pumpStations: 'Pump Stations',
     unreachable: 'Unreachable',
   },
   mapPage: {

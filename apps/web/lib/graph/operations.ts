@@ -5,7 +5,6 @@
  */
 
 import type { NetworkGraph, NetworkNode, NetworkEdge } from './types';
-import { HYDRAULICS } from '@urbanus/constants';
 import { GeoCalculations } from '@urbanus/geo';
 
 // ============ ADJACENCY ============
@@ -68,12 +67,9 @@ export function calculateSlope(
  */
 export function validateSlope(
   slope: number | null,
-  diameterMm: number = HYDRAULICS.MIN_DIAMETER_COLLECTOR,
 ): { valid: boolean; reason?: string } {
   if (slope === null) return { valid: true }; // Can't validate without data
 
-  // Min slope (tractive stress constraint) — simplified approximation
-  // Real formula uses Manning + hydraulic radius, but for quick validation:
   const minSlope = 0.005; // 0.5% — safe minimum for DN150+
 
   if (slope < -0.001) {
@@ -83,7 +79,7 @@ export function validateSlope(
   if (slope < minSlope && slope >= 0) {
     return {
       valid: false,
-      reason: `Slope too low (${(slope * 100).toFixed(2)}%) for DN${diameterMm}`,
+      reason: `Slope too low (${(slope * 100).toFixed(2)}%)`,
     };
   }
 

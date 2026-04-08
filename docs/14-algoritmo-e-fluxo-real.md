@@ -1,5 +1,7 @@
 # 14 -- Algoritmo e Fluxo Real do Pipeline
 
+> Status em 2026-04-08: as secoes abaixo sobre `low_points`, `dimensioning`, `costing`, `PipeSegment`, `PumpStation` e `total_cost` descrevem um fluxo antigo. O pipeline ativo hoje termina em `rsph_sewer_routing -> ensure_full_coverage -> _break_cycles -> optimize_node_placement -> assign_accessory_types`, e o `SewerNetwork` serializado contem apenas `nodes`, `edges` e `unreachable_nodes`.
+
 ## Objetivo
 
 Este documento explica o fluxo real executado hoje no URBANUS, ponta a ponta:
@@ -26,7 +28,7 @@ streets GeoJSON
   -> POST /projects/{id}/process
   -> _build_graph_from_edited
   -> G (nx.Graph)
-  -> saneamento + classificacao + roteamento + cobertura + otimizacao + hidraulica
+  -> saneamento + classificacao + roteamento + cobertura + otimizacao + acessorios
   -> SewerNetwork
   -> persistencia no PostGIS + snapshot no projeto
   -> pipelineStore + renderizacao no mapa/paineis
@@ -85,7 +87,6 @@ E a rede dirigida final no sentido do escoamento.
 
 Ela comeca a nascer no RSPH e depois e ajustada por:
 
-- resolucao de `unreachable`
 - cobertura total
 - quebra de ciclos
 - reducao de nos
@@ -96,10 +97,7 @@ E o payload serializado final retornado ao frontend e salvo no banco:
 
 - `nodes`
 - `edges`
-- `pipes`
-- `pump_stations`
 - `unreachable_nodes`
-- `total_cost`
 
 ## Etapa A -- Enriquecimento de elevacao
 

@@ -1,10 +1,9 @@
-"""Tests for cycle prevention in low_points and coverage."""
+"""Tests for cycle prevention in coverage and reduction steps."""
 
 import networkx as nx
 import pytest
 
 from urbanus_api.core.graph.coverage import ensure_full_coverage, _would_create_cycle
-from urbanus_api.core.hydraulics.dimensioning import dimension_network
 
 
 class TestWouldCreateCycle:
@@ -276,8 +275,10 @@ class TestReducePassThroughNodes:
 
 
 class TestFullPipelineNoCycles:
-    def test_dimension_after_coverage(self):
-        """End-to-end: build tree, add coverage, dimension without crash."""
+    def test_accessories_after_coverage(self):
+        """End-to-end: build tree, add coverage, assign accessories without crash."""
+        from urbanus_api.core.graph.accessories import assign_accessory_types
+
         tree = nx.DiGraph()
         for i, z in enumerate([100, 98, 96, 94]):
             tree.add_node(f"N{i}", x=-46.65 + i * 0.001, y=-23.55, z=z)
@@ -296,6 +297,5 @@ class TestFullPipelineNoCycles:
         ensure_full_coverage(tree, G)
         assert nx.is_directed_acyclic_graph(tree)
 
-        # dimension_network must not crash
-        pipes = dimension_network(tree)
-        assert len(pipes) == tree.number_of_edges()
+        tree = assign_accessory_types(tree)
+        assert all(tree.nodes[node]["accessory_type"] == "PV" for node in tree.nodes)

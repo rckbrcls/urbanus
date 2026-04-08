@@ -96,42 +96,15 @@ interface SewerEdge {
   targetNodeId: string;
   lengthM: number;
   slope: number | null;       // m/m, positivo = descendente
-  cost: number | null;
   name: string | null;        // nome da rua (OSM)
   highway: string | null;     // tipo de via (OSM)
-}
-
-interface PipeSegment {
-  edgeId: string;
-  diameterMm: number;         // DN em milimetros
-  manningN: number;            // coeficiente de Manning
-  slope: number;               // m/m
-  coverDepth: number;          // recobrimento em metros
-  flowDepthRatio: number | null; // y/D (0 a 0.75)
-  velocity: number | null;      // m/s
-  tractiveStress: number | null; // Pa
-  flowRate: number | null;       // L/s
-  isPressurized: boolean;       // true = trecho de recalque
-}
-
-interface PumpStation {
-  id: string;
-  nodeId: string;
-  capacityLs: number;         // L/s
-  headM: number;               // altura manometrica (m)
-  capex: number;               // custo de implantacao (R$)
-  annualOpex: number;          // custo anual de operacao (R$)
-  npv: number | null;          // valor presente liquido (R$)
 }
 
 interface SewerNetwork {
   projectId: string;
   nodes: SewerNode[];
   edges: SewerEdge[];
-  pipes: PipeSegment[];
-  pumpStations: PumpStation[];
   unreachableNodes: string[];  // IDs sem caminho gravitacional
-  totalCost: number | null;    // custo total (R$)
 }
 ```
 
@@ -179,39 +152,14 @@ class SewerEdge(BaseModel):
     target_node_id: str
     length_m: float
     slope: float | None = None
-    cost: float | None = None
     name: str | None = None
     highway: str | None = None
-
-class PipeSegment(BaseModel):
-    edge_id: str
-    diameter_mm: int = 150
-    manning_n: float = 0.013
-    slope: float
-    cover_depth: float
-    flow_depth_ratio: float | None = None
-    velocity: float | None = None
-    tractive_stress: float | None = None
-    flow_rate: float | None = None
-    is_pressurized: bool = False
-
-class PumpStation(BaseModel):
-    id: str
-    node_id: str
-    capacity_ls: float
-    head_m: float
-    capex: float
-    annual_opex: float
-    npv: float | None = None
 
 class SewerNetwork(BaseModel):
     project_id: str
     nodes: list[SewerNode]
     edges: list[SewerEdge]
-    pipes: list[PipeSegment]
-    pump_stations: list[PumpStation]
     unreachable_nodes: list[str]
-    total_cost: float | None = None
 ```
 
 ## Constantes NBR 9649 -- Hidraulica
@@ -223,14 +171,6 @@ Definidas em `packages/constants/src/hydraulics.ts` (JS) e `py/urbanus-geo/src/u
 | `MANNING_N_DEFAULT` | 0.013 | -- | Coeficiente de Manning (todos os materiais com biofilme) |
 | `MANNING_N_PVC` | 0.010 | -- | Coeficiente de Manning para PVC novo |
 | `GAMMA_WATER` | 9810 | N/m3 | Peso especifico da agua |
-| `MIN_TRACTIVE_STRESS` | 1.0 | Pa | Tensao trativa minima (n=0.013) |
-| `MIN_TRACTIVE_STRESS_PVC` | 0.6 | Pa | Tensao trativa minima (n=0.010) |
-| `MAX_FLOW_DEPTH_RATIO` | 0.75 | -- | Lâmina maxima y/D |
-| `MAX_VELOCITY` | 5.0 | m/s | Velocidade maxima |
-| `MIN_FLOW_RATE` | 1.5 | L/s | Vazao minima para qualquer trecho |
-| `PIPE_DIAMETERS` | [100..1000] | mm | Diâmetros nominais disponiveis |
-| `MIN_DIAMETER_COLLECTOR` | 150 | mm | DN minimo para coletor |
-| `MIN_DIAMETER_LATERAL` | 100 | mm | DN minimo para ramal |
 | `MIN_COVER_STREET` | 0.90 | m | Recobrimento minimo sob rua |
 | `MIN_COVER_SIDEWALK` | 0.65 | m | Recobrimento minimo sob calcada |
 | `MAX_PV_SPACING` | 100 | m | Espacamento maximo entre PVs |
@@ -251,22 +191,8 @@ Definidas em `packages/constants/src/pipeline.ts` (JS) e `py/urbanus-geo/src/urb
 | `CURVE_ANGLE_THRESHOLD` | 150.0 | graus | 4 | Ângulo de deflexao que dispara PV em curva |
 | `ELEVATION_PROMINENCE_MIN` | 2.0 | m | 5 | Proeminencia minima para pico/vale |
 | `DIRECTION_CHANGE_THRESHOLD` | 45.0 | graus | -- | Mudanca de direcao que exige PV |
-| `MAX_GRAVITY_DEPTH` | 4.5 | m | 7 | Profundidade maxima antes de considerar bombeamento |
-| `PUMP_PENALTY` | 100000 | R$ | 6 | Penalidade de custo para desencorajar bombeamento |
+| `SLOPE_PENALTY` | 10.0 | -- | 6 | Penalidade de roteamento para declividade insuficiente |
 | `REUSE_BONUS` | 0.5 | -- | 6 | Multiplicador de desconto para reutilizacao de aresta |
-
-Constantes economicas (Python):
-
-| Constante | Valor | Significado |
-|-----------|-------|-------------|
-| `PIPE_UNIT_COST` | 1.0 | Custo unitario de tubulacao (R$/m normalizado) |
-| `EXCAVATION_A_COEF` | 1.0 | Coeficiente quadratico de escavacao |
-| `EXCAVATION_B_COEF` | 0.5 | Coeficiente linear de escavacao |
-| `SLOPE_PENALTY` | 10.0 | Penalidade para declividade insuficiente |
-| `PUMP_CAPEX_MIN` | 150000 | Custo minimo de implantacao de elevatoria (R$) |
-| `PUMP_CAPEX_MAX` | 500000 | Custo maximo de implantacao de elevatoria (R$) |
-| `PUMP_HORIZON_YEARS` | 20 | Horizonte de projeto para VPL |
-| `PUMP_DISCOUNT_RATE` | 0.10 | Taxa de desconto para VPL (10%) |
 
 ## Constantes Auxiliares
 

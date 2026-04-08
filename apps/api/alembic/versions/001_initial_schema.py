@@ -40,7 +40,6 @@ def upgrade() -> None:
         sa.Column("highway", sa.Text()),
         sa.Column("length_m", sa.Double()),
         sa.Column("slope", sa.Double()),
-        sa.Column("cost", sa.Double()),
         sa.Column("properties", sa.dialects.postgresql.JSONB()),
     )
     op.create_index("idx_edges_project", "edges", ["project_id"])
@@ -63,39 +62,7 @@ def upgrade() -> None:
     op.create_index("idx_nodes_project", "nodes", ["project_id"])
     op.create_index("idx_nodes_geom", "nodes", ["geometry"], postgresql_using="gist")
 
-    op.create_table(
-        "pipe_segments",
-        sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("project_id", sa.String(), sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("edge_id", sa.String(), sa.ForeignKey("edges.id")),
-        sa.Column("diameter_mm", sa.Integer(), nullable=False, server_default="150"),
-        sa.Column("manning_n", sa.Double(), nullable=False, server_default="0.013"),
-        sa.Column("slope", sa.Double()),
-        sa.Column("cover_depth", sa.Double()),
-        sa.Column("flow_depth_ratio", sa.Double()),
-        sa.Column("velocity", sa.Double()),
-        sa.Column("tractive_stress", sa.Double()),
-        sa.Column("flow_rate", sa.Double()),
-        sa.Column("is_pressurized", sa.Boolean(), server_default="false"),
-    )
-    op.create_index("idx_pipes_project", "pipe_segments", ["project_id"])
-
-    op.create_table(
-        "pump_stations",
-        sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("project_id", sa.String(), sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("node_id", sa.String(), sa.ForeignKey("nodes.id")),
-        sa.Column("capacity_ls", sa.Double()),
-        sa.Column("head_m", sa.Double()),
-        sa.Column("capex", sa.Double()),
-        sa.Column("annual_opex", sa.Double()),
-        sa.Column("npv", sa.Double()),
-    )
-
-
 def downgrade() -> None:
-    op.drop_table("pump_stations")
-    op.drop_table("pipe_segments")
     op.drop_table("nodes")
     op.drop_table("edges")
     op.drop_table("projects")

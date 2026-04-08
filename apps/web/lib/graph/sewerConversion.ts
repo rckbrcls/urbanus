@@ -39,13 +39,7 @@ export function sewerNetworkToGraph(network: SewerNetwork): NetworkGraph {
     };
   }
 
-  const pipeLookup = new Map(
-    network.pipes.map((p) => [p.edge_id, p]),
-  );
-
   for (const e of network.edges) {
-    const pipe = pipeLookup.get(e.id) ?? pipeLookup.get(`${e.source_node_id}->${e.target_node_id}`);
-
     edges[e.id] = {
       id: e.id,
       sourceId: e.source_node_id,
@@ -54,7 +48,6 @@ export function sewerNetworkToGraph(network: SewerNetwork): NetworkGraph {
       properties: {
         length: e.length_m,
         slope: e.slope,
-        diameter: pipe?.diameter_mm,
         streetName: e.name ?? undefined,
         highway: e.highway ?? undefined,
       },
@@ -89,50 +82,17 @@ export function graphToSewerNetwork(
     target_node_id: edge.targetId,
     length_m: edge.properties.length,
     slope: edge.properties.slope ?? null,
-    cost: null,
     name: edge.properties.streetName ?? null,
     highway: edge.properties.highway ?? null,
     waypoints: edge.geometry.length > 0 ? edge.geometry.map(([lng, lat]) => [lng, lat]) : null,
   }));
 
   const nodeIds = new Set(nodes.map((node) => node.id));
-  const edgeIds = new Set(edges.map((edge) => edge.id));
-  const pipeLookup = new Map((base?.pipes ?? []).map((pipe) => [pipe.edge_id, pipe]));
-
-  const pipes = edges.map((edge) => {
-    const existing =
-      pipeLookup.get(edge.id) ??
-      pipeLookup.get(`${edge.source_node_id}->${edge.target_node_id}`) ??
-      pipeLookup.get(`${edge.target_node_id}->${edge.source_node_id}`);
-
-    if (existing) {
-      return {
-        ...existing,
-        edge_id: edge.id,
-      };
-    }
-
-    return {
-      edge_id: edge.id,
-      diameter_mm: Math.max(150, Math.round((graph.edges[edge.id]?.properties.diameter ?? 150) / 50) * 50),
-      manning_n: 0.013,
-      slope: edge.slope ?? 0,
-      cover_depth: 1,
-      flow_depth_ratio: null,
-      velocity: null,
-      tractive_stress: null,
-      flow_rate: null,
-      is_pressurized: false,
-    };
-  });
 
   return {
     project_id: projectId,
     nodes,
     edges,
-    pipes,
-    pump_stations: (base?.pump_stations ?? []).filter((pump) => nodeIds.has(pump.node_id)),
     unreachable_nodes: (base?.unreachable_nodes ?? []).filter((nodeId) => nodeIds.has(nodeId)),
-    total_cost: base?.edges.length === edgeIds.size && base?.nodes.length === nodeIds.size ? (base?.total_cost ?? null) : null,
   };
 }

@@ -30,9 +30,6 @@ from urbanus_api.core.graph.coverage import ensure_full_coverage
 from urbanus_api.core.optimizer.node_reduction import optimize_node_placement
 from urbanus_api.core.elevation.extrema import detect_extrema
 from urbanus_api.core.routing.rsph import rsph_sewer_routing
-from urbanus_api.core.optimizer.low_points import resolve_low_points
-from urbanus_api.core.hydraulics.dimensioning import dimension_network
-from urbanus_api.core.hydraulics.costing import compute_total_cost
 from urbanus_api.data.database import get_db
 from urbanus_api.data.repositories import ProjectRepository, save_sewer_network_to_postgis
 from urbanus_geo.calculations import haversine
@@ -368,29 +365,23 @@ async def process_sewer_network(
     # Etapa 6: RSPH gravity routing (multi-outlet via super-sink)
     tree, unreachable = rsph_sewer_routing(G, outlet, mandatory, collection_points)
 
-    # Etapa 7: Resolve low points
-    tree, pump_stations = resolve_low_points(tree, unreachable, G, outlet)
-
-    # Etapa 7.5: Ensure full street coverage — every street needs a collector.
+    # Etapa 7: Ensure full street coverage — every street needs a collector.
     # Uses sanitized G so node IDs match the RSPH tree exactly.
     ensure_full_coverage(tree, G)
 
-    # Safety net: ensure tree is a DAG before dimensioning
+    # Safety net: ensure tree is a DAG before serialization
     if not nx.is_directed_acyclic_graph(tree):
         _break_cycles(tree)
         # Cycle breaking may have removed coverage edges — repair.
         # The tree is now a DAG, so re-adding edges is safe.
         ensure_full_coverage(tree, G)
 
-    # Etapa 7.8: Optimize node placement — minimize PVs using greedy
+    # Etapa 7.5: Optimize node placement — minimize PVs using greedy
     # contraction with junction simplification + MILP refinement.
     optimize_node_placement(tree, outlet=outlet)
 
-    # Etapa 8: Hydraulic dimensioning
-    pipes = dimension_network(tree)
-
-    # Etapa 9: Accessory type assignment
-    tree = assign_accessory_types(tree, pipes)
+    # Etapa 8: Accessory type assignment
+    tree = assign_accessory_types(tree)
 
     # Build response
     from urbanus_geo.types import SewerNode, SewerEdge, SewerNetwork
@@ -419,7 +410,6 @@ async def process_sewer_network(
             target_node_id=str(v),
             length_m=d.get("length_m", 0),
             slope=d.get("slope"),
-            cost=d.get("cost"),
             name=d.get("name"),
             highway=d.get("highway"),
             waypoints=d.get("waypoints"),
@@ -429,10 +419,7 @@ async def process_sewer_network(
         project_id=project_id,
         nodes=nodes_out,
         edges=edges_out,
-        pipes=pipes,
-        pump_stations=pump_stations,
         unreachable_nodes=unreachable,
-        total_cost=compute_total_cost(pipes, pump_stations, tree),
     )
 
     result_payload = result.model_dump()

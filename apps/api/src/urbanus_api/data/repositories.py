@@ -13,9 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urbanus_api.data.tables import (
     EdgeTable,
     NodeTable,
-    PipeSegmentTable,
     ProjectTable,
-    PumpStationTable,
 )
 
 
@@ -105,12 +103,6 @@ async def save_sewer_network_to_postgis(
 ) -> None:
     """Persist a complete SewerNetwork payload to PostGIS tables."""
     await session.execute(
-        PumpStationTable.__table__.delete().where(PumpStationTable.project_id == project_id)
-    )
-    await session.execute(
-        PipeSegmentTable.__table__.delete().where(PipeSegmentTable.project_id == project_id)
-    )
-    await session.execute(
         EdgeTable.__table__.delete().where(EdgeTable.project_id == project_id)
     )
     await session.execute(
@@ -119,8 +111,6 @@ async def save_sewer_network_to_postgis(
 
     nodes = network.get("nodes") or []
     edges = network.get("edges") or []
-    pipes = network.get("pipes") or []
-    pump_stations = network.get("pump_stations") or []
 
     node_lookup: dict[str, dict[str, Any]] = {}
     for node in nodes:
@@ -170,40 +160,11 @@ async def save_sewer_network_to_postgis(
             highway=edge.get("highway"),
             length_m=edge.get("length_m"),
             slope=edge.get("slope"),
-            cost=edge.get("cost"),
             properties={
                 "source_node_id": source_id,
                 "target_node_id": target_id,
                 "waypoints": edge.get("waypoints"),
             },
-        ))
-
-    for pipe in pipes:
-        session.add(PipeSegmentTable(
-            id=f"{project_id}:{pipe['edge_id']}",
-            project_id=project_id,
-            edge_id=str(pipe["edge_id"]),
-            diameter_mm=pipe.get("diameter_mm", 150),
-            manning_n=pipe.get("manning_n", 0.013),
-            slope=pipe.get("slope"),
-            cover_depth=pipe.get("cover_depth"),
-            flow_depth_ratio=pipe.get("flow_depth_ratio"),
-            velocity=pipe.get("velocity"),
-            tractive_stress=pipe.get("tractive_stress"),
-            flow_rate=pipe.get("flow_rate"),
-            is_pressurized=pipe.get("is_pressurized", False),
-        ))
-
-    for pump_station in pump_stations:
-        session.add(PumpStationTable(
-            id=str(pump_station["id"]),
-            project_id=project_id,
-            node_id=pump_station.get("node_id"),
-            capacity_ls=pump_station.get("capacity_ls"),
-            head_m=pump_station.get("head_m"),
-            capex=pump_station.get("capex"),
-            annual_opex=pump_station.get("annual_opex"),
-            npv=pump_station.get("npv"),
         ))
 
     await session.commit()

@@ -118,10 +118,6 @@ export const usePipelineStore = create<PipelineState & PipelineActions>()(
             edges: result.edges.filter(
               (e) => e.source_node_id !== nodeId && e.target_node_id !== nodeId,
             ),
-            pipes: result.pipes.filter((p) => {
-              const edge = result.edges.find((e) => e.id === p.edge_id);
-              return !edge || (edge.source_node_id !== nodeId && edge.target_node_id !== nodeId);
-            }),
           },
           selectedNodeId: null,
         });

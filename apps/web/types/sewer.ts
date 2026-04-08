@@ -23,41 +23,14 @@ export interface SewerEdge {
   target_node_id: string;
   length_m: number;
   slope: number | null;
-  cost: number | null;
   name: string | null;
   highway: string | null;
   waypoints: [number, number][] | null;
-}
-
-export interface PipeSegment {
-  edge_id: string;
-  diameter_mm: number;
-  manning_n: number;
-  slope: number;
-  cover_depth: number;
-  flow_depth_ratio: number | null;
-  velocity: number | null;
-  tractive_stress: number | null;
-  flow_rate: number | null;
-  is_pressurized: boolean;
-}
-
-export interface PumpStation {
-  id: string;
-  node_id: string;
-  capacity_ls: number;
-  head_m: number;
-  capex: number;
-  annual_opex: number;
-  npv: number | null;
 }
 
 export interface SewerNetwork {
   project_id: string;
   nodes: SewerNode[];
   edges: SewerEdge[];
-  pipes: PipeSegment[];
-  pump_stations: PumpStation[];
   unreachable_nodes: string[];
-  total_cost: number | null;
 }

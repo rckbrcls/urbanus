@@ -1,5 +1,5 @@
 from urbanus_api.data.database import get_db, engine, async_session_factory
-from urbanus_api.data.tables import Base, ProjectTable, EdgeTable, NodeTable, PipeSegmentTable, PumpStationTable
+from urbanus_api.data.tables import Base, ProjectTable, EdgeTable, NodeTable
 from urbanus_api.data.repositories import ProjectRepository
 
 __all__ = [
@@ -10,7 +10,5 @@ __all__ = [
     "ProjectTable",
     "EdgeTable",
     "NodeTable",
-    "PipeSegmentTable",
-    "PumpStationTable",
     "ProjectRepository",
 ]
