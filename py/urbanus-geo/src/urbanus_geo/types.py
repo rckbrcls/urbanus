@@ -88,7 +88,7 @@ class SewerEdge(BaseModel):
 
 
 class SewerNetwork(BaseModel):
-    """Resultado completo do pipeline de 8 etapas."""
+    """Serialized result of the current sewer processing pipeline."""
     project_id: str
     nodes: list[SewerNode]
     edges: list[SewerEdge]

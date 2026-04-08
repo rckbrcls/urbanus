@@ -157,6 +157,7 @@ class SewerEdge(BaseModel):
     slope: float | None = None
     name: str | None = None
     highway: str | None = None
+    waypoints: list[list[float]] | None = None
 
 class SewerNetwork(BaseModel):
     project_id: str
@@ -164,6 +165,8 @@ class SewerNetwork(BaseModel):
     edges: list[SewerEdge]
     unreachable_nodes: list[str]
 ```
+
+No contrato atual nao existem mais `pipes`, `pumpStations`, `totalCost` nem `edges.cost`.
 
 ## Constantes NBR 9649 -- Hidraulica
 

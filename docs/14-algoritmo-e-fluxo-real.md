@@ -1,6 +1,6 @@
 # 14 -- Algoritmo e Fluxo Real do Pipeline
 
-> Status em 2026-04-08: as secoes abaixo sobre `low_points`, `dimensioning`, `costing`, `PipeSegment`, `PumpStation` e `total_cost` descrevem um fluxo antigo. O pipeline ativo hoje termina em `rsph_sewer_routing -> ensure_full_coverage -> _break_cycles -> optimize_node_placement -> assign_accessory_types`, e o `SewerNetwork` serializado contem apenas `nodes`, `edges` e `unreachable_nodes`.
+> Status em 2026-04-08: as secoes abaixo sobre `low_points`, `dimensioning`, `costing`, `PipeSegment`, `PumpStation`, `edges.cost` e `total_cost` descrevem um fluxo antigo. O pipeline ativo hoje termina em `rsph_sewer_routing -> ensure_full_coverage -> _break_cycles -> optimize_node_placement -> assign_accessory_types`, e o `SewerNetwork` serializado contem apenas `nodes`, `edges` e `unreachable_nodes`.
 >
 > `node_type` tambem foi simplificado: o runtime atual usa `MANDATORY`, `INTERMEDIATE`, `REDUNDANT`, `HIGH_POINT` e `LOW_POINT`. Snapshots legados com nomes por cor sao normalizados na leitura.
 

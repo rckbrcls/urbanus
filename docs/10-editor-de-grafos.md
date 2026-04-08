@@ -43,11 +43,7 @@ interface NetworkEdge {
   properties: {
     length: number;                     // metros
     slope: number | null;               // m/m
-    material?: string;
-    manningN?: number;
     flowDirection?: 'downstream' | 'upstream' | 'unknown';
-    upstreamOffset?: number;
-    downstreamOffset?: number;
     streetId?: string;
     streetName?: string;
     highway?: string;
