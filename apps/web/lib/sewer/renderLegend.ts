@@ -11,7 +11,7 @@ export const RENDERED_NODE_ORDER: RenderedNodeCategory[] = [
 
 export const RENDERED_NODE_COLORS: Record<RenderedNodeCategory, string> = {
   COLLECTION_POINT: '#06b6d4',
-  PV: '#f59e0b',
+  PV: '#6b7280',
 };
 
 type RenderableNodeLike = {

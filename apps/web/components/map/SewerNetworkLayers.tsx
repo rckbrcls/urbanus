@@ -5,8 +5,8 @@ import { Source, Layer } from 'react-map-gl/maplibre';
 import type { SewerNetwork } from '@/types/sewer';
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import FlowArrows from './FlowArrows';
-import { getRenderedNodeCategory, RENDERED_NODE_COLORS } from '@/lib/sewer/renderLegend';
-import { getElevationColor, getElevationLabel } from '@/lib/map/layers';
+import { DEFAULT_EDGE_COLOR, getElevationColor, getElevationLabel } from '@/lib/map/layers';
+import { HIGHWAY_COLORS } from '@/features/map/constants';
 
 export type SewerViewMode = 'default' | 'elevation' | 'streets';
 
@@ -34,6 +34,11 @@ function diameterToColor(dn: number): string {
   if (dn <= 300) return '#1976d2';
   if (dn <= 500) return '#1565c0';
   return '#0d47a1';
+}
+
+function highwayToColor(highway: string | null | undefined): string {
+  if (!highway) return HIGHWAY_COLORS.default;
+  return HIGHWAY_COLORS[highway] ?? HIGHWAY_COLORS.default;
 }
 
 /** Normalize elevation to 0-1 range. Returns -1 for null/missing. */
@@ -80,7 +85,7 @@ export default function SewerNetworkLayers({
           pv_obrigatorio: n.pv_obrigatorio,
           is_collection_point: n.is_collection_point ?? false,
           is_selected: n.id === selectedNodeId,
-          color: RENDERED_NODE_COLORS[getRenderedNodeCategory(n)],
+          color: n.is_collection_point ? '#06b6d4' : '#6b7280',
         },
       };
     });
@@ -102,6 +107,12 @@ export default function SewerNetworkLayers({
         avgElevNorm = normalizeElevation(tgtElev, min, range);
       }
 
+      const arrowColor = isElevation
+        ? getElevationColor(avgElevNorm)
+        : viewMode === 'streets'
+          ? highwayToColor(e.highway)
+          : DEFAULT_EDGE_COLOR;
+
       return {
         type: 'Feature',
         id: e.id,
@@ -122,6 +133,7 @@ export default function SewerNetworkLayers({
           slope: e.slope,
           avg_elevation_normalized: avgElevNorm,
           elevationColor: getElevationColor(avgElevNorm),
+          arrowColor,
         },
       };
     });
@@ -130,7 +142,7 @@ export default function SewerNetworkLayers({
       nodesGeoJSON: { type: 'FeatureCollection' as const, features: nodeFeatures },
       edgesGeoJSON: { type: 'FeatureCollection' as const, features: edgeFeatures },
     };
-  }, [network, min, range]);
+  }, [network, min, range, isElevation, viewMode]);
 
   // ============ PAINT OBJECTS ============
 

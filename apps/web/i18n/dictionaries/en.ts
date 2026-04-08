@@ -142,12 +142,7 @@ export const en: Dictionary = {
     pumpStations: 'Pump Stations',
     totalCost: 'Total Cost',
     unreachable: 'Unreachable',
-    nodeTypes: 'Map Legend',
     diameters: 'Diameters',
-    nodeLabels: {
-      collectionPoint: 'Collection point',
-      pv: 'Manhole (PV)',
-    },
   },
   mapPage: {
     shiftDragInstruction: '+ drag to select (max',

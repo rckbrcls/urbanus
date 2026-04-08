@@ -24,9 +24,10 @@ export function PipelineResultsPanel({
   onToggleCategory,
 }: PipelineResultsPanelProps) {
   const t = useTranslation('pipeline');
+
   const renderedNodeLabels: Record<RenderedNodeCategory, string> = {
-    COLLECTION_POINT: t.nodeLabels.collectionPoint,
-    PV: t.nodeLabels.pv,
+    COLLECTION_POINT: 'Collection point',
+    PV: 'PV',
   };
 
   const renderedNodeCount = result.nodes.reduce<Record<RenderedNodeCategory, number>>((acc, node) => {
@@ -69,10 +70,9 @@ export function PipelineResultsPanel({
         </div>
       </div>
 
-      {/* Map Legend */}
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          {t.nodeTypes}
+          Node Filters
         </h3>
         <div className="space-y-1">
           {RENDERED_NODE_ORDER
@@ -86,12 +86,12 @@ export function PipelineResultsPanel({
                 className={cn(
                   'flex w-full items-center justify-between rounded-md border px-2 py-1 text-xs transition-colors',
                   isRenderedNodeCategoryVisible(category, visibleCategories)
-                    ? 'border-transparent bg-transparent text-zinc-900 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800/70'
-                    : 'border-zinc-200/80 bg-zinc-50/80 text-zinc-400 opacity-65 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500 dark:hover:bg-zinc-800/70',
+                    ? 'border-zinc-300 bg-zinc-50 text-zinc-900 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-100 dark:hover:bg-zinc-800'
+                    : 'border-zinc-200/80 bg-transparent text-zinc-400 opacity-70 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-500 dark:hover:bg-zinc-900/40',
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <div
+                  <span
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: RENDERED_NODE_COLORS[category] }}
                   />

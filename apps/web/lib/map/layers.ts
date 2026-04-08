@@ -3,9 +3,9 @@
  */
 
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
-import { RENDERED_NODE_COLORS } from '@/lib/sewer/renderLegend';
 
 const MISSING_ELEVATION_COLOR = '#9e9e9e';
+export const DEFAULT_EDGE_COLOR = '#60a5fa';
 
 const ELEVATION_COLOR_STOPS = [
   { value: 0, color: '#313695' },
@@ -89,25 +89,10 @@ export const NODES_PAINT: CircleLayerSpecification['paint'] = {
     ['boolean', ['feature-state', 'error'], false], '#ef4444',
     ['boolean', ['feature-state', 'selected'], false], '#f97316',
     ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',
-    // Processed network view
-    ['==', ['get', 'isCollectionPoint'], true], RENDERED_NODE_COLORS.COLLECTION_POINT,
-    ['any',
-      ['==', ['get', 'accessoryType'], 'PV'],
-      ['==', ['get', 'accessoryType'], 'TIL'],
-      ['==', ['get', 'accessoryType'], 'TL'],
-      ['==', ['get', 'accessoryType'], 'CP'],
-    ], RENDERED_NODE_COLORS.PV,
-    // Editor fallback
-    ['==', ['get', 'isHighestElevation'], true], '#ef4444',
-    ['==', ['get', 'isLowestElevation'], true], '#06b6d4',
-    ['==', ['get', 'isEndpoint'], true], '#f59e0b',
-    '#8b5cf6', // default — intersection
+    ['==', ['get', 'isCollectionPoint'], true], '#06b6d4',
+    '#6b7280',
   ] as unknown as string,
-  'circle-opacity': [
-    'case',
-    ['boolean', ['feature-state', 'selected'], false], 1,
-    0.85,
-  ] as unknown as number,
+  'circle-opacity': 1,
   'circle-stroke-width': [
     'case',
     ['boolean', ['feature-state', 'selected'], false], 3,
@@ -118,7 +103,8 @@ export const NODES_PAINT: CircleLayerSpecification['paint'] = {
     'case',
     ['boolean', ['feature-state', 'selected'], false], '#fff',
     ['boolean', ['feature-state', 'hovered'], false], '#fff',
-    'rgba(255, 255, 255, 0.6)',
+    ['==', ['get', 'isCollectionPoint'], true], '#004d40',
+    '#fff',
   ] as unknown as string,
 };
 
@@ -131,7 +117,7 @@ export const EDGES_DEFAULT_PAINT: LineLayerSpecification['paint'] = {
     ['boolean', ['feature-state', 'error'], false], '#ef4444',
     ['boolean', ['feature-state', 'selected'], false], '#f97316',
     ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',
-    '#60a5fa',
+    DEFAULT_EDGE_COLOR,
   ] as unknown as string,
   'line-width': [
     'case',
@@ -253,6 +239,8 @@ export const FLOW_ARROWS_LAYOUT: SymbolLayerSpecification['layout'] = {
 };
 
 export const FLOW_ARROWS_PAINT: SymbolLayerSpecification['paint'] = {
-  'text-color': '#475569',
-  'text-opacity': 0.7,
+  'text-color': ['coalesce', ['get', 'arrowColor'], DEFAULT_EDGE_COLOR] as unknown as string,
+  'text-opacity': 0.95,
+  'text-halo-color': 'rgba(255, 255, 255, 0.9)',
+  'text-halo-width': 1.1,
 };

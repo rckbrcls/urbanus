@@ -64,10 +64,21 @@ Na visualizacao processada, o mapa renderiza chevrons de fluxo sobre a rede.
 Esses chevrons seguem a orientacao do `LineString` retornado no `SewerNetwork`
 e usam `text-keep-upright: false` no MapLibre para nao inverter a direcao em
 trechos cujo bearing faria o motor "virar" o simbolo por legibilidade.
+O editor expõe apenas tres modos de visualizacao para o mapa: `default`,
+`streets` e `elevation`. Nos modos `default` e `streets`, os nós permanecem
+com a cor neutra padrao do editor tanto antes quanto depois do processamento;
+apenas as arestas e chevrons mudam de acordo com o modo ativo. No modo
+`elevation`, nós, arestas e chevrons usam a rampa topografica calculada para
+cada trecho. Na aba de pipeline, a rede processada ainda expõe filtros de
+visibilidade para `PV` e `collection point`, mas esses filtros nao alteram a
+paleta dos nós no mapa, com excecao de `collection point`, que permanece
+visualmente destacado em relacao aos nós comuns.
 
 ## Persistencia de projeto
 
 `useProjectStore` faz proxy same-origin para o FastAPI. O payload de projeto continua podendo incluir `sewerNetwork`; quando presente, o editor reabre diretamente no snapshot processado salvo.
+
+Na tela `app/projects/page.tsx`, cada card e item de lista agora usa um menu de contexto (`components/ProjectContextMenu.tsx`) com acoes locais para abrir o projeto, abrir em nova aba e remover o projeto com confirmacao antes do `DELETE /api/projects/[id]`.
 
 ## Notas de simplificacao
 

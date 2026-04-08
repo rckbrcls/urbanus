@@ -5,7 +5,7 @@ import type { Project } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2, Mountain, Eye, EyeOff, Droplets, Cable, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2, Mountain, Eye, EyeOff, Cable, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { graphToSewerNetwork, sewerNetworkToGraph } from '@/lib/graph/sewerConversion';
 
 import {
@@ -29,7 +29,6 @@ import { mapNodesToNetworkGraph } from '@/lib/graph/serialization';
 import type { EditingMode } from '@/lib/graph/types';
 import { usePipelineStore } from '@/stores/pipelineStore';
 import { PipelineResultsPanel } from '@/components/pipeline/PipelineResultsPanel';
-import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { Kbd } from '@/components/ui/kbd';
 import { useTranslation } from '@/i18n';
@@ -50,7 +49,6 @@ const GraphMapView = dynamic(() => import('@/components/map/GraphMapView'), {
     </div>
   ),
 });
-const SewerNetworkLayers = dynamic(() => import('@/components/map/SewerNetworkLayers'), { ssr: false });
 
 // ============ TYPES ============
 

@@ -112,12 +112,7 @@ export interface Dictionary {
     pumpStations: string;
     totalCost: string;
     unreachable: string;
-    nodeTypes: string;
     diameters: string;
-    nodeLabels: {
-      collectionPoint: string;
-      pv: string;
-    };
   };
   mapPage: {
     shiftDragInstruction: string;

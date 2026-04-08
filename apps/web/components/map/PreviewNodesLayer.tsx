@@ -11,7 +11,6 @@ interface PreviewNodesLayerProps {
 
 /**
  * Read-only circle layer for preview nodes on the home page.
- * Colors by classification: highest (red), lowest (cyan), endpoint (amber), intersection (violet).
  */
 export default function PreviewNodesLayer({ nodes }: PreviewNodesLayerProps) {
   const geojson = useMemo((): GeoJSON.FeatureCollection => ({
@@ -20,13 +19,6 @@ export default function PreviewNodesLayer({ nodes }: PreviewNodesLayerProps) {
       type: 'Feature' as const,
       properties: {
         id: n.id,
-        classification: n.isHighestElevation
-          ? 'highest'
-          : n.isLowestElevation
-            ? 'lowest'
-            : n.isEndpoint
-              ? 'endpoint'
-              : 'intersection',
         elevation: n.elevation,
         degree: n.degree ?? 0,
       },
@@ -38,32 +30,11 @@ export default function PreviewNodesLayer({ nodes }: PreviewNodesLayerProps) {
   }), [nodes]);
 
   const paintStyle: CircleLayerSpecification['paint'] = {
-    'circle-radius': [
-      'match',
-      ['get', 'classification'],
-      'highest', 6,
-      'lowest', 6,
-      'endpoint', 5,
-      4, // default — intersection
-    ] as unknown as number,
-    'circle-color': [
-      'match',
-      ['get', 'classification'],
-      'highest', '#ef4444',
-      'lowest', '#06b6d4',
-      'endpoint', '#f59e0b',
-      '#8b5cf6', // default — intersection/violet
-    ] as unknown as string,
-    'circle-opacity': 0.7,
+    'circle-radius': 5,
+    'circle-color': '#6b7280',
+    'circle-opacity': 1,
     'circle-stroke-width': 1,
-    'circle-stroke-color': [
-      'match',
-      ['get', 'classification'],
-      'highest', '#ef4444',
-      'lowest', '#06b6d4',
-      'endpoint', '#f59e0b',
-      '#8b5cf6',
-    ] as unknown as string,
+    'circle-stroke-color': '#ffffff',
   };
 
   if (nodes.length === 0) return null;
