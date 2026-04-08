@@ -39,3 +39,12 @@ class ElevationEnrichRequest(BaseModel):
     geojson: Dict[str, Any]
     bbox: ElevationEnrichBbox
     demType: Optional[str] = "COP30"
+
+
+class ProcessRequest(BaseModel):
+    """Edited graph payload accepted by the processing endpoint."""
+
+    nodes: List[Dict[str, Any]]
+    edges: List[Dict[str, Any]]
+
+    model_config = {"extra": "allow"}

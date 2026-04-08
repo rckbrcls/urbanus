@@ -1,248 +1,115 @@
 # 03 -- Backend FastAPI
 
-## Estrutura de Pastas
+## Estrutura relevante
 
-```
+```text
 apps/api/src/urbanus_api/
-├── main.py                          # App FastAPI + endpoints
-├── models.py                        # Modelos Pydantic (request/response)
+├── main.py                    # Endpoints FastAPI e orquestracao do pipeline
+├── models.py                  # Contratos Pydantic de request/response
 ├── data/
-│   ├── database.py                  # Engine async, session factory, get_db
-│   ├── tables.py                    # SQLAlchemy ORM + PostGIS
-│   └── repositories.py             # CRUD (ProjectRepository)
+│   ├── database.py            # Engine async e dependency get_db
+│   ├── tables.py              # ORM SQLAlchemy + PostGIS
+│   └── repositories.py        # CRUD de projetos + persistencia de SewerNetwork
 ├── services/
-│   └── elevation.py                 # OpenTopography (GeoTIFF -> elevacao)
-├── core/
-│   ├── graph/
-│   │   ├── builder.py              # GeoJSON -> NetworkX + persistencia da SewerNetwork
-│   │   ├── classification.py       # Classificacao de nos e clustering espacial
-│   │   ├── sanitization.py         # Limpeza topologica, curvas e quebra de greide
-│   │   ├── coverage.py             # Garantia de cobertura completa das ruas
-│   │   └── accessories.py          # Atribuicao de PV/TIL/TL/CP
-│   ├── elevation/
-│   │   └── extrema.py              # Etapa 5: maximos/minimos topograficos
-│   ├── routing/
-│   │   ├── rsph.py                 # Etapa 6: Repeated Shortest Path Heuristic
-│   │   └── cost.py                 # Funcao de custo de arestas
-│   ├── hydraulics/
-│   │   ├── dimensioning.py         # Dimensionamento de tubos
-│   │   └── costing.py              # Custo total da rede
-│   └── optimizer/
-│       ├── low_points.py           # Resolucao de pontos baixos / inalcançaveis
-│       └── node_reduction.py       # Reducao de nos apos a cobertura completa
+│   └── elevation.py           # Download/amostragem de DEM via OpenTopography
+└── core/
+    ├── graph/                 # classificacao, sanitizacao, cobertura, acessorios
+    ├── elevation/             # deteccao de extremos
+    ├── routing/               # RSPH e custo
+    ├── hydraulics/            # dimensionamento e custo total
+    └── optimizer/             # low points e reducao de nos
 ```
 
-## Endpoints da API
+## Superficie HTTP suportada
 
-### Health Check
+O backend exposto pelo runtime atual ficou reduzido a sete endpoints:
 
-```
-GET /
-Response: {"status": "ok"}
-```
-
-### Projetos (CRUD)
-
-```
-POST   /projects              Cria ou atualiza projeto
-GET    /projects              Lista todos os projetos
-GET    /projects/{project_id} Retorna projeto por ID
-DELETE /projects/{project_id} Deleta projeto e dados relacionados (cascade)
+```text
+POST   /projects
+GET    /projects
+GET    /projects/{project_id}
+DELETE /projects/{project_id}
+POST   /nodes/extract
+POST   /elevation/enrich
+POST   /projects/{project_id}/process
 ```
 
-O `POST /projects` recebe um objeto `Project` e faz upsert: se o ID ja existe, atualiza; caso contrario, insere. As coordenadas de `bounds` e `center` sao convertidas para geometrias PostGIS (`POLYGON` e `POINT`, SRID 4326).
+Nao existe mais `GET /` de health no contrato do app.
 
-### Extracao de Nos
+## Contratos principais
 
-```
-POST /nodes/extract
-Body: NodesExtractRequest
-Response: { nodes: [...], metadata: {...} }
-```
-
-Recebe GeoJSON de ruas enriquecido com elevacao e extrai nos da rede. O parametro `mode` controla a filtragem:
-- `"intersections"`: apenas nos com grau >= 2 (intersecoes) e extremidades
-- `"all"`: todos os vertices (para edicao detalhada)
-
-A classificacao ROSA e atribuida a nos obrigatorios (intersecoes, extremidades, quedas bruscas de elevacao > 0.50 m). Os extremos globais de elevacao recebem AMARELO (mais alto) e AZUL_ESCURO (mais baixo).
-
-### Enriquecimento de Elevacao
-
-```
-POST /elevation/enrich
-Body: ElevationEnrichRequest
-Response: GeoJSON FeatureCollection enriquecido
-```
-
-Pipeline:
-1. Busca GeoTIFF do OpenTopography para a bbox especificada
-2. Abre o raster em memoria com `rasterio.MemoryFile`
-3. Para cada LineString, amostra a elevacao em cada vertice
-4. Adiciona `vertex_elevations` (lista de floats) e `elevation` (estatisticas: min, max, avg, range) nas propriedades de cada feature
-5. Retorna o GeoJSON enriquecido
-
-### Pipeline Completo
-
-```
-POST /projects/{project_id}/process
-Response: SewerNetwork (nodes, edges, pipes, pump_stations, unreachable_nodes)
-```
-
-Executa o pipeline real do backend atual:
-
-1. Constroi `G` a partir do grafo editado ou do `streets_geojson` (`_build_graph_from_edited` / `build_graph_from_geojson`)
-2. Corrige elevacoes espurias do DEM (`_sanitize_spurious_zero_elevations`)
-3. Marca mudancas de direcao e recompila nos obrigatorios (`enforce_direction_changes`)
-4. Sanitiza topologia (`remove_redundant_nodes`, `resolve_curve_clusters`, `enforce_min_pv_spacing`)
-5. Detecta extremos topograficos e quebra de greide (`detect_extrema`, `detect_grade_breaks`)
-6. Define `outlet` e `collection_points` (respeitando selecao manual quando existir e deduplicando pontos baixos proximos)
-7. Roteia a espinha dorsal com RSPH (`rsph_sewer_routing`)
-8. Resolve nos sem caminho gravitacional (`resolve_low_points`)
-9. Reintroduz cobertura completa das ruas (`ensure_full_coverage`)
-10. Quebra ciclos restantes e otimiza numero de nos (`_break_cycles`, `optimize_node_placement`)
-11. Dimensiona a hidraulica (`dimension_network`)
-12. Atribui acessorios (`assign_accessory_types`)
-13. Salva a rede processada completa no PostGIS e em `streets_geojson._sewerNetwork`
-14. Monta e retorna `SewerNetwork`
-
-Documentacao detalhada:
-
-- [`docs/05-pipeline-8-etapas.md`](05-pipeline-8-etapas.md)
-- [`docs/13-fluxo-completo-pipeline.md`](13-fluxo-completo-pipeline.md)
-
-## Modelos Pydantic (`models.py`)
-
-### Request Models
+### `Project`
 
 ```python
-class NodesExtractRequest(BaseModel):
-    geojson: Dict                          # FeatureCollection com LineStrings
-    mode: Literal["intersections", "all"]  # default: "intersections"
-
-class ElevationEnrichBbox(BaseModel):
-    south: float
-    north: float
-    west: float
-    east: float
-
-class ElevationEnrichRequest(BaseModel):
-    geojson: Dict                          # FeatureCollection
-    bbox: ElevationEnrichBbox
-    demType: Optional[str] = "COP30"       # SRTMGL3, SRTMGL1, COP30, COP90, etc.
-```
-
-### Response Models
-
-```python
-class ProjectStats(BaseModel):
-    streetCount: int
-
 class Project(BaseModel):
-    id: str                    # UUID
+    id: str
     name: str
-    createdAt: int             # Unix timestamp
-    bounds: BoundingBox        # {southWest: {lat, lng}, northEast: {lat, lng}}
+    createdAt: int
+    bounds: BoundingBox
     areaKm2: float
-    center: List[float]        # [lat, lng]
+    center: List[float]
     zoom: float
     stats: ProjectStats
-    streets: Dict[str, Any]    # GeoJSON com metadados
+    streets: Dict[str, Any]
     sewerNetwork: SewerNetwork | None = None
 ```
 
-Quando `sewerNetwork` existe, o backend salva um snapshot em `streets_geojson._sewerNetwork` para reidratacao do editor e sincroniza a mesma rede nas tabelas `nodes`, `edges`, `pipe_segments` e `pump_stations`.
+`sewerNetwork` continua opcional no CRUD, mas quando presente ele e salvo em `streets_geojson._sewerNetwork` para reidratacao do editor e sincronizado nas tabelas processadas do PostGIS.
 
-## Camada de Dados
-
-### Engine e Session (`database.py`)
+### `NodesExtractRequest`
 
 ```python
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://urbanus:urbanus@localhost:5432/urbanus"
-)
-
-engine = create_async_engine(DATABASE_URL)
-async_session_factory = async_sessionmaker(engine, class_=AsyncSession)
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency que fornece uma sessao async."""
+class NodesExtractRequest(BaseModel):
+    geojson: Dict[str, Any]
+    mode: Literal["intersections", "all"] = "intersections"
 ```
 
-Usa `asyncpg` como driver assincrono para PostgreSQL.
-
-### Tabelas ORM (`tables.py`)
-
-Cinco tabelas definidas com SQLAlchemy + GeoAlchemy2:
-
-- `ProjectTable` -- projetos com bounds (POLYGON) e center (POINT)
-- `NodeTable` -- nos com geometry (POINT), elevation, node_type, accessory_type
-- `EdgeTable` -- arestas com geometry (LINESTRING), length, slope, cost
-- `PipeSegmentTable` -- segmentos dimensionados (diâmetro, Manning, lâmina, etc.)
-- `PumpStationTable` -- elevatorias (capacidade, altura, CAPEX, OPEX, VPL)
-
-Todas as FKs usam `CASCADE` no delete. Detalhes completos em `docs/04-banco-de-dados.md`.
-
-### Repository (`repositories.py`)
+### `ElevationEnrichRequest`
 
 ```python
-class ProjectRepository:
-    def __init__(self, session: AsyncSession): ...
-
-    async def upsert(self, data: dict) -> ProjectTable:
-        """Insere ou atualiza projeto. Converte bounds/center para PostGIS."""
-
-    async def get_all(self) -> list[ProjectTable]:
-        """Retorna todos os projetos."""
-
-    async def get_by_id(self, project_id: str) -> ProjectTable | None:
-        """Busca projeto por ID."""
-
-    async def delete(self, project_id: str) -> bool:
-        """Deleta projeto e dados relacionados. Retorna True se encontrado."""
+class ElevationEnrichRequest(BaseModel):
+    geojson: Dict[str, Any]
+    bbox: ElevationEnrichBbox
+    demType: str | None = "COP30"
 ```
 
-Metodos internos de conversao:
-- `_bbox_to_polygon(bounds)` -> `ST_SetSRID(ST_MakeEnvelope(west, south, east, north), 4326)`
-- `_center_to_point(center)` -> `ST_SetSRID(ST_MakePoint(lng, lat), 4326)`
+### `ProcessRequest`
 
-## Grafo Base e Persistencia (`core/graph/builder.py`)
+```python
+class ProcessRequest(BaseModel):
+    nodes: List[Dict[str, Any]]
+    edges: List[Dict[str, Any]]
+```
 
-### `build_graph_from_geojson(geojson) -> nx.Graph`
+O processamento agora aceita **apenas** o grafo editado vindo do frontend. Nao existe mais branch de reconstrucao a partir de `streets_geojson`.
 
-E o caminho mais importante para entender o endpoint `process` atual:
+## Fluxo do endpoint `POST /projects/{project_id}/process`
 
-1. Chama `extract_nodes(..., mode="all")`
-2. Mantem apenas anchors (intersecoes e endpoints)
-3. Conecta anchors consecutivos por rua
-4. Garante cobertura minima para ruas sem anchors (`_ensure_street_coverage`)
-5. Conecta componentes desconectados (`_connect_components`)
+1. Carrega o projeto pelo ID.
+2. Exige body JSON com `nodes` e `edges`.
+3. Reconstrui `G: nx.Graph` apenas a partir do payload editado.
+4. Executa classificacao complementar, sanitizacao, extremos, roteamento, low points, cobertura, reducao de nos, hidraulica e acessorios.
+5. Serializa `SewerNetwork`.
+6. Persiste o resultado no PostGIS e atualiza `streets_geojson._sewerNetwork`.
+7. Retorna o payload serializado.
 
-### `save_sewer_network_to_postgis(project_id, network, session) -> None`
+Erros de contrato retornam `400` com mensagens explicitas como:
 
-1. Remove `nodes`, `edges`, `pipe_segments` e `pump_stations` existentes para o projeto
-2. Persiste os nos serializados do `SewerNetwork` em `NodeTable`
-3. Persiste as arestas serializadas, incluindo `waypoints`, em `EdgeTable`
-4. Persiste `pipes` em `PipeSegmentTable`
-5. Persiste `pump_stations` em `PumpStationTable`
+- `Edited graph payload with nodes and edges is required.`
+- `Edited graph payload must include non-empty nodes and edges.`
+- `Edited graph payload contains edges that reference missing nodes.`
 
-## Servicos Externos
+## Persistencia
 
-As consultas de ruas do OpenStreetMap nao passam pelo FastAPI neste momento. O fluxo atual usa a rota Next.js `POST /api/streets`, que consulta o Overpass e retorna GeoJSON para o frontend.
+`repositories.py` concentra dois blocos:
 
-### OpenTopography (`services/elevation.py`)
+- `ProjectRepository`: upsert/list/get/delete do projeto e merge de metadados em `streets_geojson`
+- `save_sewer_network_to_postgis(...)`: limpa e repopula `nodes`, `edges`, `pipe_segments` e `pump_stations` para o projeto
 
-Endpoint: `https://portal.opentopography.org/API/globaldem`
+Isso deixa a camada `core/` focada no algoritmo, sem helper de persistencia misturado ao pipeline.
 
-DEMs suportados:
-- `SRTMGL3` (90m), `SRTMGL1` (30m)
-- `COP30` (30m, **padrao**), `COP90` (90m)
-- `AW3D30` (30m), `NASADEM` (30m)
-- `EU_DTM`, `GEDI_L3`, `FABDEM`
+## Relacao com o frontend
 
-Constantes:
-- `NODATA_THRESHOLD = -9000` -- valores abaixo sao tratados como ausentes
-- Timeout: 120s
-- Limite de area: `MAX_AREA_KM2` (100 km2)
-
-Requer variavel de ambiente `OPENTOPOGRAPHY_API_KEY`.
+- A home usa `POST /elevation/enrich` seguido de `POST /nodes/extract`.
+- O editor usa CRUD de `projects` para abrir/salvar.
+- O processamento do editor sempre passa pelo proxy Next `POST /api/projects/{id}/process`, que encaminha o grafo editado ao FastAPI.

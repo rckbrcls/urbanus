@@ -1,158 +1,71 @@
-# 11 -- Servico de Elevacao e Topografia
+# 11 -- Elevacao e DEM
 
-## OpenTopography API
+## Escopo atual
 
-O URBANUS usa a API do OpenTopography para obter Modelos Digitais de Elevacao (DEMs) globais no formato GeoTIFF.
+O runtime atual usa OpenTopography apenas para o fluxo de enriquecimento de elevacao por vertice.
 
-### Endpoint
+Superficie suportada:
 
-```
-GET https://portal.opentopography.org/API/globaldem
-```
-
-### Parametros
-
-| Parametro | Tipo | Descricao |
-|-----------|------|-----------|
-| `demtype` | string | Identificador do DEM (COP30, NASADEM, etc.) |
-| `south` | float | Latitude sul da bbox |
-| `north` | float | Latitude norte da bbox |
-| `west` | float | Longitude oeste da bbox |
-| `east` | float | Longitude leste da bbox |
-| `outputFormat` | string | `GTiff` (GeoTIFF) |
-| `API_Key` | string | Chave de API |
-
-### Autenticacao
-
-Requer `OPENTOPOGRAPHY_API_KEY` como variavel de ambiente. A chave e gratuita para uso academico.
-
-## DEMs Disponiveis
-
-| DEM | Resolucao | Tipo | Cobertura | Observacoes |
-|-----|-----------|------|-----------|-------------|
-| COP30 | 30 m | DSM | Global (56S-84N) | **Padrao do URBANUS**. Copernicus. Inclui copas de arvores e edificios |
-| COP90 | 90 m | DSM | Global | Versao reamostrada do COP30 |
-| SRTMGL1 | 30 m | DSM | 60N-56S | NASA SRTM v3, lacunas preenchidas |
-| SRTMGL3 | 90 m | DSM | 60N-56S | Versao original SRTM |
-| NASADEM | 30 m | DSM | 60N-56S | SRTM reprocessado com ICESat, melhor que SRTMGL1 |
-| AW3D30 | 30 m | DSM | Global | JAXA ALOS, bom em regioes montanhosas |
-| FABDEM | 30 m | DTM | Global | Copernicus corrigido: copas e edificios removidos |
-| EU_DTM | 30 m | DTM | Europa | Derivado de LiDAR europeu |
-| GEDI_L3 | 1000 m | Altimetria | Tropical | GEDI LiDAR orbital |
-
-### DSM vs DTM
-
-- **DSM (Digital Surface Model)**: inclui superficies elevadas (copas de arvores, edificios, postes). COP30 e SRTM sao DSMs
-- **DTM (Digital Terrain Model)**: superficie do terreno nua. FABDEM e EU_DTM sao DTMs
-
-Para redes de esgoto, o DTM e preferivel (a tubulacao segue o terreno, nao as copas). O FABDEM seria ideal, mas o COP30 e usado como padrao por sua disponibilidade e por ser suficiente para o tracado preliminar.
-
-## Pipeline de Processamento
-
-```
-1. Frontend envia request:
-   POST /api/elevation/enrich
-   { geojson, bbox: {south, north, west, east}, demType: "COP30" }
-
-2. Next.js proxy encaminha para FastAPI:
-   POST http://localhost:8000/elevation/enrich
-
-3. FastAPI (services/elevation.py):
-   a. Valida OPENTOPOGRAPHY_API_KEY
-   b. Verifica area <= 100 km2
-   c. GET OpenTopography -> bytes (GeoTIFF)
-   d. rasterio.MemoryFile(bytes) -> dataset
-
-4. Para cada Feature (LineString) no GeoJSON:
-   a. Extrai coordenadas de cada vertice
-   b. Amostra elevacao em cada coordenada:
-      - Nearest-neighbor: src.sample([(lng, lat)])
-      - Sanitizacao de `0` espurio quando o vertice cai na borda da bbox
-      - Interpolacao de lacunas entre vertices validos da mesma rua
-   c. Valida contra NODATA_THRESHOLD (-9000)
-   d. Adiciona propriedades:
-      - vertex_elevations: [float | null, ...]
-      - elevation: {min, max, avg, range}
-
-5. Retorna GeoJSON enriquecido
+```text
+POST /api/elevation/enrich   # Next.js -> FastAPI
+POST /elevation/enrich       # FastAPI
 ```
 
-## Amostragem de Elevacao
+Nao existe mais rota de download direto de GeoTIFF no produto suportado.
 
-### Nearest-Neighbor
+## Fluxo
 
-**Arquivo**: `services/elevation.py`
-
-O servico atual amostra cada vertice com o valor do pixel mais proximo:
-
-```python
-sample = src.sample([(lng, lat)])
-value = next(sample)[0]
+```text
+frontend
+  -> POST /api/elevation/enrich
+  -> proxy Next.js
+  -> POST /elevation/enrich
+  -> FastAPI baixa GeoTIFF do OpenTopography
+  -> rasterio amostra cada vertice do GeoJSON
+  -> retorna FeatureCollection enriquecida
 ```
 
-O valor e validado contra `NODATA_THRESHOLD = -9000` e contra o valor `nodata` do raster.
+## Request
 
-### Interpolacao de Lacunas
-
-Quando algum vertice recebe `None`, o servico tenta preencher a lacuna usando os vizinhos validos mais proximos da mesma `LineString`.
-
-Regras:
-- se existir valor valido dos dois lados, faz interpolacao linear;
-- se existir apenas um lado valido, propaga esse valor;
-- zeros espurios em borda de raster ou da bbox podem ser promovidos a `None` antes da interpolacao;
-- se o mesmo ponto aparecer em mais de uma feature, a elevacao valida coincidente tem prioridade sobre `0` e `None`.
-
-## Estatisticas por Feature
-
-Para cada LineString enriquecida, o servico calcula:
-
-```python
+```json
 {
-    "vertex_elevations": [312.5, 315.2, 318.0, None, 310.1],
-    "elevation": {
-        "min": 310.1,
-        "max": 318.0,
-        "avg": 313.95,
-        "range": 7.9
-    }
+  "geojson": { "...": "..." },
+  "bbox": {
+    "south": -23.6,
+    "north": -23.5,
+    "west": -46.7,
+    "east": -46.6
+  },
+  "demType": "COP30"
 }
 ```
 
-Vertices com elevacao `None` (fora do raster ou nodata) sao excluidos do calculo de estatisticas.
+## Resposta
 
-## Limitacoes
+Cada `LineString` volta com:
 
-### Resolucao (30 m)
+- `vertex_elevations`
+- `elevation.min`
+- `elevation.max`
+- `elevation.avg`
+- `elevation.range`
 
-O COP30 tem resolucao de ~30 metros. Para redes urbanas com lotes de 10-15 m de frente, um unico pixel pode cobrir 2-3 lotes. A declividade calculada entre vertices proximos pode ser imprecisa.
+## Comportamento do servico
 
-Mitigacao: a interpolacao bilinear suaviza os degraus, e o pipeline usa `ELEVATION_PROMINENCE_MIN = 2.0 m` para ignorar ruido.
+Arquivo: `apps/api/src/urbanus_api/services/elevation.py`
 
-### DSM vs DTM
+1. valida a area da bbox
+2. verifica `OPENTOPOGRAPHY_API_KEY`
+3. baixa o DEM
+4. abre o raster em memoria
+5. amostra cada vertice
+6. trata `nodata` e zeros espurios de borda
+7. interpola lacunas locais quando possivel
+8. devolve o GeoJSON enriquecido
 
-O COP30 e um DSM -- inclui copas de arvores e topos de edificios. Em areas densamente arborizadas ou com edificios altos, a elevacao pode ser 5-30 m superior ao terreno real.
+## Papel no produto
 
-Mitigacao futura: migrar para FABDEM (DTM derivado do Copernicus com copas e edificios removidos algoritmicamente).
+- a home usa esse enriquecimento antes de chamar `/nodes/extract`
+- o pipeline de processamento depende das elevacoes presentes no grafo editado enviado depois pelo editor
 
-### Nodata e Bordas
-
-Vertices na borda do raster, na borda da bbox clipada ou sobre corpos d'agua podem retornar `nodata` ou `0` espurio. O sistema trata esses casos como `None` quando o contexto local indica artefato, depois tenta interpolar pela mesma `LineString`, e prefere valores validos coincidentes quando duas ruas compartilham o mesmo vertice.
-
-### Ruido Urbano
-
-Em areas urbanas densas, o DEM pode apresentar ruido causado por:
-- Edificios altos criando "picos" artificiais
-- Sombras de radar (SRTM) causando vales artificiais
-- Artefatos de pos-processamento
-
-O filtro de proeminencia (Etapa 5) elimina a maioria desses artefatos, mas casos extremos podem exigir revisao manual.
-
-## Proposta de Cache em Disco
-
-Atualmente, cada requisicao de elevacao baixa um novo GeoTIFF do OpenTopography. Para areas grandes ou requisicoes repetidas, isso e ineficiente.
-
-Proposta (descrita em `URBANUS_REFATORACAO_PIPELINE_DADOS.md`):
-- Cache em disco com chave `{demType}_{south}_{north}_{west}_{east}.tif`
-- TTL configuravel (padrao: 24h)
-- Limpeza periodica de cache antigo
-- Verificacao de sobreposicao: se o cache ja contem a area requisitada, reutilizar
+O nome de estagio "topography" ainda aparece no frontend por compatibilidade visual da home, mas funcionalmente ele representa apenas o enriquecimento de elevacao do GeoJSON.

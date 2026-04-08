@@ -80,7 +80,7 @@ Indices:
 - `idx_edges_project` (project_id) -- busca por projeto
 - `idx_edges_geom` (geometry, GiST) -- consultas espaciais
 
-O campo `properties` (JSONB) armazena `source_node_id` e `target_node_id` como metadados de conectividade, usados pelo `builder.py` para reconstruir o grafo NetworkX.
+O campo `properties` (JSONB) armazena `source_node_id` e `target_node_id` como metadados de conectividade usados pelo runtime para reconstruir e persistir a conectividade da rede processada.
 
 ### Tabela `pipe_segments`
 

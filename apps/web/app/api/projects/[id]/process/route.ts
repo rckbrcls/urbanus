@@ -8,11 +8,20 @@ export async function POST(
 ) {
   const { id } = await params;
 
-  // Forward body to Python API if present (edited graph)
-  let body: string | undefined;
   const contentType = request.headers.get("content-type");
-  if (contentType?.includes("application/json")) {
-    body = await request.text();
+  if (!contentType?.includes("application/json")) {
+    return NextResponse.json(
+      { error: "Edited graph payload must be sent as application/json" },
+      { status: 400 },
+    );
+  }
+
+  const body = await request.text();
+  if (!body.trim()) {
+    return NextResponse.json(
+      { error: "Edited graph payload with nodes and edges is required" },
+      { status: 400 },
+    );
   }
 
   try {

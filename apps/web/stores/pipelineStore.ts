@@ -23,7 +23,7 @@ export interface PipelineState {
 // ============ ACTIONS ============
 
 export interface PipelineActions {
-  processProject: (projectId: string, editedGraph?: { nodes: unknown[]; edges: unknown[] }) => Promise<void>;
+  processProject: (projectId: string, editedGraph: { nodes: unknown[]; edges: unknown[] }) => Promise<void>;
   hydrateResult: (result: SewerNetwork | null) => void;
   reset: () => void;
   toggleView: () => void;
@@ -48,14 +48,14 @@ export const usePipelineStore = create<PipelineState & PipelineActions>()(
     (set, get) => ({
       ...initialState,
 
-      processProject: async (projectId: string, editedGraph?: { nodes: unknown[]; edges: unknown[] }) => {
+      processProject: async (projectId: string, editedGraph: { nodes: unknown[]; edges: unknown[] }) => {
         set({ status: 'processing', error: null, _cachedResult: null });
 
         try {
           const res = await fetch(`/api/projects/${projectId}/process`, {
             method: 'POST',
-            headers: editedGraph ? { 'Content-Type': 'application/json' } : {},
-            body: editedGraph ? JSON.stringify(editedGraph) : undefined,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editedGraph),
           });
 
           if (!res.ok) {

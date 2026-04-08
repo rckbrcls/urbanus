@@ -4,30 +4,26 @@ from typing import List
 
 import networkx as nx
 
-from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from urbanus_api.models import (
-    Project,
-    NodesExtractRequest,
     ElevationEnrichRequest,
+    NodesExtractRequest,
+    ProcessRequest,
+    Project,
 )
 from urbanus_api.services.elevation import enrich_geojson as _enrich_geojson
 from urbanus_api.core.graph.classification import (
     extract_nodes as _extract_nodes,
     enforce_direction_changes,
 )
-from urbanus_api.core.graph.builder import (
-    build_graph_from_geojson,
-    save_sewer_network_to_postgis,
-)
 from urbanus_api.core.graph.sanitization import (
-    remove_redundant_nodes,
-    resolve_curve_clusters,
     detect_grade_breaks,
     enforce_min_pv_spacing,
+    remove_redundant_nodes,
+    resolve_curve_clusters,
 )
 from urbanus_api.core.graph.accessories import assign_accessory_types
 from urbanus_api.core.graph.coverage import ensure_full_coverage
@@ -38,7 +34,7 @@ from urbanus_api.core.optimizer.low_points import resolve_low_points
 from urbanus_api.core.hydraulics.dimensioning import dimension_network
 from urbanus_api.core.hydraulics.costing import compute_total_cost
 from urbanus_api.data.database import get_db
-from urbanus_api.data.repositories import ProjectRepository
+from urbanus_api.data.repositories import ProjectRepository, save_sewer_network_to_postgis
 from urbanus_geo.calculations import haversine
 from urbanus_geo.constants import MIN_PV_SPACING
 
@@ -74,12 +70,6 @@ def _row_to_project(row, *, include_sewer_network: bool = True) -> dict:
             else None
         ),
     }
-
-
-@app.get("/")
-def read_root():
-    return {"status": "ok"}
-
 
 @app.post("/projects", response_model=Project)
 async def create_project(project: Project, db: AsyncSession = Depends(get_db)):
@@ -232,16 +222,11 @@ def _select_collection_points(
     return selected
 
 
-class ProcessRequest(BaseModel):
-    """Optional request body for processing with an edited graph."""
-    nodes: list[dict] | None = None
-    edges: list[dict] | None = None
-
-    model_config = {"extra": "allow"}
-
-
 def _build_graph_from_edited(data: ProcessRequest) -> nx.Graph:
-    """Build a NetworkX graph from an edited node/edge list sent by the frontend."""
+    """Build a NetworkX graph from the edited node/edge payload."""
+    if not data.nodes or not data.edges:
+        raise ValueError("Edited graph payload must include non-empty nodes and edges.")
+
     G = nx.Graph()
     for n in data.nodes or []:
         G.add_node(
@@ -255,6 +240,8 @@ def _build_graph_from_edited(data: ProcessRequest) -> nx.Graph:
             is_endpoint=n.get("is_endpoint") or n.get("isEndpoint", False),
             is_collection_point=n.get("is_collection_point") or n.get("isCollectionPoint", False),
         )
+
+    invalid_edges = 0
     for e in data.edges or []:
         src = e.get("source_node_id") or e.get("sourceId", "")
         tgt = e.get("target_node_id") or e.get("targetId", "")
@@ -266,6 +253,16 @@ def _build_graph_from_edited(data: ProcessRequest) -> nx.Graph:
                 highway=e.get("highway"),
                 street_id=e.get("street_id") or e.get("streetId", ""),
             )
+        else:
+            invalid_edges += 1
+
+    if len(G.nodes) == 0:
+        raise ValueError("Edited graph payload must include at least one node.")
+    if invalid_edges > 0:
+        raise ValueError("Edited graph payload contains edges that reference missing nodes.")
+    if len(G.edges) == 0:
+        raise ValueError("Edited graph payload must include at least one valid edge.")
+
     return G
 
 
@@ -275,34 +272,22 @@ async def process_sewer_network(
     body: ProcessRequest | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Execute the full sewer network pipeline.
-
-    If a request body with nodes/edges is provided, uses that edited graph
-    instead of rebuilding from the stored streets_geojson.
-    """
+    """Execute the sewer pipeline from the edited graph sent by the frontend."""
     repo = ProjectRepository(db)
     project = await repo.get_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Use edited graph if provided, otherwise rebuild from streets_geojson
-    if body and body.nodes:
-        G = _build_graph_from_edited(body)
-    else:
-        streets_geojson = project.streets_geojson
-        if not streets_geojson or not isinstance(streets_geojson, dict):
-            raise HTTPException(
-                status_code=400,
-                detail="No streets data. Select an area and extract streets first.",
-            )
-        clean_geojson = {k: v for k, v in streets_geojson.items() if not k.startswith("_")}
-        G = build_graph_from_geojson(clean_geojson)
-
-    if len(G.nodes) == 0:
+    if body is None:
         raise HTTPException(
             status_code=400,
-            detail="Could not extract graph from streets data.",
+            detail="Edited graph payload with nodes and edges is required.",
         )
+
+    try:
+        G = _build_graph_from_edited(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Sanity check: elevation=0 surrounded by high neighbors is a DEM edge artifact
     _sanitize_spurious_zero_elevations(G)
@@ -450,15 +435,16 @@ async def process_sewer_network(
         total_cost=compute_total_cost(pipes, pump_stations, tree),
     )
 
-    await save_sewer_network_to_postgis(project_id, result.model_dump(), db)
+    result_payload = result.model_dump()
+    await save_sewer_network_to_postgis(project_id, result_payload, db)
     if isinstance(project.streets_geojson, dict):
         project.streets_geojson = {
             **project.streets_geojson,
-            "_sewerNetwork": result.model_dump(),
+            "_sewerNetwork": result_payload,
         }
         await db.commit()
 
-    return result.model_dump()
+    return result_payload
 
 
 @app.post("/elevation/enrich")

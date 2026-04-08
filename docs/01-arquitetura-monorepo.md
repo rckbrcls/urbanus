@@ -186,7 +186,7 @@ Tres servicos definidos em `docker-compose.yml`:
 
 | Variavel | Usado por | Descricao |
 |----------|-----------|-----------|
-| `OPENTOPOGRAPHY_API_KEY` | FastAPI, Next.js (`/api/topography`) | Chave da API OpenTopography para download de DEMs |
+| `OPENTOPOGRAPHY_API_KEY` | FastAPI e proxy Next `/api/elevation/enrich` | Chave da API OpenTopography usada no enriquecimento de elevacao |
 | `PYTHON_API_URL` | Next.js | URL do backend FastAPI (default: `http://localhost:8000`) |
 | `DATABASE_URL` | FastAPI | String de conexao PostgreSQL com asyncpg |
 
