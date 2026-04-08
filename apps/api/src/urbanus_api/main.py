@@ -130,23 +130,28 @@ async def nodes_extract(req: NodesExtractRequest):
 
 
 def _sanitize_spurious_zero_elevations(G: nx.Graph, threshold: float = 50.0) -> None:
-    """Replace elevation=0 with None when surrounding nodes are much higher.
+    """Final safeguard for boundary zero artifacts that escaped earlier stages.
 
-    Common for boundary nodes where DEM returns 0 (edge artifact).
-    If median neighbor elevation is > threshold meters above 0, mark as None.
+    Enrichment and graph building should already prefer valid coincident values.
+    This only clears residual elevation=0 nodes when surrounding nodes are
+    clearly much higher, preventing spurious outlets and wrong routing.
     """
     for node in list(G.nodes):
         z = G.nodes[node].get("z")
-        if z is not None and z == 0:
-            neighbor_elevs = [
-                G.nodes[nb].get("z")
-                for nb in G.neighbors(node)
-                if G.nodes[nb].get("z") is not None and G.nodes[nb].get("z") != 0
-            ]
-            if neighbor_elevs:
-                median_z = sorted(neighbor_elevs)[len(neighbor_elevs) // 2]
-                if median_z > threshold:
-                    G.nodes[node]["z"] = None
+        if z is None or z != 0:
+            continue
+
+        neighbor_elevs = [
+            G.nodes[nb].get("z")
+            for nb in G.neighbors(node)
+            if G.nodes[nb].get("z") is not None and G.nodes[nb].get("z") != 0
+        ]
+        if not neighbor_elevs:
+            continue
+
+        median_z = sorted(neighbor_elevs)[len(neighbor_elevs) // 2]
+        if median_z > threshold:
+            G.nodes[node]["z"] = None
 
 
 def _break_cycles(tree: nx.DiGraph) -> None:

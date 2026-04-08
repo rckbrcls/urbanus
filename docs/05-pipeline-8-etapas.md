@@ -126,11 +126,13 @@ Resultado: `G` ja nasce como um grafo estrutural da malha, nao como um espelho l
 
 ### Objetivo
 
-Corrigir casos em que o DEM devolve elevacao `0` em bordas do raster. Se um no esta em `0` mas os vizinhos estao muito acima, o valor vira `None`.
+Corrigir casos residuais em que o DEM devolve elevacao `0` em bordas do raster. A correcao principal acontece antes, no enriquecimento e na reconciliacao de nos coincidentes; aqui fica apenas a defesa final. Se um no esta em `0` mas os vizinhos estao muito acima, o valor vira `None`.
 
 ### Por que existe
 
 Sem isso, o `outlet` poderia ser escolhido por um artefato do raster, e o roteamento ficaria enviesado.
+
+Quando ha mais de uma rua compartilhando a mesma coordenada na borda da bbox, o pipeline agora prefere a elevacao valida coincidente ao inves de preservar o primeiro `0` observado.
 
 ## Etapa 1 -- Classificacao Base de Nos
 

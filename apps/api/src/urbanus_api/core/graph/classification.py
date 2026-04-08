@@ -20,6 +20,11 @@ from urbanus_geo.calculations import haversine
 from urbanus_geo.constants import DIRECTION_CHANGE_THRESHOLD, SNAP_DISTANCE_METERS
 
 
+def _is_meaningful_elevation(value: float | None) -> bool:
+    """Return True for valid, non-zero elevations."""
+    return value is not None and value != 0
+
+
 def _cluster_nearby_nodes(
     nodes: list[dict[str, Any]],
     snap_distance: float = 5.0,
@@ -83,7 +88,8 @@ def _cluster_nearby_nodes(
         # Merge street_ids and street_names
         all_street_ids: set[str] = set()
         all_street_names: set[str] = set()
-        elevations: list[float] = []
+        meaningful_elevations: list[float] = []
+        has_zero_elevation = False
         any_pv = False
         any_endpoint = False
 
@@ -98,8 +104,11 @@ def _cluster_nearby_nodes(
             sname = nd.get("streetName")
             if sname and sname != "Unnamed":
                 all_street_names.add(sname)
-            if nd.get("elevation") is not None:
-                elevations.append(nd["elevation"])
+            elevation = nd.get("elevation")
+            if _is_meaningful_elevation(elevation):
+                meaningful_elevations.append(elevation)
+            elif elevation == 0:
+                has_zero_elevation = True
             if nd.get("pvObrigatorio"):
                 any_pv = True
             if nd.get("isEndpoint"):
@@ -110,8 +119,12 @@ def _cluster_nearby_nodes(
         rep["degree"] = len(all_street_ids)
         rep["isIntersection"] = rep["degree"] >= 2
         rep["isEndpoint"] = any_endpoint
-        if elevations:
-            rep["elevation"] = sum(elevations) / len(elevations)
+        if meaningful_elevations:
+            rep["elevation"] = sum(meaningful_elevations) / len(meaningful_elevations)
+        elif has_zero_elevation:
+            rep["elevation"] = 0.0
+        else:
+            rep["elevation"] = None
         if any_pv:
             rep["pvObrigatorio"] = True
             rep["nodeType"] = "ROSA"

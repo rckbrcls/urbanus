@@ -15,6 +15,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urbanus_api.data.tables import EdgeTable, NodeTable, PipeSegmentTable, PumpStationTable
 
 
+def _is_meaningful_elevation(value: float | None) -> bool:
+    """Return True for valid, non-zero elevations."""
+    return value is not None and value != 0
+
+
+def _prefer_elevation(current: float | None, incoming: float | None) -> float | None:
+    """Prefer meaningful elevations and never downgrade a valid value to zero."""
+    current_valid = _is_meaningful_elevation(current)
+    incoming_valid = _is_meaningful_elevation(incoming)
+
+    if current_valid:
+        return current
+    if incoming_valid:
+        return incoming
+    if current is not None:
+        return current
+    return incoming
+
+
+def _reconcile_node_elevation(
+    G: nx.Graph,
+    node_id: str,
+    elevation: float | None,
+) -> None:
+    """Update an existing node elevation without overwriting valid data with zero."""
+    G.nodes[node_id]["z"] = _prefer_elevation(G.nodes[node_id].get("z"), elevation)
+
+
 def build_graph_from_geojson(geojson: dict) -> nx.Graph:
     """Build a NetworkX graph directly from streets GeoJSON.
 
@@ -49,6 +77,7 @@ def build_graph_from_geojson(geojson: dict) -> nx.Graph:
         pos_key = f'{pos["lat"]:.5f},{pos["lng"]:.5f}'
 
         if pos_key in pos_to_id:
+            _reconcile_node_elevation(G, pos_to_id[pos_key], n.get("elevation"))
             continue
 
         pos_to_id[pos_key] = n["id"]
@@ -131,8 +160,6 @@ def _ensure_street_coverage(
     - Circular / very short streets where first==last (uses midpoint vertex)
     - MultiLineString geometries (processes each line segment)
     """
-    import uuid
-
     features = geojson.get("features") or []
     for f in features:
         geom = f.get("geometry", {})
@@ -170,8 +197,6 @@ def _add_edge_for_line(
     haversine_fn,
 ) -> None:
     """Add an edge for a single coordinate line if none exists yet."""
-    import uuid
-
     first = coords[0]
     last = coords[-1]
 
@@ -251,6 +276,7 @@ def _get_or_create_node(
 
     node_id = pos_to_id.get(pos_key)
     if node_id:
+        _reconcile_node_elevation(G, node_id, elevation)
         return node_id
 
     node_id = str(uuid.uuid4())

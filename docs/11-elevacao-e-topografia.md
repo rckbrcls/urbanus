@@ -67,6 +67,7 @@ Para redes de esgoto, o DTM e preferivel (a tubulacao segue o terreno, nao as co
    a. Extrai coordenadas de cada vertice
    b. Amostra elevacao em cada coordenada:
       - Nearest-neighbor: src.sample([(lng, lat)])
+      - Sanitizacao de `0` espurio quando o vertice cai na borda da bbox
       - Interpolacao de lacunas entre vertices validos da mesma rua
    c. Valida contra NODATA_THRESHOLD (-9000)
    d. Adiciona propriedades:
@@ -98,7 +99,8 @@ Quando algum vertice recebe `None`, o servico tenta preencher a lacuna usando os
 Regras:
 - se existir valor valido dos dois lados, faz interpolacao linear;
 - se existir apenas um lado valido, propaga esse valor;
-- zeros espurios em borda de raster podem ser promovidos a `None` antes da interpolacao.
+- zeros espurios em borda de raster ou da bbox podem ser promovidos a `None` antes da interpolacao;
+- se o mesmo ponto aparecer em mais de uma feature, a elevacao valida coincidente tem prioridade sobre `0` e `None`.
 
 ## Estatisticas por Feature
 
@@ -134,7 +136,7 @@ Mitigacao futura: migrar para FABDEM (DTM derivado do Copernicus com copas e edi
 
 ### Nodata e Bordas
 
-Vertices na borda do raster ou sobre corpos d'agua podem retornar `nodata`. O sistema trata esses casos como `None`, propagando a ausencia para as etapas seguintes.
+Vertices na borda do raster, na borda da bbox clipada ou sobre corpos d'agua podem retornar `nodata` ou `0` espurio. O sistema trata esses casos como `None` quando o contexto local indica artefato, depois tenta interpolar pela mesma `LineString`, e prefere valores validos coincidentes quando duas ruas compartilham o mesmo vertice.
 
 ### Ruido Urbano
 

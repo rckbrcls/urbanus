@@ -26,6 +26,53 @@ OPENTOPOGRAPHY_URL = "https://portal.opentopography.org/API/globaldem"
 DEM_TYPES = ("SRTMGL3", "SRTMGL1", "COP30", "COP90", "AW3D30", "NASADEM", "EU_DTM", "GEDI_L3", "FABDEM")
 DEFAULT_DEM = "COP30"
 NODATA_THRESHOLD = -9000
+BOUNDARY_EPSILON = 1e-9
+SPURIOUS_ZERO_THRESHOLD = 50.0
+
+
+def _is_meaningful_elevation(value: float | None) -> bool:
+    """Return True for valid, non-zero elevations."""
+    return value is not None and value != 0
+
+
+def _is_bbox_edge_vertex(
+    lon: float,
+    lat: float,
+    south: float,
+    north: float,
+    west: float,
+    east: float,
+    epsilon: float = BOUNDARY_EPSILON,
+) -> bool:
+    """Return True when the coordinate lies on the request bbox boundary."""
+    return (
+        abs(lat - south) <= epsilon
+        or abs(lat - north) <= epsilon
+        or abs(lon - west) <= epsilon
+        or abs(lon - east) <= epsilon
+    )
+
+
+def _nearest_nonzero_neighbors(
+    elevations: list[float | None],
+    index: int,
+) -> list[float]:
+    """Collect nearest non-zero neighbors to the left and right of index."""
+    neighbors: list[float] = []
+
+    for j in range(index - 1, -1, -1):
+        value = elevations[j]
+        if _is_meaningful_elevation(value):
+            neighbors.append(value)
+            break
+
+    for j in range(index + 1, len(elevations)):
+        value = elevations[j]
+        if _is_meaningful_elevation(value):
+            neighbors.append(value)
+            break
+
+    return neighbors
 
 
 def _fetch_geotiff(south: float, north: float, west: float, east: float, dem_type: str) -> bytes:
@@ -95,6 +142,44 @@ def _elevation_stats(elevations: list[float | None]) -> dict[str, Any]:
     return {"min": mn, "max": mx, "avg": avg, "range": mx - mn}
 
 
+def _sanitize_boundary_elevations(
+    coords: list[tuple[float, float]],
+    elevations: list[float | None],
+    south: float,
+    north: float,
+    west: float,
+    east: float,
+    threshold: float = SPURIOUS_ZERO_THRESHOLD,
+) -> list[float | None]:
+    """Convert suspicious bbox-edge zeros into None before interpolation."""
+    if not coords or not elevations:
+        return elevations
+
+    result = list(elevations)
+    valid = [value for value in result if _is_meaningful_elevation(value)]
+    if not valid:
+        return result
+
+    median_valid = sorted(valid)[len(valid) // 2]
+
+    for i, ((lon, lat), value) in enumerate(zip(coords, result)):
+        if value != 0:
+            continue
+        if not _is_bbox_edge_vertex(lon, lat, south, north, west, east):
+            continue
+
+        neighbor_values = _nearest_nonzero_neighbors(result, i)
+        if neighbor_values:
+            if max(neighbor_values) > threshold:
+                result[i] = None
+                continue
+
+        if median_valid > threshold:
+            result[i] = None
+
+    return result
+
+
 def _interpolate_missing_elevations(elevations: list[float | None]) -> list[float | None]:
     """Fill None values by interpolating from nearest valid neighbors.
 
@@ -108,13 +193,20 @@ def _interpolate_missing_elevations(elevations: list[float | None]) -> list[floa
     if n == 0:
         return elevations
 
-    # First pass: detect spurious zeros (0 where neighbors are much higher)
+    # First pass: detect spurious zeros that escaped initial sanitization.
     result = list(elevations)
-    valid = [e for e in result if e is not None and e != 0]
+    valid = [e for e in result if _is_meaningful_elevation(e)]
     if valid:
         median_valid = sorted(valid)[len(valid) // 2]
         for i in range(n):
-            if result[i] is not None and result[i] == 0 and median_valid > 50:
+            if result[i] != 0:
+                continue
+
+            neighbor_values = _nearest_nonzero_neighbors(result, i)
+            if neighbor_values and (
+                max(neighbor_values) > SPURIOUS_ZERO_THRESHOLD
+                or median_valid > SPURIOUS_ZERO_THRESHOLD
+            ):
                 result[i] = None
 
     # Second pass: interpolate None from nearest valid neighbors
@@ -194,6 +286,9 @@ def enrich_geojson(
 
                 pairs = [(float(c[0]), float(c[1])) for c in coords]
                 elevations = _sample_elevations_at(src, pairs, no_val)
+                elevations = _sanitize_boundary_elevations(
+                    pairs, elevations, south, north, west, east,
+                )
                 elevations = _interpolate_missing_elevations(elevations)
                 stats = _elevation_stats(elevations)
 

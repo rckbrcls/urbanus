@@ -102,6 +102,36 @@ class TestClusterNearbyNodes:
         # Merged degree recalculated from all street_ids
         assert result[0]["degree"] >= 2
 
+    def test_merge_prefers_nonzero_elevation_over_zero(self):
+        """A valid elevation must win over a coincident spurious zero."""
+        nodes = [
+            {
+                "id": "1",
+                "position": {"lat": -23.55000, "lng": -46.65000},
+                "degree": 1,
+                "connectedStreets": ["s1"],
+                "streetNames": [],
+                "pvObrigatorio": False,
+                "isEndpoint": True,
+                "elevation": 0.0,
+            },
+            {
+                "id": "2",
+                "position": {"lat": -23.55001, "lng": -46.65001},
+                "degree": 1,
+                "connectedStreets": ["s2"],
+                "streetNames": [],
+                "pvObrigatorio": False,
+                "isEndpoint": True,
+                "elevation": 852.0,
+            },
+        ]
+
+        result = _cluster_nearby_nodes(nodes, snap_distance=5.0)
+
+        assert len(result) == 1
+        assert result[0]["elevation"] == pytest.approx(852.0)
+
 
 class TestEnforceDirectionChanges:
     def test_sharp_bend_marks_rosa(self):
