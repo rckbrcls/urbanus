@@ -71,11 +71,45 @@ export class CommandManager {
  */
 export interface GraphStoreAccessor {
   getGraph(): NetworkGraph;
+  setGraph(graph: NetworkGraph): void;
   setNode(id: string, node: NetworkNode): void;
   removeNode(id: string): void;
   setEdge(id: string, edge: NetworkEdge): void;
   removeEdge(id: string): void;
   updateNodeEdgeIds(nodeId: string, edgeIds: string[]): void;
+}
+
+function cloneGraph(graph: NetworkGraph): NetworkGraph {
+  return {
+    nodes: Object.fromEntries(
+      Object.entries(graph.nodes).map(([id, node]) => [
+        id,
+        {
+          ...node,
+          coordinates: [...node.coordinates] as [number, number, number],
+          properties: {
+            ...node.properties,
+            edgeIds: [...node.properties.edgeIds],
+            connectedStreets: node.properties.connectedStreets
+              ? [...node.properties.connectedStreets]
+              : undefined,
+          },
+        },
+      ]),
+    ),
+    edges: Object.fromEntries(
+      Object.entries(graph.edges).map(([id, edge]) => [
+        id,
+        {
+          ...edge,
+          geometry: edge.geometry.map((point) => [...point]),
+          properties: {
+            ...edge.properties,
+          },
+        },
+      ]),
+    ),
+  };
 }
 
 // ============ BATCH COMMAND ============
@@ -100,6 +134,43 @@ export class BatchCommand implements GraphCommand {
     for (let i = this.commands.length - 1; i >= 0; i--) {
       this.commands[i].undo();
     }
+  }
+}
+
+export class ReplaceGraphCommand implements GraphCommand {
+  readonly description: string;
+  private store: GraphStoreAccessor;
+  private previousGraph: NetworkGraph;
+  private nextGraph: NetworkGraph;
+  private onExecute?: () => void;
+  private onUndo?: () => void;
+
+  constructor(
+    store: GraphStoreAccessor,
+    previousGraph: NetworkGraph,
+    nextGraph: NetworkGraph,
+    options?: {
+      description?: string;
+      onExecute?: () => void;
+      onUndo?: () => void;
+    },
+  ) {
+    this.store = store;
+    this.previousGraph = cloneGraph(previousGraph);
+    this.nextGraph = cloneGraph(nextGraph);
+    this.description = options?.description ?? 'Replace graph';
+    this.onExecute = options?.onExecute;
+    this.onUndo = options?.onUndo;
+  }
+
+  execute(): void {
+    this.store.setGraph(cloneGraph(this.nextGraph));
+    this.onExecute?.();
+  }
+
+  undo(): void {
+    this.store.setGraph(cloneGraph(this.previousGraph));
+    this.onUndo?.();
   }
 }
 

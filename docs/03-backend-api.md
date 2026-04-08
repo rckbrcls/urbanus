@@ -11,13 +11,14 @@ apps/api/src/urbanus_api/
 │   ├── tables.py                    # SQLAlchemy ORM + PostGIS
 │   └── repositories.py             # CRUD (ProjectRepository)
 ├── services/
-│   ├── elevation.py                 # OpenTopography (GeoTIFF -> elevacao)
-│   └── overpass.py                  # Stub para queries Overpass
+│   └── elevation.py                 # OpenTopography (GeoTIFF -> elevacao)
 ├── core/
 │   ├── graph/
-│   │   ├── builder.py              # PostGIS <-> NetworkX
-│   │   ├── classification.py       # Etapa 1: classificacao de nos
-│   │   └── sanitization.py         # Etapas 2-4: subdivisao, remocao, curvas
+│   │   ├── builder.py              # GeoJSON/PostGIS <-> NetworkX
+│   │   ├── classification.py       # Classificacao de nos e clustering espacial
+│   │   ├── sanitization.py         # Limpeza topologica, curvas e quebra de greide
+│   │   ├── coverage.py             # Garantia de cobertura completa das ruas
+│   │   └── accessories.py          # Atribuicao de PV/TIL/TL/CP
 │   ├── elevation/
 │   │   ├── sampling.py             # Amostragem bilinear de DEM
 │   │   └── extrema.py              # Etapa 5: maximos/minimos topograficos
@@ -27,11 +28,11 @@ apps/api/src/urbanus_api/
 │   │   └── arborescence.py         # Alternativa: Edmonds/Chu-Liu
 │   ├── hydraulics/
 │   │   ├── manning.py              # Formula de Manning (re-exporta de urbanus-geo)
-│   │   └── dimensioning.py         # Etapa 8: dimensionamento de tubos
+│   │   ├── dimensioning.py         # Dimensionamento de tubos
+│   │   └── costing.py              # Custo total da rede
 │   └── optimizer/
-│       └── low_points.py           # Etapa 7: resolucao de pontos baixos
-└── workers/
-    └── __init__.py                  # Stub para tasks assincronas (ARQ futuro)
+│       ├── low_points.py           # Resolucao de pontos baixos / inalcançaveis
+│       └── node_reduction.py       # Reducao de nos apos a cobertura completa
 ```
 
 ## Endpoints da API
@@ -87,22 +88,30 @@ Pipeline:
 
 ```
 POST /projects/{project_id}/process
-Response: SewerNetwork (nodes, edges, pipes, pump_stations, unreachable)
+Response: SewerNetwork (nodes, edges, pipes, pump_stations, unreachable_nodes)
 ```
 
-Executa o pipeline de 8 etapas (detalhado em `docs/05-pipeline-8-etapas.md`):
+Executa o pipeline real do backend atual:
 
-1. Carrega grafo do PostGIS (`build_graph_from_postgis`)
-2. Sanitiza arestas longas (`sanitize_long_edges`)
-3. Remove nos redundantes (`remove_redundant_nodes`)
-4. Resolve clusters de curva (`resolve_curve_clusters`)
-5. Detecta extremos de elevacao (`detect_extrema`)
-6. Identifica nos obrigatorios e exutorio (min elevacao)
-7. Roteamento RSPH (`rsph_sewer_routing`)
-8. Resolve pontos baixos (`resolve_low_points`)
-9. Dimensionamento hidraulico (`dimension_network`)
-10. Salva resultados no PostGIS (`save_graph_to_postgis`)
-11. Monta e retorna `SewerNetwork`
+1. Constroi `G` a partir do grafo editado ou do `streets_geojson` (`_build_graph_from_edited` / `build_graph_from_geojson`)
+2. Corrige elevacoes espurias do DEM (`_sanitize_spurious_zero_elevations`)
+3. Marca mudancas de direcao e recompila nos obrigatorios (`enforce_direction_changes`)
+4. Sanitiza topologia (`remove_redundant_nodes`, `resolve_curve_clusters`, `enforce_min_pv_spacing`)
+5. Detecta extremos topograficos e quebra de greide (`detect_extrema`, `detect_grade_breaks`)
+6. Define `outlet` e `collection_points` (respeitando selecao manual quando existir e deduplicando pontos baixos proximos)
+7. Roteia a espinha dorsal com RSPH (`rsph_sewer_routing`)
+8. Resolve nos sem caminho gravitacional (`resolve_low_points`)
+9. Reintroduz cobertura completa das ruas (`ensure_full_coverage`)
+10. Quebra ciclos restantes e otimiza numero de nos (`_break_cycles`, `optimize_node_placement`)
+11. Dimensiona a hidraulica (`dimension_network`)
+12. Atribui acessorios (`assign_accessory_types`)
+13. Salva a rede processada completa no PostGIS e em `streets_geojson._sewerNetwork`
+14. Monta e retorna `SewerNetwork`
+
+Documentacao detalhada:
+
+- [`docs/05-pipeline-8-etapas.md`](05-pipeline-8-etapas.md)
+- [`docs/13-fluxo-completo-pipeline.md`](13-fluxo-completo-pipeline.md)
 
 ## Modelos Pydantic (`models.py`)
 
@@ -141,7 +150,10 @@ class Project(BaseModel):
     zoom: float
     stats: ProjectStats
     streets: Dict[str, Any]    # GeoJSON com metadados
+    sewerNetwork: SewerNetwork | None = None
 ```
+
+Quando `sewerNetwork` existe, o backend salva um snapshot em `streets_geojson._sewerNetwork` para reidratacao do editor e sincroniza a mesma rede nas tabelas `nodes`, `edges`, `pipe_segments` e `pump_stations`.
 
 ## Camada de Dados
 
@@ -207,6 +219,16 @@ Metodos internos de conversao:
    - Nos: `{x, y, z, node_type, pv_obrigatorio, is_intersection, is_endpoint, degree}`
    - Arestas: `{edge_id, length_m, name, highway, slope, cost}`
 
+### `build_graph_from_geojson(geojson) -> nx.Graph`
+
+E o caminho mais importante para entender o endpoint `process` atual:
+
+1. Chama `extract_nodes(..., mode="all")`
+2. Mantem apenas anchors (intersecoes e endpoints)
+3. Conecta anchors consecutivos por rua
+4. Garante cobertura minima para ruas sem anchors (`_ensure_street_coverage`)
+5. Conecta componentes desconectados (`_connect_components`)
+
 ### `save_graph_to_postgis(project_id, G, session) -> None`
 
 1. Remove todos os nos e arestas existentes para o projeto
@@ -214,6 +236,8 @@ Metodos internos de conversao:
 3. Para cada aresta `(u, v, data)` em `G`: cria `LineString([(u.x, u.y), (v.x, v.y)])` e insere `EdgeTable`
 
 ## Servicos Externos
+
+As consultas de ruas do OpenStreetMap nao passam pelo FastAPI neste momento. O fluxo atual usa a rota Next.js `POST /api/streets`, que consulta o Overpass e retorna GeoJSON para o frontend.
 
 ### OpenTopography (`services/elevation.py`)
 
@@ -231,7 +255,3 @@ Constantes:
 - Limite de area: `MAX_AREA_KM2` (100 km2)
 
 Requer variavel de ambiente `OPENTOPOGRAPHY_API_KEY`.
-
-### Overpass (`services/overpass.py`)
-
-Stub atual -- a consulta Overpass e feita diretamente pelo frontend em `POST /api/streets`. O plano e migrar para o backend com cache em disco (ver `URBANUS_REFATORACAO_PIPELINE_DADOS.md`).

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2, Mountain, Eye, EyeOff, Droplets, Cable, PanelRightOpen, PanelRightClose } from 'lucide-react';
-import { sewerNetworkToGraph } from '@/lib/graph/sewerConversion';
+import { graphToSewerNetwork, sewerNetworkToGraph } from '@/lib/graph/sewerConversion';
 
 import {
   AlertDialog,
@@ -24,7 +24,7 @@ import { HIGHWAY_COLORS } from '@/features/map/constants';
 import { NodesApiService } from '@/features/map/services/NodesApiService';
 import type { EnrichedFeatureCollection } from '@/features/map/types/elevation.types';
 import { useGraphStore } from '@/stores/graphStore';
-import { useCommandManager } from '@/stores/commandManager';
+import { getStoreAccessor, useCommandManager } from '@/stores/commandManager';
 import { mapNodesToNetworkGraph } from '@/lib/graph/serialization';
 import type { EditingMode } from '@/lib/graph/types';
 import { usePipelineStore } from '@/stores/pipelineStore';
@@ -34,6 +34,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { Kbd } from '@/components/ui/kbd';
 import { useTranslation } from '@/i18n';
 import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
+import { ReplaceGraphCommand } from '@/lib/graph/commands';
 
 // Dynamic imports (no SSR — MapLibre uses WebGL)
 const GraphMapView = dynamic(() => import('@/components/map/GraphMapView'), {
@@ -68,6 +69,8 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const [hasChanges, setHasChanges] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const didInitRef = useRef(false);
+  const skipNextGraphChangeRef = useRef(false);
+  const skipNextPipelineChangeRef = useRef(false);
 
   // Graph store
   const editingMode = useGraphStore((s) => s.editingMode);
@@ -83,6 +86,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const canRedo = useCommandManager((s) => s.canRedo);
   const commandUndo = useCommandManager((s) => s.undo);
   const commandRedo = useCommandManager((s) => s.redo);
+  const executeCommand = useCommandManager((s) => s.execute);
   const clearCommands = useCommandManager((s) => s.clear);
 
   // Pipeline store
@@ -91,6 +95,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const pipelineError = usePipelineStore((s) => s.error);
   const processProject = usePipelineStore((s) => s.processProject);
   const resetPipeline = usePipelineStore((s) => s.reset);
+  const hydratePipeline = usePipelineStore((s) => s.hydrateResult);
   const toggleView = usePipelineStore((s) => s.toggleView);
   const hasCachedResult = usePipelineStore((s) => s._cachedResult !== null);
   const getGraph = useGraphStore((s) => s.getGraph);
@@ -102,6 +107,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const [sewerViewMode, setSewerViewMode] = useState<SewerViewMode>('default');
 
   const nodesApiService = useRef(NodesApiService.getInstance()).current;
+  const accessor = useMemo(() => getStoreAccessor(), []);
 
   // ============ MODE BUTTONS ============
 
@@ -126,27 +132,58 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   // Initialize graph from project data
   useEffect(() => {
-    if (project?.streets && !didInitRef.current) {
-      didInitRef.current = true;
-
-      nodesApiService
-        .extractNodes(project.streets as EnrichedFeatureCollection, 'all')
-        .then(({ nodes: extractedNodes }) => {
-          const graph = mapNodesToNetworkGraph(extractedNodes);
-          loadGraph(graph);
-          setHasChanges(false);
-        })
-        .catch((err) => {
-          console.error('Failed to extract nodes:', err);
-        });
+    if (!project || didInitRef.current) {
+      return;
     }
-  }, [project, nodesApiService, loadGraph]);
+
+    didInitRef.current = true;
+
+    if (project.sewerNetwork) {
+      skipNextPipelineChangeRef.current = true;
+      skipNextGraphChangeRef.current = true;
+      hydratePipeline(project.sewerNetwork);
+      loadGraph(sewerNetworkToGraph(project.sewerNetwork));
+      setHasChanges(false);
+      setActiveTab('pipeline');
+      return;
+    }
+
+    nodesApiService
+      .extractNodes(project.streets as EnrichedFeatureCollection, 'all')
+      .then(({ nodes: extractedNodes }) => {
+        const graph = mapNodesToNetworkGraph(extractedNodes);
+        skipNextGraphChangeRef.current = true;
+        loadGraph(graph);
+        setHasChanges(false);
+      })
+      .catch((err) => {
+        console.error('Failed to extract nodes:', err);
+      });
+  }, [project, nodesApiService, loadGraph, hydratePipeline]);
 
   // Track changes when graph mutates
   useEffect(() => {
     const unsub = useGraphStore.subscribe(
       (s) => [s.nodes, s.edges],
       () => {
+        if (skipNextGraphChangeRef.current) {
+          skipNextGraphChangeRef.current = false;
+          return;
+        }
+        if (didInitRef.current) setHasChanges(true);
+      },
+    );
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const unsub = usePipelineStore.subscribe(
+      (s) => [s.result, s._cachedResult],
+      () => {
+        if (skipNextPipelineChangeRef.current) {
+          skipNextPipelineChangeRef.current = false;
+          return;
+        }
         if (didInitRef.current) setHasChanges(true);
       },
     );
@@ -169,12 +206,12 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   const handleProcess = useCallback(async () => {
     if (!project) return;
-    // Save current graph so we can restore on undo
-    preProcessGraphRef.current = getGraph();
+    const previousGraph = getGraph();
+    preProcessGraphRef.current = previousGraph;
+    const previousPipelineState = usePipelineStore.getState();
 
     // Build edited graph payload from current graphStore
-    const currentGraph = getGraph();
-    const editedNodes = Object.values(currentGraph.nodes).map((n) => ({
+    const editedNodes = Object.values(previousGraph.nodes).map((n) => ({
       id: n.id,
       lng: n.coordinates[0],
       lat: n.coordinates[1],
@@ -185,7 +222,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
       is_endpoint: n.properties.isEndpoint ?? false,
       is_collection_point: n.properties.isCollectionPoint ?? false,
     }));
-    const editedEdges = Object.values(currentGraph.edges).map((e) => ({
+    const editedEdges = Object.values(previousGraph.edges).map((e) => ({
       id: e.id,
       sourceId: e.sourceId,
       targetId: e.targetId,
@@ -194,23 +231,50 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
       highway: e.properties.highway,
     }));
 
+    skipNextPipelineChangeRef.current = true;
     await processProject(project.id, { nodes: editedNodes, edges: editedEdges });
 
-    // Load processed result into graphStore so the same editor works
     const result = usePipelineStore.getState().result;
     if (result) {
-      const graph = sewerNetworkToGraph(result);
-      loadGraph(graph);
-      clearCommands();
+      const processedGraph = sewerNetworkToGraph(result);
+      const nextPipelineState = usePipelineStore.getState();
+
+      executeCommand(
+        new ReplaceGraphCommand(accessor, previousGraph, processedGraph, {
+          description: 'Process graph',
+          onExecute: () => {
+            usePipelineStore.setState({
+              status: nextPipelineState.status,
+              result: nextPipelineState.result,
+              error: nextPipelineState.error,
+              _cachedResult: nextPipelineState._cachedResult,
+              selectedNodeId: nextPipelineState.selectedNodeId,
+            });
+            setActiveTab('pipeline');
+          },
+          onUndo: () => {
+            usePipelineStore.setState({
+              status: previousPipelineState.status,
+              result: previousPipelineState.result,
+              error: previousPipelineState.error,
+              _cachedResult: previousPipelineState._cachedResult,
+              selectedNodeId: previousPipelineState.selectedNodeId,
+            });
+            setActiveTab(previousPipelineState.result ? 'pipeline' : 'overview');
+          },
+        }),
+      );
+    } else {
+      skipNextPipelineChangeRef.current = false;
     }
-    setActiveTab('pipeline');
-  }, [project, processProject, getGraph, loadGraph, clearCommands]);
+  }, [project, processProject, getGraph, executeCommand, accessor]);
 
   const handleToggleView = useCallback(() => {
     const currentResult = usePipelineStore.getState().result;
     if (currentResult) {
       // Switching TO pre-processing view: restore original graph
       if (preProcessGraphRef.current) {
+        skipNextGraphChangeRef.current = true;
         loadGraph(preProcessGraphRef.current);
         clearCommands();
       }
@@ -219,10 +283,12 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
       const cached = usePipelineStore.getState()._cachedResult;
       if (cached) {
         const graph = sewerNetworkToGraph(cached);
+        skipNextGraphChangeRef.current = true;
         loadGraph(graph);
         clearCommands();
       }
     }
+    skipNextPipelineChangeRef.current = true;
     toggleView();
   }, [toggleView, loadGraph, clearCommands]);
 
@@ -230,18 +296,32 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     if (!project) return;
     setIsSaving(true);
     try {
-      // For now, keep original streets — node changes are tracked separately
+      const pipelineState = usePipelineStore.getState();
+      const baseSewerNetwork =
+        pipelineState.result ??
+        pipelineState._cachedResult ??
+        project.sewerNetwork ??
+        null;
+      const sewerNetwork = baseSewerNetwork
+        ? graphToSewerNetwork(getGraph(), project.id, baseSewerNetwork)
+        : null;
+
       await updateProject({
         ...project,
-        streets: project.streets, // TODO: merge node changes back to streets
+        streets: project.streets,
+        sewerNetwork,
       });
+      if (sewerNetwork) {
+        skipNextPipelineChangeRef.current = true;
+        hydratePipeline(sewerNetwork);
+      }
       setHasChanges(false);
     } catch (error) {
       console.error('Failed to save project:', error);
     } finally {
       setIsSaving(false);
     }
-  }, [project, updateProject]);
+  }, [project, updateProject, getGraph, hydratePipeline]);
 
   const handleExport = useCallback(() => {
     if (!project?.streets) return;

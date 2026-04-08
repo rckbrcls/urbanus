@@ -9,10 +9,12 @@ import { useTranslation } from '@/i18n';
 
 import { Plus, Search } from 'lucide-react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export default function ProjectsPage() {
-  const { data: projects = [], isLoading } = useProjects();
+  const { data: projects = [], isLoading, isError, error, refetch, isFetching } = useProjects();
   const t = useTranslation('projects');
+  const tc = useTranslation('common');
 
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -98,6 +100,20 @@ export default function ProjectsPage() {
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 py-20 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="max-w-md space-y-2 px-6">
+            <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
+              {error instanceof Error ? error.message : 'Failed to load projects'}
+            </h3>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {isFetching ? tc.loading : t.subtitle}
+            </p>
+          </div>
+          <Button onClick={() => void refetch()} disabled={isFetching}>
+            {isFetching ? tc.loading : tc.retry}
+          </Button>
         </div>
       ) : projects.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 py-20 dark:border-zinc-800 dark:bg-zinc-900/50">

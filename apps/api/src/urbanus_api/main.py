@@ -19,7 +19,11 @@ from urbanus_api.core.graph.classification import (
     extract_nodes as _extract_nodes,
     enforce_direction_changes,
 )
-from urbanus_api.core.graph.builder import build_graph_from_postgis, build_graph_from_geojson, save_graph_to_postgis
+from urbanus_api.core.graph.builder import (
+    build_graph_from_postgis,
+    build_graph_from_geojson,
+    save_sewer_network_to_postgis,
+)
 from urbanus_api.core.graph.sanitization import (
     remove_redundant_nodes,
     resolve_curve_clusters,
@@ -36,6 +40,8 @@ from urbanus_api.core.hydraulics.dimensioning import dimension_network
 from urbanus_api.core.hydraulics.costing import compute_total_cost
 from urbanus_api.data.database import get_db
 from urbanus_api.data.repositories import ProjectRepository
+from urbanus_geo.calculations import haversine
+from urbanus_geo.constants import MIN_PV_SPACING
 
 app = FastAPI()
 
@@ -49,7 +55,7 @@ app.add_middleware(
 )
 
 
-def _row_to_project(row) -> dict:
+def _row_to_project(row, *, include_sewer_network: bool = True) -> dict:
     """Convert a ProjectTable row back to the API response format."""
     # Reconstruct bounds from JSONB stored in streets_geojson context
     # We store the raw project data, so we can reconstruct it
@@ -63,6 +69,11 @@ def _row_to_project(row) -> dict:
         "zoom": row.zoom,
         "stats": {"streetCount": row.street_count},
         "streets": {k: v for k, v in (row.streets_geojson or {}).items() if not k.startswith("_")},
+        "sewerNetwork": (
+            row.streets_geojson.get("_sewerNetwork")
+            if include_sewer_network and row.streets_geojson
+            else None
+        ),
     }
 
 
@@ -73,15 +84,12 @@ def read_root():
 
 @app.post("/projects", response_model=Project)
 async def create_project(project: Project, db: AsyncSession = Depends(get_db)):
-    data = project.model_dump()
-    # Stash bounds and center in streets_geojson for round-trip reconstruction
-    streets = data.get("streets") or {}
-    streets["_bounds"] = data["bounds"]
-    streets["_center"] = data["center"]
-    data["streets"] = streets
+    data = project.model_dump(exclude_none=True)
 
     repo = ProjectRepository(db)
     await repo.upsert(data)
+    if project.sewerNetwork is not None:
+        await save_sewer_network_to_postgis(project.id, project.sewerNetwork.model_dump(), db)
     return project
 
 
@@ -89,7 +97,7 @@ async def create_project(project: Project, db: AsyncSession = Depends(get_db)):
 async def get_projects(db: AsyncSession = Depends(get_db)):
     repo = ProjectRepository(db)
     rows = await repo.get_all()
-    return [_row_to_project(r) for r in rows]
+    return [_row_to_project(r, include_sewer_network=False) for r in rows]
 
 
 @app.get("/projects/{project_id}", response_model=Project)
@@ -165,6 +173,59 @@ def _break_cycles(tree: nx.DiGraph) -> None:
             worst_edge = cycle[-1][:2]
 
         tree.remove_edge(*worst_edge)
+
+
+def _select_collection_points(
+    G: nx.Graph,
+    outlet: str,
+    cluster_radius_m: float = MIN_PV_SPACING,
+    explicit_points: set[str] | None = None,
+) -> set[str]:
+    """Select collection points for routing.
+
+    Priority:
+    1. Explicitly marked collection points from the edited graph.
+    2. Automatic low points (`AZUL_ESCURO`), spatially deduplicated so we
+       keep only the deepest low point inside each local cluster.
+
+    The outlet is always preserved.
+    """
+    if explicit_points:
+        return explicit_points | {outlet}
+
+    candidates = [
+        node for node, data in G.nodes(data=True)
+        if data.get("node_type") == "AZUL_ESCURO"
+    ]
+    candidates.sort(
+        key=lambda node: (
+            G.nodes[node].get("z") is None,
+            G.nodes[node].get("z", float("inf")),
+            str(node),
+        ),
+    )
+
+    selected = {outlet}
+    for candidate in candidates:
+        cand_y = G.nodes[candidate].get("y")
+        cand_x = G.nodes[candidate].get("x")
+        if cand_y is None or cand_x is None:
+            continue
+
+        is_redundant = False
+        for existing in selected:
+            existing_y = G.nodes[existing].get("y")
+            existing_x = G.nodes[existing].get("x")
+            if existing_y is None or existing_x is None:
+                continue
+            if haversine(cand_y, cand_x, existing_y, existing_x) < cluster_radius_m:
+                is_redundant = True
+                break
+
+        if not is_redundant:
+            selected.add(candidate)
+
+    return selected
 
 
 class ProcessRequest(BaseModel):
@@ -291,12 +352,23 @@ async def process_sewer_network(
     if outlet is None:
         raise HTTPException(status_code=400, detail="No nodes with elevation data found")
 
-    # Identify collection points — AZUL_ESCURO nodes are natural low points
-    # where sewage accumulates. The outlet is always a collection point.
-    collection_points = {
-        n for n, d in G.nodes(data=True)
-        if d.get("node_type") == "AZUL_ESCURO"
-    } | {outlet}
+    explicit_collection_points = {
+        node for node, data in G.nodes(data=True)
+        if data.get("is_collection_point")
+    }
+
+    # Reset stale flags before recomputing collection points for this run.
+    for _, data in G.nodes(data=True):
+        data["is_collection_point"] = False
+
+    # Identify collection points. Explicit user selections win when present;
+    # otherwise use automatic low points, but collapse nearby minima into a
+    # single sink to avoid over-populating the graph with local collectors.
+    collection_points = _select_collection_points(
+        G,
+        outlet,
+        explicit_points=explicit_collection_points,
+    )
 
     # Mark collection points in node data
     for cp in collection_points:
@@ -331,9 +403,6 @@ async def process_sewer_network(
     # Etapa 9: Accessory type assignment
     tree = assign_accessory_types(tree, pipes)
 
-    # Save results to PostGIS
-    await save_graph_to_postgis(project_id, tree, db)
-
     # Build response
     from urbanus_geo.types import SewerNode, SewerEdge, SewerNetwork
 
@@ -356,7 +425,7 @@ async def process_sewer_network(
     edges_out = []
     for u, v, d in tree.edges(data=True):
         edges_out.append(SewerEdge(
-            id=d.get("edge_id", f"{u}->{v}"),
+            id=f"{u}->{v}",
             source_node_id=str(u),
             target_node_id=str(v),
             length_m=d.get("length_m", 0),
@@ -376,6 +445,14 @@ async def process_sewer_network(
         unreachable_nodes=unreachable,
         total_cost=compute_total_cost(pipes, pump_stations, tree),
     )
+
+    await save_sewer_network_to_postgis(project_id, result.model_dump(), db)
+    if isinstance(project.streets_geojson, dict):
+        project.streets_geojson = {
+            **project.streets_geojson,
+            "_sewerNetwork": result.model_dump(),
+        }
+        await db.commit()
 
     return result.model_dump()
 

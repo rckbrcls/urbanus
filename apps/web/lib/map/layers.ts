@@ -3,6 +3,7 @@
  */
 
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
+import { RENDERED_NODE_COLORS } from '@/lib/sewer/renderLegend';
 
 // ============ NODES ============
 
@@ -18,8 +19,13 @@ export const NODES_PAINT: CircleLayerSpecification['paint'] = {
     ['boolean', ['feature-state', 'error'], false], '#ef4444',
     ['boolean', ['feature-state', 'selected'], false], '#f97316',
     ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',
-    // By classification
-    ['==', ['get', 'isCollectionPoint'], true], '#00bcd4',
+    // Processed network view
+    ['==', ['get', 'isCollectionPoint'], true], RENDERED_NODE_COLORS.COLLECTION_POINT,
+    ['==', ['get', 'accessoryType'], 'PV'], RENDERED_NODE_COLORS.PV,
+    ['==', ['get', 'accessoryType'], 'TIL'], RENDERED_NODE_COLORS.TIL,
+    ['==', ['get', 'accessoryType'], 'TL'], RENDERED_NODE_COLORS.TL,
+    ['==', ['get', 'accessoryType'], 'CP'], RENDERED_NODE_COLORS.CP,
+    // Editor fallback
     ['==', ['get', 'isHighestElevation'], true], '#ef4444',
     ['==', ['get', 'isLowestElevation'], true], '#06b6d4',
     ['==', ['get', 'isEndpoint'], true], '#f59e0b',

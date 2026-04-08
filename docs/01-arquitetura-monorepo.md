@@ -21,9 +21,8 @@ URBANUS/
 │       │   ├── main.py         # Rotas FastAPI
 │       │   ├── models.py       # Pydantic request/response
 │       │   ├── data/           # Database, tables, repositories
-│       │   ├── services/       # Elevation, Overpass
-│       │   ├── core/           # Pipeline de 8 etapas
-│       │   └── workers/        # Stub para tasks assincronas
+│       │   ├── services/       # Integracoes server-side (elevacao)
+│       │   └── core/           # Pipeline de 8 etapas
 │       ├── migrations/         # Alembic (PostGIS)
 │       ├── Dockerfile
 │       └── pyproject.toml
@@ -150,6 +149,8 @@ type-check:    # pnpm turbo run type-check
 `make dev` inicia simultaneamente:
 - Frontend em `http://localhost:3000` (Next.js dev server)
 - Backend em `http://localhost:8000` (uvicorn com hot-reload)
+
+O script raiz usa `concurrently --kill-others-on-fail` e o comando do backend roda com `exec uv run ... uvicorn --reload`. Isso reduz o risco de o processo supervisor do reload ficar preso na porta `8000` quando a sessao de desenvolvimento e interrompida.
 
 ## Docker Compose
 

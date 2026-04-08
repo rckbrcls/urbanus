@@ -3,7 +3,7 @@
 from typing import List, Dict, Any, Optional, Literal
 
 from pydantic import BaseModel
-from urbanus_geo.types import LatLng, BoundingBox
+from urbanus_geo.types import BoundingBox, SewerNetwork
 
 
 class ProjectStats(BaseModel):
@@ -20,6 +20,7 @@ class Project(BaseModel):
     zoom: float
     stats: ProjectStats
     streets: Dict[str, Any]
+    sewerNetwork: Optional[SewerNetwork] = None
 
 
 class NodesExtractRequest(BaseModel):

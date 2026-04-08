@@ -11,7 +11,7 @@ dev-web:
 	pnpm --filter @urbanus/web dev
 
 dev-api:
-	cd apps/api && uv run --env-file ../../.env uvicorn urbanus_api.main:app --reload --host 0.0.0.0 --port 8000
+	cd apps/api && exec uv run --env-file ../../.env uvicorn urbanus_api.main:app --reload --host 0.0.0.0 --port 8000
 
 build:
 	pnpm turbo run build

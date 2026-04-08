@@ -142,8 +142,7 @@ export const en: Dictionary = {
     pumpStations: 'Pump Stations',
     totalCost: 'Total Cost',
     unreachable: 'Unreachable',
-    nodeTypes: 'Node Types',
-    accessories: 'Accessories',
+    nodeTypes: 'Map Legend',
     diameters: 'Diameters',
   },
   mapPage: {

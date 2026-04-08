@@ -5,6 +5,7 @@ import { Source, Layer } from 'react-map-gl/maplibre';
 import type { SewerNetwork } from '@/types/sewer';
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import FlowArrows from './FlowArrows';
+import { getRenderedNodeCategory, RENDERED_NODE_COLORS } from '@/lib/sewer/renderLegend';
 
 export type SewerViewMode = 'default' | 'elevation' | 'streets';
 
@@ -16,13 +17,6 @@ interface SewerNetworkLayersProps {
   /** When true, only renders flow arrows — nodes/edges are handled by GraphLayers */
   overlayOnly?: boolean;
 }
-
-const NODE_COLORS: Record<string, string> = {
-  ROSA: '#e91e63',
-  VERDE: '#4caf50',
-  AMARELO: '#ffc107',
-  AZUL_ESCURO: '#1565c0',
-};
 
 /** Map pipe diameter to line width */
 function diameterToWidth(dn: number): number {
@@ -108,7 +102,7 @@ export default function SewerNetworkLayers({
         pv_obrigatorio: n.pv_obrigatorio,
         is_collection_point: n.is_collection_point ?? false,
         is_selected: n.id === selectedNodeId,
-        color: n.is_collection_point ? '#00bcd4' : (NODE_COLORS[n.node_type ?? ''] ?? '#9e9e9e'),
+        color: RENDERED_NODE_COLORS[getRenderedNodeCategory(n)],
       },
     }));
 

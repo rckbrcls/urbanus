@@ -7,7 +7,7 @@ O URBANUS e uma plataforma web para planejamento automatizado de redes coletoras
 1. Extrai a malha viaria de fontes abertas (OpenStreetMap via Overpass API)
 2. Enriquece as geometrias com dados de elevacao (OpenTopography)
 3. Identifica nos obrigatorios (intersecoes, extremidades, mudancas bruscas de cota)
-4. Executa um pipeline de 8 etapas que classifica, sanitiza, roteia e dimensiona a rede de esgoto
+4. Executa um pipeline multi-etapas que classifica, sanitiza, roteia, cobre a malha e dimensiona a rede de esgoto
 5. Apresenta o resultado como um grafo editavel interativo sobre o mapa
 
 O objetivo e substituir o processo manual de tracado de rede -- tradicionalmente feito com CAD e planilhas -- por uma ferramenta que combina algoritmos de otimizacao de grafos com dimensionamento hidraulico segundo a NBR 9649.
@@ -96,10 +96,11 @@ O projeto e desenvolvido como trabalho de Iniciacao Cientifica (IC). O escopo ac
 
 ### Fase 3: Processamento e Dimensionamento
 
-10. `POST /projects/{id}/process` dispara o pipeline de 8 etapas no backend:
-    - Etapas 1-4: classificacao, subdivisao de arestas, remocao de redundancias, resolucao de curvas
-    - Etapa 5: deteccao de maximos/minimos topograficos
-    - Etapa 6: roteamento gravitacional (RSPH) de todos os nos ate o exutorio
-    - Etapa 7: resolucao de pontos baixos (rota alternativa, escavacao extra ou elevatoria)
-    - Etapa 8: dimensionamento hidraulico NBR 9649 (diâmetro, lâmina, velocidade, tensao trativa)
+10. `POST /projects/{id}/process` dispara o pipeline atual do backend:
+    - construcao de `G` a partir do `streets_geojson` ou do grafo editado
+    - classificacao, clustering espacial e sanitizacao topologica
+    - deteccao de extremos topograficos e quebra de greide
+    - roteamento gravitacional (RSPH) ate collection points / outlet
+    - resolucao de nos inalcançaveis e cobertura completa das ruas
+    - reducao de nos, dimensionamento hidraulico e atribuicao de acessorios
 11. O resultado (`SewerNetwork`) e exibido no mapa com setas de fluxo e propriedades nos paineis laterais

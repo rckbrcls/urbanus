@@ -2,48 +2,33 @@
 
 import type { SewerNetwork } from '@/types/sewer';
 import { useTranslation } from '@/i18n';
+import {
+  getRenderedNodeCategory,
+  RENDERED_NODE_COLORS,
+  RENDERED_NODE_LABELS,
+  RENDERED_NODE_ORDER,
+  type RenderedNodeCategory,
+} from '@/lib/sewer/renderLegend';
 
 interface PipelineResultsPanelProps {
   result: SewerNetwork;
 }
 
-const NODE_TYPE_COLORS: Record<string, string> = {
-  ROSA: '#e91e63',
-  VERDE: '#4caf50',
-  AMARELO: '#ffc107',
-  AZUL_ESCURO: '#1565c0',
-};
-
-const NODE_TYPE_LABELS: Record<string, string> = {
-  ROSA: 'Obrigatório (interseção/confluência)',
-  VERDE: 'Intermediário',
-  AMARELO: 'Ponto alto',
-  AZUL_ESCURO: 'Ponto baixo (coleta)',
-  OTHER: 'Outro',
-};
-
-const ACCESSORY_LABELS: Record<string, string> = {
-  PV: 'Poço de Visita',
-  TIL: 'Terminal de Inspeção e Limpeza',
-  TL: 'Terminal de Limpeza',
-  CP: 'Caixa de Passagem',
-  NONE: 'Sem acessório',
-};
-
 export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
   const t = useTranslation('pipeline');
 
-  const nodesByType = result.nodes.reduce<Record<string, number>>((acc, n) => {
-    const type = n.node_type ?? 'OTHER';
-    acc[type] = (acc[type] || 0) + 1;
+  const renderedNodeCount = result.nodes.reduce<Record<RenderedNodeCategory, number>>((acc, node) => {
+    const category = getRenderedNodeCategory(node);
+    acc[category] += 1;
     return acc;
-  }, {});
-
-  const accessoryCount = result.nodes.reduce<Record<string, number>>((acc, n) => {
-    const type = n.accessory_type ?? 'NONE';
-    acc[type] = (acc[type] || 0) + 1;
-    return acc;
-  }, {});
+  }, {
+    COLLECTION_POINT: 0,
+    PV: 0,
+    TIL: 0,
+    TL: 0,
+    CP: 0,
+    OTHER: 0,
+  });
 
   const diameterCount = result.pipes.reduce<Record<number, number>>((acc, p) => {
     acc[p.diameter_mm] = (acc[p.diameter_mm] || 0) + 1;
@@ -76,41 +61,24 @@ export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
         </div>
       </div>
 
-      {/* Node Types */}
+      {/* Map Legend */}
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
           {t.nodeTypes}
         </h3>
         <div className="space-y-1">
-          {Object.entries(nodesByType)
-            .sort((a, b) => b[1] - a[1])
-            .map(([type, count]) => (
-              <div key={type} className="flex items-center justify-between rounded px-2 py-1 text-xs">
+          {RENDERED_NODE_ORDER
+            .filter((category) => renderedNodeCount[category] > 0)
+            .map((category) => (
+              <div key={category} className="flex items-center justify-between rounded px-2 py-1 text-xs">
                 <div className="flex items-center gap-2">
                   <div
                     className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: NODE_TYPE_COLORS[type] || '#9e9e9e' }}
+                    style={{ backgroundColor: RENDERED_NODE_COLORS[category] }}
                   />
-                  <span className="text-zinc-700 dark:text-zinc-300">{NODE_TYPE_LABELS[type] ?? type}</span>
+                  <span className="text-zinc-700 dark:text-zinc-300">{RENDERED_NODE_LABELS[category]}</span>
                 </div>
-                <span className="font-mono text-zinc-500">{count}</span>
-              </div>
-            ))}
-        </div>
-      </div>
-
-      {/* Accessories */}
-      <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          {t.accessories}
-        </h3>
-        <div className="space-y-1">
-          {Object.entries(accessoryCount)
-            .sort((a, b) => b[1] - a[1])
-            .map(([type, count]) => (
-              <div key={type} className="flex items-center justify-between rounded px-2 py-1 text-xs">
-                <span className="text-zinc-700 dark:text-zinc-300">{ACCESSORY_LABELS[type] ?? type}</span>
-                <span className="font-mono text-zinc-500">{count}</span>
+                <span className="font-mono text-zinc-500">{renderedNodeCount[category]}</span>
               </div>
             ))}
         </div>

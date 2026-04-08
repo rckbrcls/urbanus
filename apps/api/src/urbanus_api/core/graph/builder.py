@@ -14,7 +14,7 @@ from geoalchemy2.functions import ST_X, ST_Y, ST_AsText
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from urbanus_api.data.tables import EdgeTable, NodeTable
+from urbanus_api.data.tables import EdgeTable, NodeTable, PipeSegmentTable, PumpStationTable
 
 
 async def build_graph_from_postgis(
@@ -450,5 +450,119 @@ async def save_graph_to_postgis(
             },
         )
         session.add(edge_row)
+
+    await session.commit()
+
+
+async def save_sewer_network_to_postgis(
+    project_id: str,
+    network: dict[str, Any],
+    session: AsyncSession,
+) -> None:
+    """Persist a complete SewerNetwork payload to PostGIS tables."""
+    from geoalchemy2.shape import from_shape
+    from shapely.geometry import LineString, Point
+
+    await session.execute(
+        PumpStationTable.__table__.delete().where(PumpStationTable.project_id == project_id)
+    )
+    await session.execute(
+        PipeSegmentTable.__table__.delete().where(PipeSegmentTable.project_id == project_id)
+    )
+    await session.execute(
+        EdgeTable.__table__.delete().where(EdgeTable.project_id == project_id)
+    )
+    await session.execute(
+        NodeTable.__table__.delete().where(NodeTable.project_id == project_id)
+    )
+
+    nodes = network.get("nodes") or []
+    edges = network.get("edges") or []
+    pipes = network.get("pipes") or []
+    pump_stations = network.get("pump_stations") or []
+
+    node_lookup: dict[str, dict[str, Any]] = {}
+    for node in nodes:
+        node_id = str(node["id"])
+        node_lookup[node_id] = node
+        point = from_shape(Point(node.get("lng", 0), node.get("lat", 0)), srid=4326)
+        session.add(NodeTable(
+            id=node_id,
+            project_id=project_id,
+            geometry=point,
+            elevation=node.get("elevation"),
+            degree=node.get("degree", 0),
+            is_intersection=node.get("is_intersection", False),
+            is_endpoint=node.get("is_endpoint", False),
+            node_type=node.get("node_type"),
+            pv_obrigatorio=node.get("pv_obrigatorio", False),
+            accessory_type=node.get("accessory_type"),
+            properties={
+                "is_collection_point": node.get("is_collection_point", False),
+            },
+        ))
+
+    for edge in edges:
+        source_id = str(edge["source_node_id"])
+        target_id = str(edge["target_node_id"])
+        source = node_lookup.get(source_id)
+        target = node_lookup.get(target_id)
+        if source is None or target is None:
+            continue
+
+        coordinates = [
+            (source.get("lng", 0), source.get("lat", 0)),
+            *[
+                (point[0], point[1])
+                for point in (edge.get("waypoints") or [])
+                if isinstance(point, list) and len(point) >= 2
+            ],
+            (target.get("lng", 0), target.get("lat", 0)),
+        ]
+        line = from_shape(LineString(coordinates), srid=4326)
+
+        session.add(EdgeTable(
+            id=str(edge["id"]),
+            project_id=project_id,
+            geometry=line,
+            name=edge.get("name"),
+            highway=edge.get("highway"),
+            length_m=edge.get("length_m"),
+            slope=edge.get("slope"),
+            cost=edge.get("cost"),
+            properties={
+                "source_node_id": source_id,
+                "target_node_id": target_id,
+                "waypoints": edge.get("waypoints"),
+            },
+        ))
+
+    for pipe in pipes:
+        session.add(PipeSegmentTable(
+            id=f"{project_id}:{pipe['edge_id']}",
+            project_id=project_id,
+            edge_id=pipe["edge_id"],
+            diameter_mm=pipe.get("diameter_mm", 150),
+            manning_n=pipe.get("manning_n", 0.013),
+            slope=pipe.get("slope"),
+            cover_depth=pipe.get("cover_depth"),
+            flow_depth_ratio=pipe.get("flow_depth_ratio"),
+            velocity=pipe.get("velocity"),
+            tractive_stress=pipe.get("tractive_stress"),
+            flow_rate=pipe.get("flow_rate"),
+            is_pressurized=pipe.get("is_pressurized", False),
+        ))
+
+    for pump in pump_stations:
+        session.add(PumpStationTable(
+            id=str(pump["id"]),
+            project_id=project_id,
+            node_id=pump.get("node_id"),
+            capacity_ls=pump.get("capacity_ls"),
+            head_m=pump.get("head_m"),
+            capex=pump.get("capex"),
+            annual_opex=pump.get("annual_opex"),
+            npv=pump.get("npv"),
+        ))
 
     await session.commit()

@@ -1,563 +1,558 @@
-# 05 -- Pipeline de Processamento (8+ Etapas)
+# 05 -- Pipeline de Processamento dos Grafos
 
-## Visao Geral
+## Objetivo Deste Documento
 
-O pipeline de processamento transforma um grafo viario com elevacao em uma rede coletora de esgoto dimensionada. E executado via `POST /projects/{project_id}/process` e segue etapas sequenciais.
+Este documento descreve o **pipeline real em execucao hoje**, seguindo a ordem de [`process_sewer_network`](../apps/api/src/urbanus_api/main.py). O foco aqui e ajudar a ler o codigo com contexto:
 
+- qual objeto entra e qual objeto sai de cada etapa;
+- quais arquivos participam do fluxo;
+- quais etapas ainda existem no codigo, mas nao sao mais chamadas pelo endpoint;
+- onde o pipeline deixa de ser um grafo viario e passa a ser uma rede de esgoto dirigida.
+
+Se voce quiser uma visao navegavel com uma lista curta de todas as etapas e links diretos para os arquivos, veja tambem [13-fluxo-completo-pipeline.md](13-fluxo-completo-pipeline.md).
+
+## Ideia Geral
+
+O endpoint [`POST /projects/{project_id}/process`](../apps/api/src/urbanus_api/main.py) transforma um grafo viario com elevacao em uma rede coletora de esgoto representada por um `SewerNetwork`.
+
+O pipeline trabalha com **tres representacoes principais**:
+
+1. `G` -- `nx.Graph` nao direcionado da malha viaria.
+2. `tree` -- `nx.DiGraph` orientado no sentido do escoamento.
+3. `SewerNetwork` -- estrutura serializada de saida com nos, arestas, tubos, elevatorias e custo.
+
+## Glossario Minimo Para Ler o Codigo
+
+### `G`
+
+Grafo nao direcionado base. Cada no carrega coordenadas e elevacao, e cada aresta carrega geometria simplificada da rua e comprimento.
+
+### `tree`
+
+Grafo dirigido usado como rede de escoamento. Ele precisa ser um **DAG** antes do dimensionamento.
+
+### DAG
+
+`Directed Acyclic Graph`: grafo dirigido sem ciclos. No contexto do projeto, significa que a agua residual sempre tem um sentido consistente de montante para jusante.
+
+### `mandatory`
+
+Conjunto de nos que o algoritmo precisa conectar no roteamento. Ele e derivado de `pv_obrigatorio=True` e de alguns `node_type="ROSA"` apos as etapas de sanitizacao.
+
+### `outlet`
+
+No com menor elevacao no grafo atual. Ele funciona como exutorio global.
+
+### `collection_points`
+
+Pontos de coleta usados pelo RSPH. Quando o grafo editado traz marcacoes manuais, elas sao respeitadas. Sem marcacao manual, o pipeline usa o `outlet` e os nos `AZUL_ESCURO`, mas colapsa minimos locais proximos para manter apenas o ponto mais baixo de cada cluster.
+
+### `unreachable`
+
+Nos obrigatorios que o RSPH nao conseguiu conectar por gravidade no grafo dirigido.
+
+## Fluxo Real de Execucao
+
+O fluxo principal esta em [`main.py`](../apps/api/src/urbanus_api/main.py).
+
+```text
+Projeto / grafo editado
+    -> construir G
+    -> sanear elevacoes espurias
+    -> classificar e marcar nos obrigatorios
+    -> sanitizar topologia
+    -> detectar extremos e quebra de greide
+    -> escolher outlet e collection points
+    -> RSPH
+    -> resolver inalcanhaveis / pontos baixos
+    -> garantir cobertura completa das ruas
+    -> quebrar ciclos, se necessario
+    -> otimizar numero de nos
+    -> dimensionar hidraulica
+    -> atribuir acessorios
+    -> calcular custo total
+    -> persistir e retornar SewerNetwork
 ```
-Grafo viario     Etapas 1-4       Etapa 5        Etapa 6         Etapa 7        Etapa 8        Etapa 9
-(PostGIS)   -->  Classificacao --> Elevacao   --> Roteamento  --> Otimizacao --> Dimensionamento --> Acessorios
-                 + sanitizacao    extrema        gravitacional   pontos baixos  hidraulico         (PV/TIL/CP)
-                 + clustering     + grade break  (RSPH)                         (NBR 9649)
-                 + steep edges                                                  + invert elev
-                 + dir changes
-                 + PV spacing
-                                                     |
-                                                     v
-                                              SewerNetwork
-                                              (nos, arestas, tubos,
-                                               elevatorias, custo real)
-```
 
-## Fluxo de Execucao (`main.py`)
+## Etapa 0 -- Entrada do Endpoint e Construcao do Grafo Base
 
-```python
-# 1. Carregar grafo do PostGIS
-G = await build_graph_from_postgis(project_id, session)
+### Arquivos
 
-# 1.5. Mudanca de direcao > 45° -> PV obrigatorio
-enforce_direction_changes(G)
+- [`main.py`](../apps/api/src/urbanus_api/main.py)
+- [`builder.py`](../apps/api/src/urbanus_api/core/graph/builder.py)
+- [`classification.py`](../apps/api/src/urbanus_api/core/graph/classification.py)
 
-# 2. Subdividir arestas longas
-G = sanitize_long_edges(G)
+### O que entra
 
-# 2.5. Subdividir trechos ingremes (> 15%)
-G = subdivide_steep_edges(G)
+- `project_id`
+- opcionalmente um grafo editado vindo do frontend (`nodes` e `edges`)
 
-# 3. Remover nos redundantes
-G = remove_redundant_nodes(G)
+### O que sai
 
-# 4. Resolver clusters de curva
-G = resolve_curve_clusters(G)
+- `G: nx.Graph`
 
-# 4.5. Espacamento minimo PV (80m)
-G = enforce_min_pv_spacing(G)
+### Como funciona
 
-# 5. Elevacao
-G = detect_extrema(G)
+O endpoint pode seguir dois caminhos:
 
-# 5.5. Quebra de greide (mudanca de declividade > 3%)
-G = detect_grade_breaks(G)
+1. Se vier corpo com `nodes`, usa [`_build_graph_from_edited`](../apps/api/src/urbanus_api/main.py) e reconstrui `G` diretamente do payload.
+2. Caso contrario, usa o `streets_geojson` salvo e monta `G` com [`build_graph_from_geojson`](../apps/api/src/urbanus_api/core/graph/builder.py).
 
-# 6. Roteamento
-mandatory = {n for n, d in G.nodes(data=True) if d.get("pv_obrigatorio") or d.get("node_type") == "ROSA"}
-outlet = min(G.nodes, key=lambda n: G.nodes[n].get("z", float("inf")))
-tree, unreachable = rsph_sewer_routing(G, outlet, mandatory)
+### Detalhe importante
 
-# 7. Otimizacao
-tree, pumps = resolve_low_points(tree, unreachable, G, outlet)
+Hoje o fluxo principal **nao comeca carregando PostGIS processado**. O caminho mais comum e reconstruir o grafo a partir do `streets_geojson` salvo do projeto. O helper [`build_graph_from_postgis`](../apps/api/src/urbanus_api/core/graph/builder.py) existe, mas nao e o caminho usado pelo endpoint atual.
 
-# 8. Dimensionamento (+ calculo de invert elevation)
-pipes = dimension_network(tree)
+### Como `build_graph_from_geojson` condensa a malha
 
-# 9. Atribuicao de acessorios (PV/TIL/TL/CP)
-tree = assign_accessory_types(tree, pipes)
+[`build_graph_from_geojson`](../apps/api/src/urbanus_api/core/graph/builder.py) faz mais do que so converter GeoJSON em arestas:
 
-# Custo real
-total_cost = compute_total_cost(pipes, pumps, tree)
+- chama [`extract_nodes(..., mode="all")`](../apps/api/src/urbanus_api/core/graph/classification.py);
+- mantem apenas **anchors**: intersecoes e endpoints;
+- liga anchors consecutivos ao longo de cada rua;
+- garante que ruas sem anchors ainda tenham cobertura via `_ensure_street_coverage`;
+- conecta componentes desconectados com `_connect_components`.
 
-# Salvar e retornar
-await save_graph_to_postgis(project_id, tree, session)
-```
+Resultado: `G` ja nasce como um grafo estrutural da malha, nao como um espelho literal de todos os vertices OSM.
 
-## Etapas Novas (adicionadas)
+## Etapa 0.5 -- Saneamento de Elevacoes Espurias do DEM
 
-### Etapa 0 (Pre-processamento): Clustering Espacial
+### Arquivo
 
-**Arquivo**: `core/graph/classification.py`
-**Funcao**: `_cluster_nearby_nodes(nodes, snap_distance=5.0)`
-**Constante**: `SNAP_DISTANCE_METERS = 5.0 m`
+- [`main.py`](../apps/api/src/urbanus_api/main.py)
 
-Nos do OSM que chegam na mesma intersecao tem endpoints 2-5m de distancia. O clustering usa Union-Find + haversine para mesclar nos dentro de 5m. O representante do cluster e o no com maior degree. Properties mescladas: street_ids (uniao), degree (recalculado), elevation (media), pv_obrigatorio (qualquer True).
+### Funcao
 
-### Etapa 1.5: Mudanca de Direcao
-
-**Arquivo**: `core/graph/classification.py`
-**Funcao**: `enforce_direction_changes(G)`
-**Constante**: `DIRECTION_CHANGE_THRESHOLD = 45°`
-
-Nos de grau 2 com deflexao > 45° entre as arestas adjacentes recebem node_type=ROSA e pv_obrigatorio=True.
-
-### Etapa 2.5: Subdivisao de Trechos Ingremes
-
-**Arquivo**: `core/graph/sanitization.py`
-**Funcao**: `subdivide_steep_edges(G, max_slope=0.15)`
-**Constante**: `MAX_TERRAIN_SLOPE = 0.15`
-
-Trechos com declividade do terreno > 15% sao subdivididos para permitir degraus. Nos intermediarios sao ROSA/pv_obrigatorio.
-
-### Etapa 4.5: Espacamento Minimo PV
-
-**Arquivo**: `core/graph/sanitization.py`
-**Funcao**: `enforce_min_pv_spacing(G, min_spacing=80)`
-**Constante**: `MIN_PV_SPACING = 80 m`
-
-PVs consecutivos mais proximos que 80m sao avaliados para merge (se grau 2 e sem criterios especiais).
-
-### Etapa 5.5: Deteccao de Quebra de Greide
-
-**Arquivo**: `core/graph/sanitization.py`
-**Funcao**: `detect_grade_breaks(G, threshold=0.03)`
-**Constante**: `GRADE_BREAK_THRESHOLD = 0.03`
-
-Nos de grau 2 onde a declividade muda abruptamente (> 3%) entre as duas arestas adjacentes recebem PV para transicao de greide.
-
-### Etapa 9: Atribuicao de Acessorios
-
-**Arquivo**: `core/graph/accessories.py`
-**Funcao**: `assign_accessory_types(tree, pipes)`
-
-Classifica cada no com o acessorio NBR 9649 apropriado:
-- **PV**: intersecoes (grau >= 3), deflexao > 45°, mudanca de diametro
-- **TIL**: terminais em coletores DN <= 150mm
-- **TL**: dead-ends sem PV
-- **CP**: intermediarios em trechos retos (apenas espacamento)
-
-### Calculo de Custo Real
-
-**Arquivo**: `core/hydraulics/costing.py`
-**Funcao**: `compute_total_cost(pipes, pump_stations, tree)`
-
-Substitui o placeholder que somava flow_rate. Custo = tubulacao (R$/m por DN) + escavacao (quadratica com profundidade) + elevatorias (VPL).
-
----
-
-## Etapa 1: Classificacao de Nos Obrigatorios
-
-**Arquivo**: `core/graph/classification.py`
-**Funcao**: `extract_nodes(geojson, mode)`
+- [`_sanitize_spurious_zero_elevations`](../apps/api/src/urbanus_api/main.py)
 
 ### Objetivo
 
-Identificar nos que devem obrigatoriamente receber um Poco de Visita (PV) na rede de esgoto. Esses nos sao marcados como ROSA.
-
-### Algoritmo
-
-```
-Para cada coordenada no GeoJSON:
-    pos_key = f"{lat:.6f},{lng:.6f}"
-    Agregar: street_ids, street_names
-    degree = |street_ids|
-
-Para cada vertice:
-    is_intersection = degree >= 2
-    is_endpoint = primeiro ou ultimo vertice da LineString
-    elevation = vertex_elevations[i] ou None
-
-    SE is_intersection OU is_endpoint:
-        node_type = "ROSA"
-        pv_obrigatorio = True
-    SE queda de elevacao > 0.50 m entre vertices adjacentes:
-        node_type = "ROSA"
-        pv_obrigatorio = True
+Corrigir casos em que o DEM devolve elevacao `0` em bordas do raster. Se um no esta em `0` mas os vizinhos estao muito acima, o valor vira `None`.
 
-    (filtrar por mode: "intersections" -> degree >= 2 OU endpoint)
+### Por que existe
 
-Clustering espacial (SNAP_DISTANCE_METERS = 5m):
-    Union-Find agrupa nos dentro de 5m
-    Representante = no com maior degree
-    street_ids = uniao, degree = recalculado, elevation = media
-    Se qualquer no do cluster era pv_obrigatorio, representante tambem e
+Sem isso, o `outlet` poderia ser escolhido por um artefato do raster, e o roteamento ficaria enviesado.
 
-Pos-processamento:
-    highest_id = argmax(elevation) entre intersecoes -> "AMARELO" (se nao ROSA)
-    lowest_id = argmin(elevation) entre intersecoes -> "AZUL_ESCURO" (se nao ROSA)
-```
+## Etapa 1 -- Classificacao Base de Nos
 
-### Saida
+### Arquivo
 
-```python
-{
-    "nodes": [
-        {
-            "id": "uuid",
-            "position": {"lat": float, "lng": float},
-            "elevation": float | None,
-            "degree": int,
-            "isIntersection": bool,
-            "isEndpoint": bool,
-            "connectedStreets": [str],
-            "nodeType": "ROSA" | "AMARELO" | "AZUL_ESCURO" | None,
-            "pvObrigatorio": bool,
-            "accessoryType": "PV" | None
-        }
-    ],
-    "metadata": {
-        "totalVertices": int,
-        "totalUniquePositions": int,
-        "filteredNodes": int,
-        "highestElevationNodeId": str | None,
-        "lowestElevationNodeId": str | None
-    }
-}
-```
+- [`classification.py`](../apps/api/src/urbanus_api/core/graph/classification.py)
 
-### Complexidade
+### Funcoes centrais
 
-O(V) onde V = numero de vertices no GeoJSON. A agregacao de coordenadas usa dicionario com chave de string formatada.
+- [`extract_nodes`](../apps/api/src/urbanus_api/core/graph/classification.py)
+- [`_cluster_nearby_nodes`](../apps/api/src/urbanus_api/core/graph/classification.py)
+- [`enforce_direction_changes`](../apps/api/src/urbanus_api/core/graph/classification.py)
 
----
+### O que essa etapa faz
 
-## Etapa 2: Subdivisao de Arestas Longas
+Ela define quais nos sao estruturalmente relevantes para o pipeline.
 
-**Arquivo**: `core/graph/sanitization.py`
-**Funcao**: `sanitize_long_edges(G, dist_max=LONG_EDGE_MAX_DISTANCE)`
-**Constante**: `LONG_EDGE_MAX_DISTANCE = 100 m`
+#### Regras usadas em `extract_nodes`
 
-### Objetivo
+- endpoints viram `ROSA` e `pvObrigatorio=True`;
+- quedas abruptas de elevacao entre vertices adjacentes tambem podem virar `ROSA`;
+- intersecoes sao reconhecidas pelo `degree`, mas nao sao automaticamente PV obrigatorio apos o clustering;
+- o maior extremo entre intersecoes pode virar `AMARELO`;
+- o menor extremo entre intersecoes pode virar `AZUL_ESCURO`.
 
-Subdividir arestas com comprimento superior a `dist_max` em segmentos menores. Nos intermediarios recebem tipo VERDE.
+#### Clustering espacial
 
-### Algoritmo
+[`_cluster_nearby_nodes`](../apps/api/src/urbanus_api/core/graph/classification.py) usa Union-Find e `haversine` para fundir nos a ate `SNAP_DISTANCE_METERS = 5 m`.
 
-```
-Para cada aresta (u, v) com length > dist_max:
-    n_segments = ceil(length / dist_max)
-    n_novos_nos = n_segments - 1
+Esse passo e essencial para eliminar falsas desconexoes e cruzamentos quebrados do OSM.
 
-    Para i de 1 ate n_novos_nos:
-        t = i / n_segments
-        lat_i = lerp(lat_u, lat_v, t)
-        lng_i = lerp(lng_u, lng_v, t)
-        z_i   = lerp(z_u, z_v, t)
+#### Mudanca de direcao
 
-        Criar no intermediario (node_type="VERDE")
+Depois que `G` ja existe, [`enforce_direction_changes`](../apps/api/src/urbanus_api/core/graph/classification.py) marca como `ROSA` qualquer no de grau 2 cuja deflexao seja maior que `45°`.
 
-    Substituir aresta (u, v) por cadeia:
-        u -> n1 -> n2 -> ... -> v
-```
+### Como pensar nessa etapa
 
-### Parametros
+Esta fase responde: **quais pontos da geometria viaria merecem sobreviver como decisoes de engenharia?**
 
-| Parametro | Valor | Descricao |
-|-----------|-------|-----------|
-| `dist_max` | 100 m | Comprimento maximo de aresta |
+## Etapa 2 -- Sanitizacao Topologica de `G`
 
-### Complexidade
+### Arquivo
 
-O(E) onde E = numero de arestas. Cada aresta e avaliada uma vez.
+- [`sanitization.py`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
 
----
+### Funcoes chamadas no fluxo real
 
-## Etapa 3: Remocao de Nos Redundantes
+- [`remove_redundant_nodes`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
+- [`resolve_curve_clusters`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
+- [`enforce_min_pv_spacing`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
+- [`detect_grade_breaks`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
 
-**Arquivo**: `core/graph/sanitization.py`
-**Funcao**: `remove_redundant_nodes(G, dist_min, dist_max)`
-**Constantes**: `REDUNDANT_NODE_MIN_DISTANCE = 20 m`, `LONG_EDGE_MAX_DISTANCE = 100 m`
+### 2.1 Remocao de nos redundantes
 
-### Objetivo
+[`remove_redundant_nodes`](../apps/api/src/urbanus_api/core/graph/sanitization.py) remove nos de grau 2 nao obrigatorios quando ambos os lados sao curtos e a fusao nao cria um trecho longo demais.
 
-Remover nos de grau 2 que estao muito proximos de ambos os vizinhos (sem contribuicao topologica). Nos removidos sao marcados como VERMELHO.
+Intuicao: se um no nao muda conectividade, nao marca curva importante e esta entre dois trechos curtinhos, ele so infla a rede.
 
-### Restricoes
+### 2.2 Resolucao de clusters de curva
 
-- Nunca remover nos com `pv_obrigatorio = True`
-- Apenas nos com `degree == 2`
-- **AMBOS** os vizinhos devem estar a menos de `dist_min` de distancia (corrigido — antes removia se QUALQUER vizinho < dist_min)
-- A aresta resultante da fusao nao pode exceder `dist_max`
+[`resolve_curve_clusters`](../apps/api/src/urbanus_api/core/graph/sanitization.py) tenta substituir curvas muito agudas por um unico no melhor posicionado, aproximando a intersecao das tangentes.
 
-### Algoritmo
+Isso reduz “quebras artificiais” de geometria antes do roteamento.
 
-```
-Repetir ate estabilizar:
-    Para cada no n com grau == 2 e pv_obrigatorio == False:
-        Vizinhos: n1, n2
-        d1 = dist(n, n1)
-        d2 = dist(n, n2)
+Quando a heuristica de tangentes cai exatamente na mesma coordenada do no original, a etapa trata isso como no-op e preserva o no atual. Isso evita loop infinito em grafos editados no frontend, onde um no intermediario de grau 2 pode chegar ao pipeline sem geometria adicional para reposicionamento.
 
-        SE d1 >= dist_min OU d2 >= dist_min:
-            Pular (pelo menos um vizinho esta longe o suficiente)
+### 2.3 Espacamento minimo entre PVs
 
-        SE (d1 + d2) <= dist_max:
-            Marcar n como VERMELHO
-            Remover n
-            Criar aresta (n1, n2) com length = d1 + d2
-```
+[`enforce_min_pv_spacing`](../apps/api/src/urbanus_api/core/graph/sanitization.py) funde PVs obrigatorios proximos demais quando a topologia permite.
 
-### Complexidade
+Objetivo: evitar concentracao desnecessaria de estruturas de inspecao.
 
-O(V * k) onde k = numero de iteracoes ate estabilizar (tipicamente 2-3).
+### 2.4 Quebra de greide
 
----
+[`detect_grade_breaks`](../apps/api/src/urbanus_api/core/graph/sanitization.py) marca nos com mudanca forte de declividade entre as arestas adjacentes.
 
-## Etapa 4: Resolucao de Clusters de Curva
+Importante: essa funcao marca `node_type="ROSA"`, mas **nao seta sempre** `pv_obrigatorio=True`. O otimizador posterior ainda pode decidir manter ou remover conforme o contexto do trecho.
 
-**Arquivo**: `core/graph/sanitization.py`
-**Funcao**: `resolve_curve_clusters(G, angle_threshold=CURVE_ANGLE_THRESHOLD)`
-**Constante**: `CURVE_ANGLE_THRESHOLD = 150 graus`
+## Etapa 3 -- Extremos Topograficos
 
-### Objetivo
+### Arquivo
 
-Substituir nos em curvas acentuadas por nos otimizados na intersecao das tangentes. Se o angulo no no e menor que o limiar, a curva e considerada acentuada e justifica um PV.
+- [`extrema.py`](../apps/api/src/urbanus_api/core/elevation/extrema.py)
 
-### Algoritmo
+### Funcao
 
-```
-Repetir ate estabilizar:
-    Para cada no n com grau == 2:
-        Vizinhos: n1, n2
-        angulo = angle_at_node(n1, n, n2)
+- [`detect_extrema`](../apps/api/src/urbanus_api/core/elevation/extrema.py)
 
-        SE angulo < angle_threshold:
-            P = line_intersection(tangente n1->n, tangente n->n2)
-            SE P != None:
-                z_novo = media(z_n1, z_n2)
-                Substituir n por novo no VERDE em P
-                Interpolar elevacao
-```
+### O que faz
 
-### Funcoes Auxiliares
+Detecta:
 
-- `angle_at_node(a, b, c)`: calcula angulo interior em B entre segmentos BA e BC (graus, [0, 180])
-- `line_intersection(a, b, c, d)`: intersecao parametrica de retas L1(A->B) e L2(C->D), retorna ponto ou None se paralelas
+- `AMARELO`: maximo local;
+- `AZUL_ESCURO`: minimo local.
 
-### Complexidade
+O algoritmo compara o no com seus vizinhos e aplica um filtro de proeminencia via BFS para evitar ruido do DEM.
 
-O(V) por iteracao, tipicamente 1-2 iteracoes.
+### Impacto no pipeline
 
----
+No pipeline atual, `AZUL_ESCURO` nao e apenas decoracao visual. Esses nos entram no conjunto de `collection_points` antes do RSPH.
 
-## Etapa 5: Deteccao de Extremos de Elevacao
+## Etapa 4 -- Recalculo de Nos Obrigatorios, Escolha do Outlet e Pontos de Coleta
 
-**Arquivo**: `core/elevation/extrema.py`
-**Funcao**: `detect_extrema(G, epsilon=0.5, min_prominence=ELEVATION_PROMINENCE_MIN)`
-**Constante**: `ELEVATION_PROMINENCE_MIN = 2.0 m`
+### Arquivo
 
-### Objetivo
+- [`main.py`](../apps/api/src/urbanus_api/main.py)
 
-Identificar maximos locais (AMARELO) e minimos locais (AZUL_ESCURO) significativos no perfil topografico da rede.
+### O que acontece aqui
 
-### Algoritmo
+Depois da sanitizacao, o endpoint recompila `mandatory` a partir de:
 
-```
-Para cada no n com elevacao z:
-    SE pv_obrigatorio: pular
+- `pv_obrigatorio=True`;
+- ou `node_type == "ROSA"`.
 
-    vizinhos_z = [z_v para v em vizinhos(n)]
+Em seguida:
 
-    SE todos(z_v < z - epsilon para z_v em vizinhos_z):
-        # Maximo local
-        prom = compute_prominence(G, n, z, direction="down")
-        SE prom >= min_prominence:
-            n.node_type = "AMARELO"
+- escolhe o `outlet` como o no com menor elevacao conhecida;
+- define `collection_points` a partir da selecao manual (`is_collection_point`) quando existir; caso contrario usa o `outlet` e os `AZUL_ESCURO` deduplicados espacialmente;
+- marca `is_collection_point=True` nesses nos.
 
-    SE todos(z_v > z + epsilon para z_v em vizinhos_z):
-        # Minimo local
-        prom = compute_prominence(G, n, z, direction="up")
-        SE prom >= min_prominence:
-            n.node_type = "AZUL_ESCURO"
-```
+### Leitura conceitual
 
-### Proeminencia Topografica
+Neste ponto o pipeline deixa de ser apenas “limpeza de malha” e passa a formular um problema de escoamento:
 
-A proeminencia mede a "importancia" de um pico ou vale. E calculada via BFS a partir do no ate `max_hops = 20`:
+- quais nos precisam estar conectados;
+- para onde eles podem convergir;
+- qual o sumidouro global do sistema.
 
-- **Para maximos (direction="down")**: proeminencia = z_pico - z_sela, onde z_sela e o ponto mais alto que voce deve cruzar para alcancar um pico mais alto
-- **Para minimos (direction="up")**: proeminencia = z_sela - z_vale
+## Etapa 5 -- Roteamento Gravitacional com RSPH
 
-Apenas extremos com proeminencia >= 2.0 m sao marcados, eliminando ruido do DEM.
+### Arquivos
 
-### Complexidade
+- [`rsph.py`](../apps/api/src/urbanus_api/core/routing/rsph.py)
+- [`cost.py`](../apps/api/src/urbanus_api/core/routing/cost.py)
 
-O(V * H) onde H = max_hops (20). O BFS e limitado em profundidade.
+### O que entra
 
----
+- `G` nao direcionado
+- `mandatory`
+- `outlet`
+- `collection_points`
 
-## Etapa 6: Roteamento Gravitacional (RSPH)
+### O que sai
 
-**Arquivo**: `core/routing/rsph.py`
-**Funcao**: `rsph_sewer_routing(G, outlet, mandatory_nodes)`
+- `tree: nx.DiGraph`
+- `unreachable: list[str]`
 
-### Objetivo
+### Como o RSPH funciona
 
-Construir uma arborescencia (arvore orientada) que conecta todos os nos obrigatorios ao exutorio (no de menor elevacao) usando caminhos gravitacionais (alto -> baixo).
+[`rsph_sewer_routing`](../apps/api/src/urbanus_api/core/routing/rsph.py):
 
-### Algoritmo: Repeated Shortest Path Heuristic
+1. cria um `DiGraph` apenas com direcoes compativeis com gravidade;
+2. cria um `SUPER_SINK` virtual;
+3. conecta os collection points ao `SUPER_SINK`;
+4. ordena os nos obrigatorios por elevacao decrescente;
+5. para cada no, roda Dijkstra com a funcao [`edge_cost`](../apps/api/src/urbanus_api/core/routing/cost.py);
+6. adiciona o caminho resultante a `tree`;
+7. registra como `unreachable` quem nao achou caminho.
 
-```
-1. Criar grafo direcionado D:
-   Para cada aresta nao-direcionada (u, v):
-       SE z_u >= z_v: adicionar u -> v em D
-       SE z_v >= z_u: adicionar v -> u em D
-       SE sem elevacao: adicionar ambas direcoes
+### Por que o custo importa
 
-2. Inicializar arvore T com no exutorio
-   reused_edges = {}
+[`edge_cost`](../apps/api/src/urbanus_api/core/routing/cost.py) combina:
 
-3. Ordenar nos obrigatorios por elevacao decrescente (mais altos primeiro)
+- custo de tubulacao;
+- custo de escavacao;
+- penalidade por declividade ruim;
+- desconto por reutilizacao (`REUSE_BONUS`).
 
-4. Para cada no obrigatorio m:
-       caminho = Dijkstra(D, m, exutorio, peso=edge_cost)
-       SE caminho encontrado:
-           Adicionar todas arestas do caminho a T
-           Marcar arestas como reusadas em reused_edges
-       SENAO:
-           Adicionar m a lista de inalcancaveis
+Isso faz o RSPH tender a formar troncos compartilhados em vez de ligar cada no com um caminho isolado.
 
-5. Retornar (T, inalcancaveis)
-```
+### Diferenca importante para a leitura do codigo
 
-### Funcao de Custo (`cost.py`)
+O RSPH atual e **multi-colecao**: ele nao liga cada no necessariamente ao `outlet` global, mas sim ao collection point mais barato via `SUPER_SINK`.
 
-```
-C_total = (C_pipe + C_excavation + C_slope) * discount
+## Etapa 6 -- Resolucao de Nos Inalcançaveis e Pontos Baixos
 
-C_pipe = PIPE_UNIT_COST * length
+### Arquivo
 
-C_excavation = (EXCAVATION_A_COEF * depth^2 + EXCAVATION_B_COEF * depth) * length
-    onde depth = MIN_COVER_STREET (0.90 m)
+- [`low_points.py`](../apps/api/src/urbanus_api/core/optimizer/low_points.py)
 
-C_slope:
-    SE z_u e z_v disponiveis:
-        s = slope_2d(z_u, z_v, length)
-        SE s <= 0:           PUMP_PENALTY (100000)
-        SE 0 < s < 0.005:   SLOPE_PENALTY * (0.005 - s) / 0.005 * length
-        SENAO:               0
-    SENAO:
-        SLOPE_PENALTY * length * 0.5
+### Funcao
 
-discount:
-    SE (u, v) em reused_edges: REUSE_BONUS (0.5)
-    SENAO: 1.0
-```
+- [`resolve_low_points`](../apps/api/src/urbanus_api/core/optimizer/low_points.py)
 
-A funcao de custo penaliza fortemente fluxo contra a gravidade (`PUMP_PENALTY`) e declividades insuficientes, enquanto bonifica a reutilizacao de trechos ja incorporados na arvore (`REUSE_BONUS`).
+### O que faz
 
-### Por que processar os mais altos primeiro?
+Para cada no em `unreachable`, a etapa compara tres estrategias:
 
-Nos de maior elevacao tendem a ter caminhos gravitacionais mais longos ate o exutorio. Processando-os primeiro, seus caminhos sao incorporados na arvore e podem ser reutilizados (com bonus de custo) por nos subsequentes, resultando em redes mais compactas.
+1. rota alternativa por gravidade;
+2. escavacao profunda;
+3. elevatoria.
 
-### Alternativa: Edmonds/Chu-Liu (`arborescence.py`)
+Ela escolhe a opcao de menor custo e atualiza `tree`.
 
-O algoritmo de Edmonds encontra a **arborescencia de custo minimo** (solucao otima), em contraste com a heuristica RSPH. A implementacao usa `networkx.minimum_spanning_arborescence()`.
+### Observacao importante
 
-Desvantagens:
-- Nao permite bonus de reutilizacao
-- Pode produzir redes com muitas ramificacoes
-- Maior complexidade computacional: O(V * E)
+Apesar do docstring citar “nos AZUL_ESCURO ou unreachable”, a implementacao atual itera explicitamente sobre `unreachable`. Os `AZUL_ESCURO` influenciam o RSPH antes, ao virarem `collection_points`.
 
-### Complexidade do RSPH
+## Etapa 7 -- Cobertura Completa da Malha
 
-O(M * (V + E) * log V) onde M = numero de nos obrigatorios (Dijkstra para cada um).
+### Arquivo
 
----
+- [`coverage.py`](../apps/api/src/urbanus_api/core/graph/coverage.py)
 
-## Etapa 7: Resolucao de Pontos Baixos
+### Funcao
 
-**Arquivo**: `core/optimizer/low_points.py`
-**Funcao**: `resolve_low_points(tree, unreachable, G, outlet)`
+- [`ensure_full_coverage`](../apps/api/src/urbanus_api/core/graph/coverage.py)
 
-### Objetivo
+### O que faz
 
-Para cada no inalcancavel (sem caminho gravitacional ate o exutorio), avaliar tres opcoes e escolher a de menor custo.
+Depois do RSPH, a rede ainda pode cobrir apenas o tronco principal. Esta etapa reintroduz no `tree` todas as arestas de `G` que ainda nao entraram no resultado.
 
-### Algoritmo
+### Por que essa etapa existe
 
-```
-Para cada no inalcancavel n:
-    Opcao A: Rota alternativa gravitacional
-        custo_A = Dijkstra(G, n, arvore_mais_proximo, peso=edge_cost)
+O RSPH resolve conectividade dos nos obrigatorios. Mas o produto quer mais do que isso: **cada rua precisa ter coletor**.
 
-    Opcao B: Escavacao profunda
-        custo_B = EXCAVATION_A_COEF * d^2 + EXCAVATION_B_COEF * d
-        onde d = profundidade adicional necessaria
+Entao esta etapa transforma a arvore/espinha dorsal do RSPH em uma rede dirigida que cobre toda a malha disponivel.
 
-    Opcao C: Elevatoria (bombeamento)
-        capacidade = 7.5 L/s
-        altura = MAX_GRAVITY_DEPTH (4.5 m)
-        CAPEX = PUMP_CAPEX_MIN (150000 R$)
-        OPEX_anual = 5% * CAPEX
-        custo_C = pump_npv(CAPEX, OPEX_anual, 20 anos, 10%)
+### Como as direcoes sao decididas
 
-    Escolher min(custo_A, custo_B, custo_C):
-        SE rota: adicionar caminho a arvore
-        SE elevatoria: criar PumpStation + aresta pressurizada
-        SE escavacao: atribuir extra_depth ao no
-```
+- se ambos os nos tem elevacao, a aresta aponta do mais alto para o mais baixo;
+- se apenas um tem elevacao, a direcao privilegia o no com elevacao conhecida;
+- se nenhum tem, usa conectividade ja existente para tentar manter coerencia;
+- se a direcao gerar ciclo, tenta o sentido inverso.
 
-### Saida
+## Etapa 7.5 -- Quebra de Ciclos
 
-- Arvore atualizada com novos caminhos ou arestas pressurizadas
-- Lista de `PumpStation` com CAPEX, OPEX e VPL
+### Arquivo
 
-### Complexidade
+- [`main.py`](../apps/api/src/urbanus_api/main.py)
 
-O(U * (V + E) * log V) onde U = numero de nos inalcancaveis.
+### Funcao
 
----
+- [`_break_cycles`](../apps/api/src/urbanus_api/main.py)
 
-## Etapa 8: Dimensionamento Hidraulico (NBR 9649)
+### O que faz
 
-**Arquivo**: `core/hydraulics/dimensioning.py`
-**Funcao**: `dimension_network(tree, population_per_node=50.0)`
+Depois de `ensure_full_coverage`, o endpoint checa se `tree` ainda e um DAG. Se houver ciclo:
 
-### Objetivo
+- encontra um ciclo;
+- remove a aresta “pior”, isto e, a que sobe mais ou desce menos;
+- reexecuta `ensure_full_coverage` para reparar cobertura perdida.
 
-Selecionar diâmetro, verificar lâmina, velocidade e tensao trativa para cada trecho da rede, conforme NBR 9649.
+### Por que isso e crucial
 
-### Algoritmo
+O dimensionamento hidraulico depende de `topological_sort`, entao a rede precisa estar aciclica antes da proxima fase.
 
-```
-1. Ordenacao topologica (folhas -> raiz)
-2. Acumular populacao a montante para cada aresta
+## Etapa 7.8 -- Otimizacao de Numero de Nos
 
-3. Para cada aresta (u, v) na arvore:
-    SE pressurizada: pular
+### Arquivo
 
-    s = slope_2d(z_u, z_v, length) ou 0.005 (default)
-    pop = upstream_count * population_per_node
-    q_d = sewage_flow_estimate(pop)
-    q_peak = peak_flow(q_d)
-    q_design = max(q_peak, MIN_FLOW_RATE)
+- [`node_reduction.py`](../apps/api/src/urbanus_api/core/optimizer/node_reduction.py)
 
-    i_min = min_slope(q_design)    # 0.0055 * Qi^(-0.47)
-    slope_used = max(s, i_min)
+### Funcao publica
 
-    diametro = _select_diameter(slope_used, q_design)
-```
+- [`optimize_node_placement`](../apps/api/src/urbanus_api/core/optimizer/node_reduction.py)
 
-### Selecao de Diâmetro (`_select_diameter`)
+### O que essa etapa tenta fazer
 
-```
-Para DN em PIPE_DIAMETERS [100, 150, 200, ..., 1000]:
-    Busca binaria por y/D que produz q_design:
-        rh = hydraulic_radius_partial(DN, y)
-        V = manning_velocity(rh, slope, n=0.013)
-        A = area da secao circular parcial
-        Q = A * V
+Reduzir o numero de PVs e nos intermediarios sem destruir:
 
-    Verificar restricoes:
-        tau = tractive_stress(rh, slope) >= 1.0 Pa
-        y/D <= 0.75
-        V <= 5.0 m/s
+- direcao de escoamento;
+- continuidade geometrica;
+- mudancas relevantes de angulo;
+- mudancas relevantes de declividade.
 
-    Retornar primeiro DN que satisfaz todas as restricoes
+### Fases internas
 
-Fallback: maior diâmetro disponivel
-```
+#### Fase 1 -- Contracao gulosa
 
-### Saida
+Remove nos “pass-through” e simplifica juncoes quando o trecho continua aceitavel como tubo de passagem.
 
-Lista de `PipeSegment` com:
-- `diameter_mm`: diâmetro nominal selecionado
-- `manning_n`: 0.013
-- `slope`: declividade usada
-- `cover_depth`: recobrimento
-- `flow_depth_ratio`: y/D
-- `velocity`: m/s
-- `tractive_stress`: Pa
-- `flow_rate`: L/s
+#### Fase 2 -- Fusão espacial de nos proximos
 
-### Complexidade
+Agrupa nos dentro de `20 m`, preservando o `outlet`.
 
-O(E * D * log(P)) onde E = arestas, D = diâmetros candidatos (10), P = precisao da busca binaria.
+#### Fase 3 -- Refinamento MILP
+
+Se `scipy.optimize.milp` estiver disponivel, resolve quais nos de cadeias podem sair sem violar o espacamento maximo.
+
+#### Observacao importante
+
+A funcao `_enforce_spacing` existe, mas o proprio comentario de [`optimize_node_placement`](../apps/api/src/urbanus_api/core/optimizer/node_reduction.py) explica que o pipeline atual **nao a executa** para evitar reintroduzir uma quantidade grande de nos.
+
+## Etapa 8 -- Dimensionamento Hidraulico
+
+### Arquivo
+
+- [`dimensioning.py`](../apps/api/src/urbanus_api/core/hydraulics/dimensioning.py)
+
+### Funcao
+
+- [`dimension_network`](../apps/api/src/urbanus_api/core/hydraulics/dimensioning.py)
+
+### O que entra
+
+- `tree` como DAG dirigido
+
+### O que sai
+
+- `pipes: list[PipeSegment]`
+
+### Como funciona
+
+Para cada aresta de `tree`:
+
+1. estima contribuicao a montante com `topological_sort`;
+2. estima vazao de projeto;
+3. calcula declividade minima;
+4. escolhe o menor DN que satisfaz criterios hidraulicos;
+5. calcula `invert_elevation` e profundidades.
+
+### Criterios usados
+
+- tensao trativa minima;
+- relacao `y/D`;
+- velocidade maxima;
+- recobrimento minimo.
+
+### Efeito colateral util
+
+Essa etapa grava no proprio `tree` atributos como:
+
+- `invert_elevation`
+- `rim_elevation`
+- `depth`
+- `needs_pump_review`
+
+Ou seja: o grafo vira tambem um suporte para resultados hidraulicos, nao apenas topologicos.
+
+## Etapa 9 -- Atribuicao de Acessorios
+
+### Arquivo
+
+- [`accessories.py`](../apps/api/src/urbanus_api/core/graph/accessories.py)
+
+### Funcao
+
+- [`assign_accessory_types`](../apps/api/src/urbanus_api/core/graph/accessories.py)
+
+### O que faz
+
+Classifica cada no da rede final como:
+
+- `PV`
+- `CP`
+- `TIL`
+- `TL`
+
+### Regras principais
+
+- grau total `>= 3` vira `PV`;
+- mudanca de direcao relevante vira `PV`;
+- mudanca de diametro entre trechos adjacentes vira `PV`;
+- no intermediario reto e de mesmo diametro vira `CP`;
+- terminais pequenos tendem a virar `TIL`.
+
+## Etapa 10 -- Persistencia, Custo e Resposta
+
+### Arquivos
+
+- [`builder.py`](../apps/api/src/urbanus_api/core/graph/builder.py)
+- [`costing.py`](../apps/api/src/urbanus_api/core/hydraulics/costing.py)
+- [`types.py`](../py/urbanus-geo/src/urbanus_geo/types.py)
+
+### O que acontece
+
+1. [`save_graph_to_postgis`](../apps/api/src/urbanus_api/core/graph/builder.py) salva nos e arestas processados.
+2. [`compute_total_cost`](../apps/api/src/urbanus_api/core/hydraulics/costing.py) calcula o custo agregado.
+3. O endpoint monta e retorna um [`SewerNetwork`](../py/urbanus-geo/src/urbanus_geo/types.py).
+
+## Etapas Que Existem no Codigo, Mas Nao Estao no Fluxo Principal
+
+### `sanitize_long_edges`
+
+Arquivo: [`sanitization.py`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
+
+Ainda existe no codigo, mas o endpoint atual nao chama essa funcao. O comentario em [`main.py`](../apps/api/src/urbanus_api/main.py) explica que ela gerava muitos nos intermediarios e inflava a rede.
+
+### `subdivide_steep_edges`
+
+Arquivo: [`sanitization.py`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
+
+Tambem existe, mas nao participa do fluxo atual por razoes semelhantes.
+
+### `build_graph_from_postgis`
+
+Arquivo: [`builder.py`](../apps/api/src/urbanus_api/core/graph/builder.py)
+
+E util para reconstruir grafo a partir do banco, mas o `process` atual parte do `streets_geojson` ou do grafo editado.
+
+### `arborescence.py`
+
+Arquivo: [`arborescence.py`](../apps/api/src/urbanus_api/core/routing/arborescence.py)
+
+E uma alternativa conceitual ao RSPH, mas nao e chamada pelo endpoint atual.
+
+## Ordem Recomendada de Leitura do Codigo
+
+Se o objetivo for entender o pipeline lendo o codigo, esta e a ordem mais eficiente:
+
+1. [`main.py`](../apps/api/src/urbanus_api/main.py) -- enxergar o orquestrador.
+2. [`builder.py`](../apps/api/src/urbanus_api/core/graph/builder.py) -- entender como `G` nasce.
+3. [`classification.py`](../apps/api/src/urbanus_api/core/graph/classification.py) -- entender os tipos de no.
+4. [`sanitization.py`](../apps/api/src/urbanus_api/core/graph/sanitization.py) e [`extrema.py`](../apps/api/src/urbanus_api/core/elevation/extrema.py) -- entender limpeza e anotacao topografica.
+5. [`rsph.py`](../apps/api/src/urbanus_api/core/routing/rsph.py) e [`cost.py`](../apps/api/src/urbanus_api/core/routing/cost.py) -- entender a heuristica principal.
+6. [`coverage.py`](../apps/api/src/urbanus_api/core/graph/coverage.py) e [`node_reduction.py`](../apps/api/src/urbanus_api/core/optimizer/node_reduction.py) -- entender como o tronco vira rede completa e depois e simplificado.
+7. [`dimensioning.py`](../apps/api/src/urbanus_api/core/hydraulics/dimensioning.py) e [`accessories.py`](../apps/api/src/urbanus_api/core/graph/accessories.py) -- entender a saida de engenharia.
+
+## Resumo Executivo do Pipeline Atual
+
+O pipeline atual pode ser resumido assim:
+
+1. constroi um grafo viario condensado;
+2. marca nos relevantes para engenharia;
+3. limpa topologia e geometrias problematicas;
+4. detecta extremos topograficos;
+5. escolhe para onde o esgoto pode convergir;
+6. usa RSPH para montar a espinha dorsal de escoamento;
+7. resolve o que nao coube por gravidade;
+8. reintroduz cobertura completa das ruas;
+9. remove complexidade desnecessaria;
+10. dimensiona hidraulicamente e classifica os acessorios.
+
+Ou seja: o sistema nao faz apenas “roteamento”. Ele alterna entre **modelagem topologica**, **heuristica de custo**, **cobertura territorial** e **dimensionamento hidraulico**.

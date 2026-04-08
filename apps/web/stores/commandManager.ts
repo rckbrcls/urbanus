@@ -30,6 +30,7 @@ const manager = new CommandManager();
  */
 const storeAccessor: GraphStoreAccessor = {
   getGraph: () => useGraphStore.getState().getGraph(),
+  setGraph: (graph) => useGraphStore.getState().loadGraph(graph),
   setNode: (id, node) => useGraphStore.getState().setNode(id, node),
   removeNode: (id) => useGraphStore.getState().removeNode(id),
   setEdge: (id, edge) => useGraphStore.getState().setEdge(id, edge),

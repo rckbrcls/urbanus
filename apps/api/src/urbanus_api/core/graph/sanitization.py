@@ -197,7 +197,14 @@ def resolve_curve_clusters(
             if intersection is not None:
                 new_lat, new_lng = intersection
             else:
-                new_lat, new_lng = b
+                continue
+
+            # The tangent-intersection heuristic can degenerate to the
+            # original vertex position. Replacing the node with an
+            # identical one makes no progress and causes the outer loop
+            # to repeat forever on frontend-edited graphs.
+            if math.isclose(new_lat, nd["y"], abs_tol=1e-9) and math.isclose(new_lng, nd["x"], abs_tol=1e-9):
+                continue
 
             # Interpolate elevation
             z_n1 = n1d.get("z")

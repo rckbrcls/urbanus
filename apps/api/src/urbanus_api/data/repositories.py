@@ -33,6 +33,21 @@ class ProjectRepository:
     async def upsert(self, data: dict[str, Any]) -> ProjectTable:
         existing = await self.session.get(ProjectTable, data["id"])
         streets = data.get("streets")
+        existing_streets = existing.streets_geojson if existing and isinstance(existing.streets_geojson, dict) else {}
+        merged_streets = dict(existing_streets)
+        if isinstance(streets, dict):
+            merged_streets.update(streets)
+
+        merged_streets["_bounds"] = data["bounds"]
+        merged_streets["_center"] = data["center"]
+
+        if "sewerNetwork" in data:
+            sewer_network = data.get("sewerNetwork")
+            if sewer_network is None:
+                merged_streets.pop("_sewerNetwork", None)
+            else:
+                merged_streets["_sewerNetwork"] = sewer_network
+
         street_count = streets.get("features", []) if isinstance(streets, dict) else []
 
         values = {
@@ -44,7 +59,7 @@ class ProjectRepository:
             "center": _center_to_point(data["center"]),
             "zoom": data["zoom"],
             "street_count": len(street_count) if isinstance(street_count, list) else data.get("stats", {}).get("streetCount", 0),
-            "streets_geojson": streets,
+            "streets_geojson": merged_streets,
         }
 
         if existing:

@@ -3,7 +3,9 @@
   "private": true,
   "packageManager": "pnpm@10.30.1",
   "scripts": {
-    "dev": "concurrently -n web,api -c cyan,magenta \"pnpm --filter @urbanus/web dev\" \"cd apps/api && uv run --env-file ../../.env uvicorn urbanus_api.main:app --reload --host 0.0.0.0 --port 8000\"",
+    "dev": "concurrently --kill-others-on-fail -n web,api -c cyan,magenta \"pnpm dev:web\" \"pnpm dev:api\"",
+    "dev:web": "pnpm --filter @urbanus/web dev",
+    "dev:api": "cd apps/api && exec uv run --env-file ../../.env uvicorn urbanus_api.main:app --reload --host 0.0.0.0 --port 8000",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",

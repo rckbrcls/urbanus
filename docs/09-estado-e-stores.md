@@ -155,9 +155,11 @@ useDeleteProject(): { mutate(id: string), isPending }
 useUpdateProject(): { mutate(project: Project), isPending }
 ```
 
-Endpoint base: `http://localhost:8000/projects` (hardcoded -- ponto de atencao para refatoracao).
+Endpoint base: `/api/projects` no Next.js App Router. As rotas `app/api/projects/*` fazem proxy para o FastAPI com timeout curto, evitando depender de `localhost:8000` diretamente no browser e expondo erro explicito quando o backend nao responde.
 
-TanStack Query gerencia cache, invalidacao, retry e estados de loading/error automaticamente.
+`Project` agora pode carregar `sewerNetwork` opcional. Ao abrir um projeto processado, o editor hidrata `pipelineStore` e `graphStore` com esse snapshot persistido para manter a mesma rede apos reload.
+
+TanStack Query gerencia cache, invalidacao, retry e estados de loading/error automaticamente. O hook limita retry inicial para evitar spinner longo quando a API cai ou trava.
 
 ## areaSelectionStore
 

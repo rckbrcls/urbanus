@@ -13,7 +13,7 @@ O URBANUS e uma plataforma de planejamento automatizado de redes coletoras de es
 | 02 | [Tipos e Constantes](02-tipos-e-constantes.md) | Tipos geoespaciais canonicos (JS e Python), constantes NBR 9649 e utilitarios |
 | 03 | [Backend FastAPI](03-backend-api.md) | Endpoints, modelos Pydantic, camada de dados e servicos externos |
 | 04 | [Banco de Dados](04-banco-de-dados.md) | Schema PostGIS, tabelas, indices espaciais e migracoes Alembic |
-| 05 | [Pipeline de 8 Etapas](05-pipeline-8-etapas.md) | Classificacao, sanitizacao, elevacao, roteamento, otimizacao e dimensionamento |
+| 05 | [Pipeline de Processamento dos Grafos](05-pipeline-8-etapas.md) | Documentacao detalhada do fluxo real de processamento, da construcao do grafo ao `SewerNetwork` final |
 | 06 | [Hidraulica e NBR 9649](06-hidraulica-nbr9649.md) | Manning, tensao trativa, declividade minima, vazao e funcao de custo |
 | 07 | [Algoritmos Geoespaciais](07-algoritmos-geo.md) | Haversine, area, amostragem de elevacao, interpolacao, angulos e proeminencia |
 | 08 | [Frontend Next.js](08-frontend.md) | Estrutura, App Router, componentes de mapa, paineis e modos de edicao |
@@ -21,6 +21,7 @@ O URBANUS e uma plataforma de planejamento automatizado de redes coletoras de es
 | 10 | [Editor de Grafos](10-editor-de-grafos.md) | Modelo de dados, useGraphEditor, drag, snapping, Command Pattern e serialization |
 | 11 | [Elevacao e Topografia](11-elevacao-e-topografia.md) | OpenTopography API, pipeline GeoTIFF, amostragem bilinear e limitacoes |
 | 12 | [Referencias](12-referencias.md) | Projetos open-source, literatura academica, normas e APIs |
+| 13 | [Fluxo Completo do Pipeline](13-fluxo-completo-pipeline.md) | Guia navegavel do endpoint de processamento, com etapas, objetos e links para os arquivos do backend |
 
 ## Convencoes
 

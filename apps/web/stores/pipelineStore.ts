@@ -24,6 +24,7 @@ export interface PipelineState {
 
 export interface PipelineActions {
   processProject: (projectId: string, editedGraph?: { nodes: unknown[]; edges: unknown[] }) => Promise<void>;
+  hydrateResult: (result: SewerNetwork | null) => void;
   reset: () => void;
   toggleView: () => void;
   selectSewerNode: (nodeId: string | null) => void;
@@ -71,6 +72,15 @@ export const usePipelineStore = create<PipelineState & PipelineActions>()(
           });
         }
       },
+
+      hydrateResult: (result) =>
+        set({
+          status: result ? 'success' : 'idle',
+          result,
+          error: null,
+          _cachedResult: null,
+          selectedNodeId: null,
+        }),
 
       reset: () => set(initialState),
 

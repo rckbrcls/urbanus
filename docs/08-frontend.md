@@ -66,7 +66,6 @@ apps/web/
 │
 └── lib/
     ├── map/snapping.ts                # Snapping inteligente
-    ├── geo/                           # Re-exporta @urbanus/geo
     └── utils.ts                       # cn() (clsx + tailwind-merge)
 ```
 
@@ -96,7 +95,11 @@ As API routes do Next.js servem como proxies para servicos externos, isolando ch
 | `POST /api/elevation/enrich` | FastAPI | Enriquece GeoJSON com elevacao |
 | `POST /api/topography` | OpenTopography | Download de GeoTIFF (DEM) |
 | `POST /api/nodes/extract` | FastAPI | Extrai e classifica nos |
+| `GET/POST /api/projects` | FastAPI | Lista e faz upsert de projetos via proxy same-origin |
+| `GET/DELETE /api/projects/[id]` | FastAPI | Carrega ou exclui um projeto especifico |
 | `POST /api/geo/validate-bbox` | Local | Validacao de bbox com `@urbanus/geo` |
+
+O payload de projeto pode incluir `sewerNetwork` opcional. Quando presente, o editor reabre direto na rede processada salva em vez de reconstruir apenas o grafo derivado de `streets`.
 
 ### Paginas
 
@@ -133,6 +136,15 @@ Duas camadas MapLibre sobre o mesmo GeoJSON source:
 
 Usa `promoteId="id"` para habilitar `map.setFeatureState()` sem repaint do source. Isso permite feedback visual instantaneo (hover, selecao) sem recriar os GeoJSON features.
 
+Quando o editor esta exibindo uma `SewerNetwork` processada (via `sewerNetworkToGraph()`), a cor dos nos passa a seguir a semantica operacional da rede em vez da classificacao bruta do editor:
+- `isCollectionPoint` -> `Collection point`
+- `accessoryType=PV` -> `Manhole (PV)`
+- `accessoryType=TIL` -> `Inspection terminal (TIL)`
+- `accessoryType=TL` -> `Cleanout terminal (TL)`
+- `accessoryType=CP` -> `Passing box (CP)`
+
+O painel lateral (`PipelineResultsPanel`) usa a mesma definicao compartilhada em `lib/sewer/renderLegend.ts`, evitando divergencia entre o que o mapa desenha e o que a legenda descreve.
+
 ### Estilos de Nos
 
 ```typescript
@@ -141,9 +153,14 @@ Usa `promoteId="id"` para habilitar `map.setFeatureState()` sem repaint do sourc
   ['boolean', ['feature-state', 'error'], false], '#ef4444',    // vermelho (erro)
   ['boolean', ['feature-state', 'selected'], false], '#f97316', // laranja (selecionado)
   ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',  // azul (hover)
-  ['get', 'isHighestElevation'], '#ef4444',                     // vermelho (pico)
-  ['get', 'isLowestElevation'], '#06b6d4',                      // ciano (vale)
-  ['get', 'isEndpoint'], '#f59e0b',                             // âmbar (extremidade)
+  ['get', 'isCollectionPoint'], '#06b6d4',                      // collection point
+  ['==', ['get', 'accessoryType'], 'PV'], '#f59e0b',            // manhole
+  ['==', ['get', 'accessoryType'], 'TIL'], '#8b5cf6',           // inspection terminal
+  ['==', ['get', 'accessoryType'], 'TL'], '#ec4899',            // cleanout terminal
+  ['==', ['get', 'accessoryType'], 'CP'], '#22c55e',            // passing box
+  ['get', 'isHighestElevation'], '#ef4444',                     // fallback do editor
+  ['get', 'isLowestElevation'], '#06b6d4',                      // fallback do editor
+  ['get', 'isEndpoint'], '#f59e0b',                             // fallback do editor
   '#8b5cf6'                                                      // violeta (padrao)
 ]
 ```

@@ -113,7 +113,6 @@ export interface Dictionary {
     totalCost: string;
     unreachable: string;
     nodeTypes: string;
-    accessories: string;
     diameters: string;
   };
   mapPage: {

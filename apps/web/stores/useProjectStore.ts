@@ -2,6 +2,7 @@ import type { BoundingBox } from "@/features/map";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getErrorMessage, getErrorMessageFromResponse } from "@/lib/errors";
+import type { SewerNetwork } from "@/types/sewer";
 
 export interface ProjectStats {
   streetCount: number;
@@ -17,13 +18,35 @@ export interface Project {
   zoom: number;
   stats: ProjectStats;
   streets: GeoJSON.FeatureCollection;
+  sewerNetwork?: SewerNetwork | null;
 }
 
-const API_URL = "http://localhost:8000";
+const API_URL = "/api/projects";
+const REQUEST_TIMEOUT_MS = 15_000;
+
+const fetchWithTimeout = async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> => {
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+    ) {
+      throw new Error("Request timed out");
+    }
+    throw error;
+  }
+};
 
 // API Functions
 const fetchProjects = async (): Promise<Project[]> => {
-  const response = await fetch(`${API_URL}/projects`);
+  const response = await fetchWithTimeout(API_URL);
   if (!response.ok) {
     const message = await getErrorMessageFromResponse(
       response,
@@ -35,7 +58,7 @@ const fetchProjects = async (): Promise<Project[]> => {
 };
 
 const fetchProject = async (id: string): Promise<Project> => {
-  const response = await fetch(`${API_URL}/projects/${id}`);
+  const response = await fetchWithTimeout(`${API_URL}/${id}`);
   if (!response.ok) {
     const message = await getErrorMessageFromResponse(
       response,
@@ -47,7 +70,7 @@ const fetchProject = async (id: string): Promise<Project> => {
 };
 
 const createProject = async (project: Project): Promise<Project> => {
-  const response = await fetch(`${API_URL}/projects`, {
+  const response = await fetchWithTimeout(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(project),
@@ -63,7 +86,7 @@ const createProject = async (project: Project): Promise<Project> => {
 };
 
 const deleteProject = async (id: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/projects/${id}`, {
+  const response = await fetchWithTimeout(`${API_URL}/${id}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -77,7 +100,7 @@ const deleteProject = async (id: string): Promise<void> => {
 
 const updateProject = async (project: Project): Promise<Project> => {
   // Use POST with upsert (server uses replace_one with upsert=True)
-  const response = await fetch(`${API_URL}/projects`, {
+  const response = await fetchWithTimeout(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(project),
@@ -97,6 +120,7 @@ export const useProjects = () => {
   return useQuery({
     queryKey: ["projects"],
     queryFn: fetchProjects,
+    retry: 1,
   });
 };
 
@@ -105,6 +129,7 @@ export const useProject = (id: string) => {
     queryKey: ["projects", id],
     queryFn: () => fetchProject(id),
     enabled: !!id,
+    retry: 1,
   });
 };
 

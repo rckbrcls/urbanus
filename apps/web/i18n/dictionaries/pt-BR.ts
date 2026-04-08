@@ -142,9 +142,8 @@ export const ptBR: Dictionary = {
     pumpStations: 'Elevatórias',
     totalCost: 'Custo Total',
     unreachable: 'Inalcançáveis',
-    nodeTypes: 'Tipos de Nó',
-    accessories: 'Acessórios',
-    diameters: 'Diâmetros',
+    nodeTypes: 'Map Legend',
+    diameters: 'Diameters',
   },
   mapPage: {
     shiftDragInstruction: '+ arraste para selecionar (máx',
