@@ -90,9 +90,9 @@ def _merge_edge_pair(
 ) -> None:
     """Remove *node* and merge pred->node + node->succ into pred->succ.
 
-    Preserves the removed node's position as a waypoint so that the
-    merged edge can be rendered following the original street path
-    instead of a straight line.
+    Preserves only pre-existing edge waypoints. The removed node position
+    is intentionally not promoted to the merged edge geometry, so the
+    processed network reflects the simplified topology immediately.
     """
     d1 = tree.edges[pred, node].get("length_m", 0)
     d2 = tree.edges[node, succ].get("length_m", 0)
@@ -100,12 +100,14 @@ def _merge_edge_pair(
     e2 = dict(tree.edges[node, succ])
     merged = {**e1, **e2, "length_m": d1 + d2}
 
-    # Accumulate waypoints: existing waypoints from both edges + the node position
+    # Keep only geometry that already existed on the input edges.
     wp1 = list(e1.get("waypoints") or [])
-    node_data = tree.nodes[node]
-    node_pos = [node_data.get("x", 0), node_data.get("y", 0)]
     wp2 = list(e2.get("waypoints") or [])
-    merged["waypoints"] = wp1 + [node_pos] + wp2
+    waypoints = wp1 + wp2
+    if waypoints:
+        merged["waypoints"] = waypoints
+    else:
+        merged.pop("waypoints", None)
 
     tree.remove_edge(pred, node)
     tree.remove_edge(node, succ)
@@ -163,27 +165,23 @@ def _simplify_junctions(tree: nx.DiGraph, max_spacing: float) -> None:
             pred, succ = best_pair
             _merge_edge_pair(tree, pred, node, succ)
 
-            # Redirect remaining edges so node can be fully removed,
-            # preserving the node position as a waypoint.
+            # Redirect remaining edges so node can be fully removed
+            # without carrying the removed node into edge geometry.
             if node in tree:
-                node_pos = [tree.nodes[node].get("x", 0), tree.nodes[node].get("y", 0)]
-
                 for x in list(tree.predecessors(node)):
                     edata = dict(tree.edges[x, node])
                     tree.remove_edge(x, node)
                     if x != succ and not tree.has_edge(x, succ):
-                        wp = list(edata.get("waypoints") or [])
-                        wp.append(node_pos)
-                        edata["waypoints"] = wp
+                        if not edata.get("waypoints"):
+                            edata.pop("waypoints", None)
                         tree.add_edge(x, succ, **edata)
 
                 for y in list(tree.successors(node)):
                     edata = dict(tree.edges[node, y])
                     tree.remove_edge(node, y)
                     if y != pred and not tree.has_edge(pred, y):
-                        wp = list(edata.get("waypoints") or [])
-                        wp.insert(0, node_pos)
-                        edata["waypoints"] = wp
+                        if not edata.get("waypoints"):
+                            edata.pop("waypoints", None)
                         tree.add_edge(pred, y, **edata)
 
                 if tree.in_degree(node) == 0 and tree.out_degree(node) == 0:
@@ -404,7 +402,8 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
             if (tree.in_degree(m) + tree.out_degree(m)) > (tree.in_degree(rep) + tree.out_degree(rep)):
                 rep = m
 
-        # Redirect all edges from other members to rep, preserving waypoints
+        # Redirect all edges from other members to rep without injecting
+        # absorbed-node positions into the resulting geometry.
         member_set = set(members)
         for m in members:
             if m == rep:
@@ -412,18 +411,14 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
             if m not in tree:
                 continue
 
-            m_pos = [tree.nodes[m].get("x", 0), tree.nodes[m].get("y", 0)]
-
             for pred in list(tree.predecessors(m)):
                 edata = dict(tree.edges[pred, m])
                 tree.remove_edge(pred, m)
                 if pred in member_set or pred == rep:
                     continue
                 if not tree.has_edge(pred, rep):
-                    # Append m's position as waypoint so the line follows the street
-                    wp = list(edata.get("waypoints") or [])
-                    wp.append(m_pos)
-                    edata["waypoints"] = wp
+                    if not edata.get("waypoints"):
+                        edata.pop("waypoints", None)
                     tree.add_edge(pred, rep, **edata)
 
             for succ in list(tree.successors(m)):
@@ -432,9 +427,8 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
                 if succ in member_set or succ == rep:
                     continue
                 if not tree.has_edge(rep, succ):
-                    wp = list(edata.get("waypoints") or [])
-                    wp.insert(0, m_pos)
-                    edata["waypoints"] = wp
+                    if not edata.get("waypoints"):
+                        edata.pop("waypoints", None)
                     tree.add_edge(rep, succ, **edata)
 
             if m in tree and tree.in_degree(m) == 0 and tree.out_degree(m) == 0:

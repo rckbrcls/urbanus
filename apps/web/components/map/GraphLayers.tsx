@@ -9,12 +9,18 @@ import {
   getElevationColor, getElevationLabel,
 } from '@/lib/map/layers';
 import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
+import {
+  getRenderedNodeCategory,
+  isRenderedNodeCategoryVisible,
+  type VisibleRenderedNodeCategories,
+} from '@/lib/sewer/renderLegend';
 
 interface GraphLayersProps {
   nodesGeoJSON: GeoJSON.FeatureCollection;
   edgesGeoJSON: GeoJSON.FeatureCollection;
   viewMode?: SewerViewMode;
   elevationRange?: { min: number; max: number } | null;
+  visibleNodeCategories?: VisibleRenderedNodeCategories;
 }
 
 /** Normalize elevation to 0-1 range. Returns -1 for null/missing. */
@@ -38,6 +44,7 @@ export default function GraphLayers({
   edgesGeoJSON,
   viewMode,
   elevationRange,
+  visibleNodeCategories,
 }: GraphLayersProps) {
   const isElevation = viewMode === 'elevation' && elevationRange;
   const edgesPaint = isElevation ? EDGES_ELEVATION_PAINT
@@ -46,12 +53,27 @@ export default function GraphLayers({
   const min = elevationRange?.min ?? 0;
   const range = elevationRange ? elevationRange.max - elevationRange.min || 1 : 1;
 
-  // Precompute elevation-derived properties to keep MapLibre layers on simple `get` expressions.
-  const enrichedNodesGeoJSON = useMemo(() => {
-    if (!isElevation) return nodesGeoJSON;
+  const filteredNodesGeoJSON = useMemo(() => {
+    if (!visibleNodeCategories) {
+      return nodesGeoJSON;
+    }
+
     return {
       ...nodesGeoJSON,
-      features: nodesGeoJSON.features.map((f) => {
+      features: nodesGeoJSON.features.filter((feature) =>
+        isRenderedNodeCategoryVisible(
+          getRenderedNodeCategory((feature.properties ?? {}) as Parameters<typeof getRenderedNodeCategory>[0]),
+          visibleNodeCategories,
+        )),
+    };
+  }, [nodesGeoJSON, visibleNodeCategories]);
+
+  // Precompute elevation-derived properties to keep MapLibre layers on simple `get` expressions.
+  const enrichedNodesGeoJSON = useMemo(() => {
+    if (!isElevation) return filteredNodesGeoJSON;
+    return {
+      ...filteredNodesGeoJSON,
+      features: filteredNodesGeoJSON.features.map((f) => {
         const elevation = f.properties?.elevation as number | null;
         const elevationNormalized = normalizeElevation(elevation, min, range);
 
@@ -66,7 +88,7 @@ export default function GraphLayers({
         };
       }),
     };
-  }, [nodesGeoJSON, isElevation, min, range]);
+  }, [filteredNodesGeoJSON, isElevation, min, range]);
 
   const enrichedEdgesGeoJSON = useMemo(() => {
     if (!isElevation) return edgesGeoJSON;
@@ -105,7 +127,7 @@ export default function GraphLayers({
         };
       }),
     };
-  }, [edgesGeoJSON, nodesGeoJSON, isElevation, min, range]);
+  }, [edgesGeoJSON, isElevation, min, nodesGeoJSON, range]);
 
   return (
     <>
@@ -128,7 +150,7 @@ export default function GraphLayers({
       <Source
         id="graph-nodes"
         type="geojson"
-        data={isElevation ? enrichedNodesGeoJSON : nodesGeoJSON}
+        data={isElevation ? enrichedNodesGeoJSON : filteredNodesGeoJSON}
         promoteId="id"
       >
         <Layer

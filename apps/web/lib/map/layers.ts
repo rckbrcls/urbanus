@@ -91,10 +91,12 @@ export const NODES_PAINT: CircleLayerSpecification['paint'] = {
     ['boolean', ['feature-state', 'hovered'], false], '#3b82f6',
     // Processed network view
     ['==', ['get', 'isCollectionPoint'], true], RENDERED_NODE_COLORS.COLLECTION_POINT,
-    ['==', ['get', 'accessoryType'], 'PV'], RENDERED_NODE_COLORS.PV,
-    ['==', ['get', 'accessoryType'], 'TIL'], RENDERED_NODE_COLORS.TIL,
-    ['==', ['get', 'accessoryType'], 'TL'], RENDERED_NODE_COLORS.TL,
-    ['==', ['get', 'accessoryType'], 'CP'], RENDERED_NODE_COLORS.CP,
+    ['any',
+      ['==', ['get', 'accessoryType'], 'PV'],
+      ['==', ['get', 'accessoryType'], 'TIL'],
+      ['==', ['get', 'accessoryType'], 'TL'],
+      ['==', ['get', 'accessoryType'], 'CP'],
+    ], RENDERED_NODE_COLORS.PV,
     // Editor fallback
     ['==', ['get', 'isHighestElevation'], true], '#ef4444',
     ['==', ['get', 'isLowestElevation'], true], '#06b6d4',
@@ -243,6 +245,9 @@ export const FLOW_ARROWS_LAYOUT: SymbolLayerSpecification['layout'] = {
   'text-field': '▶',
   'text-size': 12,
   'text-rotation-alignment': 'map',
+  // Keep chevrons aligned with the actual LineString direction instead of
+  // flipping them for text readability on reversed bearings.
+  'text-keep-upright': false,
   'text-allow-overlap': true,
   'text-ignore-placement': true,
 };

@@ -130,6 +130,9 @@ Arquivos:
 
 - quebra ciclos remanescentes
 - reduz quantidade de nos sem perder validade operacional
+- quando um no e removido por compressao, a aresta resultante nao herda a
+  coordenada do no removido como `waypoint`; a geometria renderizada passa a
+  refletir imediatamente a topologia final simplificada
 
 ### 8. Hidraulica e acessorios
 
@@ -140,7 +143,8 @@ Arquivos:
 - `core/graph/accessories.py`
 
 - dimensiona os tubos
-- atribui PV/TIL/TL/CP
+- classifica todos os nos fisicos como PV
+- destaca pontos de coleta separadamente via `is_collection_point`
 - calcula custo total
 
 ### 9. Persistencia

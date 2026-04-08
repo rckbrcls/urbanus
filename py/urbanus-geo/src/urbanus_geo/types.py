@@ -28,9 +28,6 @@ class NodeType(str, Enum):
 
 class AccessoryType(str, Enum):
     PV = "PV"     # Poço de Visita
-    TIL = "TIL"   # Terminal de Inspeção e Limpeza
-    TL = "TL"     # Terminal de Limpeza
-    CP = "CP"     # Caixa de Passagem
 
 
 class SewerNode(BaseModel):

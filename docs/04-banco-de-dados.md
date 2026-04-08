@@ -53,7 +53,7 @@ Nos da rede (intersecoes, intermediarios, extremidades).
 | `is_endpoint` | Boolean | default false | Primeiro ou ultimo vertice |
 | `node_type` | Text | -- | ROSA, VERDE, VERMELHO, AMARELO, AZUL_ESCURO |
 | `pv_obrigatorio` | Boolean | default false | PV obrigatorio neste no |
-| `accessory_type` | Text | -- | PV, TIL, TL, CP |
+| `accessory_type` | Text | -- | PV (valores antigos podem existir em rows legadas) |
 | `properties` | JSONB | -- | Metadados adicionais |
 
 Indices:

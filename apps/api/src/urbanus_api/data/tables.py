@@ -74,7 +74,7 @@ class NodeTable(Base):
     is_endpoint = Column(Boolean, default=False)
     node_type = Column(Text)           # ROSA, VERDE, VERMELHO, AMARELO, AZUL_ESCURO
     pv_obrigatorio = Column(Boolean, default=False)
-    accessory_type = Column(Text)      # PV, TIL, TL, CP
+    accessory_type = Column(Text)      # PV (legacy rows may still contain old values)
     properties = Column(JSONB)
 
     project = relationship("ProjectTable", back_populates="nodes")

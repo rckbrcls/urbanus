@@ -1,27 +1,17 @@
 export type RenderedNodeCategory =
   | 'COLLECTION_POINT'
-  | 'PV'
-  | 'TIL'
-  | 'TL'
-  | 'CP'
-  | 'OTHER';
+  | 'PV';
+
+export type VisibleRenderedNodeCategories = readonly RenderedNodeCategory[];
 
 export const RENDERED_NODE_ORDER: RenderedNodeCategory[] = [
   'COLLECTION_POINT',
   'PV',
-  'TIL',
-  'TL',
-  'CP',
-  'OTHER',
 ];
 
 export const RENDERED_NODE_COLORS: Record<RenderedNodeCategory, string> = {
   COLLECTION_POINT: '#06b6d4',
   PV: '#f59e0b',
-  TIL: '#8b5cf6',
-  TL: '#ec4899',
-  CP: '#22c55e',
-  OTHER: '#a1a1aa',
 };
 
 type RenderableNodeLike = {
@@ -36,18 +26,14 @@ export function getRenderedNodeCategory(node: RenderableNodeLike): RenderedNodeC
     return 'COLLECTION_POINT';
   }
 
-  const accessoryType = node.accessory_type ?? node.accessoryType ?? null;
+  // Legacy payloads may still carry TIL/TL/CP. Collapse them into PV so the
+  // simplified UI always renders a single physical-node category.
+  return 'PV';
+}
 
-  switch (accessoryType) {
-    case 'PV':
-      return 'PV';
-    case 'TIL':
-      return 'TIL';
-    case 'TL':
-      return 'TL';
-    case 'CP':
-      return 'CP';
-    default:
-      return 'OTHER';
-  }
+export function isRenderedNodeCategoryVisible(
+  category: RenderedNodeCategory,
+  visibleCategories: VisibleRenderedNodeCategories,
+): boolean {
+  return visibleCategories.includes(category);
 }

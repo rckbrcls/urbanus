@@ -19,7 +19,7 @@ def _make_pipe(edge_id: str, dn: int = 150) -> PipeSegment:
 
 class TestAssignAccessoryTypes:
     def test_intersection_gets_pv(self):
-        """Node with degree ≥ 3 → PV."""
+        """Node with degree ≥ 3 remains PV."""
         tree = nx.DiGraph()
         tree.add_node("A", x=0.0, y=0.0)
         tree.add_node("B", x=1.0, y=0.0)
@@ -35,11 +35,10 @@ class TestAssignAccessoryTypes:
             _make_pipe("C->D"),
         ]
         tree = assign_accessory_types(tree, pipes)
-        # C has in_degree=2, out_degree=1 → total=3 → PV
         assert tree.nodes["C"]["accessory_type"] == "PV"
 
-    def test_terminal_dn150_gets_til(self):
-        """Terminal node (degree=1) on DN≤150 → TIL."""
+    def test_terminal_dn150_gets_pv(self):
+        """Terminal node on DN≤150 is still simplified to PV."""
         tree = nx.DiGraph()
         tree.add_node("A", x=0.0, y=0.0)
         tree.add_node("B", x=1.0, y=0.0)
@@ -47,11 +46,10 @@ class TestAssignAccessoryTypes:
 
         pipes = [_make_pipe("A->B", dn=150)]
         tree = assign_accessory_types(tree, pipes)
-        # A has out_degree=1, in_degree=0 → terminal
-        assert tree.nodes["A"]["accessory_type"] == "TIL"
+        assert tree.nodes["A"]["accessory_type"] == "PV"
 
     def test_terminal_large_dn_gets_pv(self):
-        """Terminal node on DN > 150 → PV."""
+        """Terminal node on DN > 150 is PV."""
         tree = nx.DiGraph()
         tree.add_node("A", x=0.0, y=0.0)
         tree.add_node("B", x=1.0, y=0.0)
@@ -61,8 +59,8 @@ class TestAssignAccessoryTypes:
         tree = assign_accessory_types(tree, pipes)
         assert tree.nodes["A"]["accessory_type"] == "PV"
 
-    def test_straight_same_dn_gets_cp(self):
-        """Degree-2 node, straight run, same diameter → CP."""
+    def test_straight_same_dn_gets_pv(self):
+        """Degree-2 node, straight run, same diameter is simplified to PV."""
         tree = nx.DiGraph()
         tree.add_node("A", x=0.0, y=0.0)
         tree.add_node("B", x=1.0, y=0.0)
@@ -72,10 +70,10 @@ class TestAssignAccessoryTypes:
 
         pipes = [_make_pipe("A->B", dn=150), _make_pipe("B->C", dn=150)]
         tree = assign_accessory_types(tree, pipes)
-        assert tree.nodes["B"]["accessory_type"] == "CP"
+        assert tree.nodes["B"]["accessory_type"] == "PV"
 
     def test_direction_change_gets_pv(self):
-        """Degree-2 node with > 45° deflection → PV."""
+        """Degree-2 node with direction change remains PV."""
         tree = nx.DiGraph()
         tree.add_node("A", x=0.0, y=0.0)
         tree.add_node("B", x=1.0, y=0.0)
@@ -85,11 +83,10 @@ class TestAssignAccessoryTypes:
 
         pipes = [_make_pipe("A->B", dn=150), _make_pipe("B->C", dn=150)]
         tree = assign_accessory_types(tree, pipes)
-        # B: angle at B = 90° → deflection = 90° > 45° → PV
         assert tree.nodes["B"]["accessory_type"] == "PV"
 
     def test_diameter_change_gets_pv(self):
-        """Degree-2 node with different diameters on each side → PV."""
+        """Degree-2 node with diameter change remains PV."""
         tree = nx.DiGraph()
         tree.add_node("A", x=0.0, y=0.0)
         tree.add_node("B", x=1.0, y=0.0)
@@ -101,8 +98,8 @@ class TestAssignAccessoryTypes:
         tree = assign_accessory_types(tree, pipes)
         assert tree.nodes["B"]["accessory_type"] == "PV"
 
-    def test_outlet_terminal_gets_til(self):
-        """Outlet (last node, degree=1, DN≤150) → TIL."""
+    def test_outlet_terminal_gets_pv(self):
+        """Outlet (last node, degree=1, DN≤150) is simplified to PV."""
         tree = nx.DiGraph()
         tree.add_node("A", x=0.0, y=0.0)
         tree.add_node("B", x=1.0, y=0.0)
@@ -110,5 +107,4 @@ class TestAssignAccessoryTypes:
 
         pipes = [_make_pipe("A->B", dn=150)]
         tree = assign_accessory_types(tree, pipes)
-        # B has in_degree=1, out_degree=0 → terminal
-        assert tree.nodes["B"]["accessory_type"] == "TIL"
+        assert tree.nodes["B"]["accessory_type"] == "PV"

@@ -2,26 +2,31 @@
 
 import type { SewerNetwork } from '@/types/sewer';
 import { useTranslation } from '@/i18n';
+import { cn } from '@/lib/utils';
 import {
   getRenderedNodeCategory,
+  isRenderedNodeCategoryVisible,
   RENDERED_NODE_COLORS,
   RENDERED_NODE_ORDER,
   type RenderedNodeCategory,
+  type VisibleRenderedNodeCategories,
 } from '@/lib/sewer/renderLegend';
 
 interface PipelineResultsPanelProps {
   result: SewerNetwork;
+  visibleCategories: VisibleRenderedNodeCategories;
+  onToggleCategory: (category: RenderedNodeCategory) => void;
 }
 
-export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
+export function PipelineResultsPanel({
+  result,
+  visibleCategories,
+  onToggleCategory,
+}: PipelineResultsPanelProps) {
   const t = useTranslation('pipeline');
   const renderedNodeLabels: Record<RenderedNodeCategory, string> = {
     COLLECTION_POINT: t.nodeLabels.collectionPoint,
     PV: t.nodeLabels.pv,
-    TIL: t.nodeLabels.til,
-    TL: t.nodeLabels.tl,
-    CP: t.nodeLabels.cp,
-    OTHER: t.nodeLabels.other,
   };
 
   const renderedNodeCount = result.nodes.reduce<Record<RenderedNodeCategory, number>>((acc, node) => {
@@ -31,10 +36,6 @@ export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
   }, {
     COLLECTION_POINT: 0,
     PV: 0,
-    TIL: 0,
-    TL: 0,
-    CP: 0,
-    OTHER: 0,
   });
 
   const diameterCount = result.pipes.reduce<Record<number, number>>((acc, p) => {
@@ -77,16 +78,27 @@ export function PipelineResultsPanel({ result }: PipelineResultsPanelProps) {
           {RENDERED_NODE_ORDER
             .filter((category) => renderedNodeCount[category] > 0)
             .map((category) => (
-              <div key={category} className="flex items-center justify-between rounded px-2 py-1 text-xs">
+              <button
+                key={category}
+                type="button"
+                aria-pressed={isRenderedNodeCategoryVisible(category, visibleCategories)}
+                onClick={() => onToggleCategory(category)}
+                className={cn(
+                  'flex w-full items-center justify-between rounded-md border px-2 py-1 text-xs transition-colors',
+                  isRenderedNodeCategoryVisible(category, visibleCategories)
+                    ? 'border-transparent bg-transparent text-zinc-900 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800/70'
+                    : 'border-zinc-200/80 bg-zinc-50/80 text-zinc-400 opacity-65 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500 dark:hover:bg-zinc-800/70',
+                )}
+              >
                 <div className="flex items-center gap-2">
                   <div
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: RENDERED_NODE_COLORS[category] }}
                   />
-                  <span className="text-zinc-700 dark:text-zinc-300">{renderedNodeLabels[category]}</span>
+                  <span>{renderedNodeLabels[category]}</span>
                 </div>
-                <span className="font-mono text-zinc-500">{renderedNodeCount[category]}</span>
-              </div>
+                <span className="font-mono text-zinc-500 dark:text-zinc-400">{renderedNodeCount[category]}</span>
+              </button>
             ))}
         </div>
       </div>

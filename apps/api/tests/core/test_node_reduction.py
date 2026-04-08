@@ -1,12 +1,13 @@
 """Tests for node optimization."""
 
 import networkx as nx
-import pytest
 
 from urbanus_api.core.optimizer.node_reduction import (
     _direction_angle,
     _slope_break,
     _is_through_pipe,
+    _merge_close_nodes,
+    _merge_edge_pair,
 )
 
 
@@ -133,6 +134,54 @@ class TestGreedyContract:
 
         _greedy_contract(tree, max_spacing=100)
         assert "B" in tree
+
+
+class TestEdgeGeometrySimplification:
+    def test_merge_edge_pair_does_not_promote_removed_node_to_waypoint(self):
+        tree = nx.DiGraph()
+        tree.add_node("A", x=0.0, y=0.0, z=10)
+        tree.add_node("B", x=0.0, y=0.0003, z=9)
+        tree.add_node("C", x=0.0, y=0.0006, z=8)
+        tree.add_edge("A", "B", length_m=30)
+        tree.add_edge("B", "C", length_m=30)
+
+        _merge_edge_pair(tree, "A", "B", "C")
+
+        assert "B" not in tree
+        assert tree.has_edge("A", "C")
+        assert "waypoints" not in tree.edges["A", "C"]
+
+    def test_simplify_junction_does_not_keep_removed_junction_as_waypoint(self):
+        tree = nx.DiGraph()
+        tree.add_node("N", x=0.0, y=0.001, z=10)
+        tree.add_node("J", x=0.0, y=0.0005, z=9)
+        tree.add_node("S", x=0.0, y=0.0, z=8)
+        tree.add_node("E", x=0.001, y=0.0005, z=10)
+        tree.add_edge("N", "J", length_m=40)
+        tree.add_edge("J", "S", length_m=40)
+        tree.add_edge("E", "J", length_m=40)
+
+        _simplify_junctions(tree, max_spacing=100)
+
+        assert "J" not in tree
+        assert tree.has_edge("N", "S")
+        assert "waypoints" not in tree.edges["N", "S"]
+        assert tree.has_edge("E", "S")
+        assert "waypoints" not in tree.edges["E", "S"]
+
+    def test_merge_close_nodes_does_not_keep_absorbed_node_as_waypoint(self):
+        tree = nx.DiGraph()
+        tree.add_node("A", x=0.0, y=0.0, z=10)
+        tree.add_node("B", x=0.0, y=0.00005, z=9)
+        tree.add_node("C", x=0.0, y=0.001, z=8)
+        tree.add_edge("A", "B", length_m=5)
+        tree.add_edge("B", "C", length_m=90)
+
+        _merge_close_nodes(tree, radius=20.0, outlet="A")
+
+        assert "B" not in tree
+        assert tree.has_edge("A", "C")
+        assert "waypoints" not in tree.edges["A", "C"]
 
 
 class TestSimplifyJunctions:

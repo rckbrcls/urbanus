@@ -147,10 +147,6 @@ export const ptBR: Dictionary = {
     nodeLabels: {
       collectionPoint: 'Ponto de coleta',
       pv: 'Poço de visita (PV)',
-      til: 'Terminal de inspeção e limpeza (TIL)',
-      tl: 'Terminal de limpeza (TL)',
-      cp: 'Caixa de passagem (CP)',
-      other: 'Outro',
     },
   },
   mapPage: {

@@ -147,10 +147,6 @@ export const en: Dictionary = {
     nodeLabels: {
       collectionPoint: 'Collection point',
       pv: 'Manhole (PV)',
-      til: 'Inspection terminal (TIL)',
-      tl: 'Cleanout terminal (TL)',
-      cp: 'Passing box (CP)',
-      other: 'Other',
     },
   },
   mapPage: {

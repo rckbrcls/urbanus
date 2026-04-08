@@ -60,6 +60,11 @@ O nome visual `topography` ainda existe no estado da home, mas funcionalmente es
 
 O frontend nao tem mais fallback local para chamar o processamento sem body.
 
+Na visualizacao processada, o mapa renderiza chevrons de fluxo sobre a rede.
+Esses chevrons seguem a orientacao do `LineString` retornado no `SewerNetwork`
+e usam `text-keep-upright: false` no MapLibre para nao inverter a direcao em
+trechos cujo bearing faria o motor "virar" o simbolo por legibilidade.
+
 ## Persistencia de projeto
 
 `useProjectStore` faz proxy same-origin para o FastAPI. O payload de projeto continua podendo incluir `sewerNetwork`; quando presente, o editor reabre diretamente no snapshot processado salvo.

@@ -117,10 +117,6 @@ export interface Dictionary {
     nodeLabels: {
       collectionPoint: string;
       pv: string;
-      til: string;
-      tl: string;
-      cp: string;
-      other: string;
     };
   };
   mapPage: {

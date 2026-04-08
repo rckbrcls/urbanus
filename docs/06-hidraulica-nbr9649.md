@@ -152,10 +152,10 @@ A NBR 9649 recomenda n = 0.013 como valor conservador que incorpora o efeito do 
 
 | Tipo | Sigla | Condicao de Uso |
 |------|-------|-----------------|
-| Poco de Visita | PV | Intersecoes, mudanca de direcao > 45 graus, mudanca de diâmetro, inicio de coletor, espacamento > 100 m |
-| Terminal de Inspecao e Limpeza | TIL | Inicio de coletor com DN <= 150 mm |
-| Terminal de Limpeza | TL | Alternativa ao PV em trechos simples |
-| Caixa de Passagem | CP | Ligacao de ramal predial ao coletor |
+| Poco de Visita | PV | Unico acessorio emitido pelo produto nesta fase; usado para representar todos os nos fisicos da rede processada |
+
+Observacao do produto: `is_collection_point` permanece como marcador separado
+do no e nao como um tipo de acessorio.
 
 Dimensoes minimas:
 - `PV_MIN_LID_DIAMETER = 0.60 m` (abertura da tampa)

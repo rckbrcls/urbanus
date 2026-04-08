@@ -35,6 +35,11 @@ import { Kbd } from '@/components/ui/kbd';
 import { useTranslation } from '@/i18n';
 import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
 import { ReplaceGraphCommand } from '@/lib/graph/commands';
+import {
+  RENDERED_NODE_ORDER,
+  type RenderedNodeCategory,
+  type VisibleRenderedNodeCategories,
+} from '@/lib/sewer/renderLegend';
 
 // Dynamic imports (no SSR — MapLibre uses WebGL)
 const GraphMapView = dynamic(() => import('@/components/map/GraphMapView'), {
@@ -105,6 +110,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   // Sewer view mode
   const [sewerViewMode, setSewerViewMode] = useState<SewerViewMode>('default');
+  const [visibleNodeCategories, setVisibleNodeCategories] = useState<VisibleRenderedNodeCategories>(RENDERED_NODE_ORDER);
 
   const nodesApiService = useRef(NodesApiService.getInstance()).current;
   const accessor = useMemo(() => getStoreAccessor(), []);
@@ -366,6 +372,14 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     return hasElev ? { min, max } : null;
   }, [graphNodes]);
 
+  const handleToggleVisibleNodeCategory = useCallback((category: RenderedNodeCategory) => {
+    setVisibleNodeCategories((current) =>
+      current.includes(category)
+        ? current.filter((item) => item !== category)
+        : [...current, category],
+    );
+  }, []);
+
   const elevationStats = useMemo(() => {
     let min = Infinity;
     let max = -Infinity;
@@ -419,6 +433,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
           sewerNetwork={pipelineResult}
           sewerViewMode={sewerViewMode}
           sewerElevationRange={sewerElevationRange}
+          visibleNodeCategories={pipelineResult ? visibleNodeCategories : undefined}
         />
       </div>
 
@@ -735,7 +750,11 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
               )}
 
               {pipelineStatus === 'success' && pipelineResult && (
-                <PipelineResultsPanel result={pipelineResult} />
+                <PipelineResultsPanel
+                  result={pipelineResult}
+                  visibleCategories={visibleNodeCategories}
+                  onToggleCategory={handleToggleVisibleNodeCategory}
+                />
               )}
             </div>
           )}

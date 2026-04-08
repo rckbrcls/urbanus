@@ -63,15 +63,15 @@ type NodeType = "ROSA" | "VERDE" | "VERMELHO" | "AMARELO" | "AZUL_ESCURO";
 | `AZUL_ESCURO` | Azul escuro | Ponto baixo -- minimo local de elevacao (Etapa 5) |
 
 ```typescript
-type AccessoryType = "PV" | "TIL" | "TL" | "CP";
+type AccessoryType = "PV";
 ```
 
 | Tipo | Nome Completo |
 |------|---------------|
 | `PV` | Poco de Visita |
-| `TIL` | Terminal de Inspecao e Limpeza |
-| `TL` | Terminal de Limpeza |
-| `CP` | Caixa de Passagem |
+
+`isCollectionPoint` permanece separado de `accessoryType` e identifica o papel
+do no como ponto de coleta no roteamento.
 
 ### Tipos da Rede de Esgoto
 
@@ -86,6 +86,7 @@ interface SewerNode {
   degree: number;
   isIntersection: boolean;
   isEndpoint: boolean;
+  isCollectionPoint: boolean;
   accessoryType: AccessoryType | null;
 }
 
@@ -158,9 +159,6 @@ class NodeType(str, Enum):
 
 class AccessoryType(str, Enum):
     PV = "PV"
-    TIL = "TIL"
-    TL = "TL"
-    CP = "CP"
 
 class SewerNode(BaseModel):
     id: str
@@ -172,6 +170,7 @@ class SewerNode(BaseModel):
     degree: int = 0
     is_intersection: bool = False
     is_endpoint: bool = False
+    is_collection_point: bool = False
     accessory_type: AccessoryType | None = None
 
 class SewerEdge(BaseModel):

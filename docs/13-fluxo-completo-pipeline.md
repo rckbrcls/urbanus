@@ -41,7 +41,7 @@ frontend edited graph
 | 8 | Quebrar ciclos | `tree` -> `tree` | `main.py` | `_break_cycles` |
 | 9 | Reduzir nos | `tree` -> `tree` | `node_reduction.py` | `optimize_node_placement` |
 | 10 | Dimensionar hidraulica | `tree` -> `pipes` | `dimensioning.py` | `dimension_network` |
-| 11 | Atribuir acessorios | `tree` + `pipes` -> `tree` | `accessories.py` | `assign_accessory_types` |
+| 11 | Classificar nos finais | `tree` + `pipes` -> `tree` | `accessories.py` | `assign_accessory_types` |
 | 12 | Calcular custo total | `pipes` + `pump_stations` + `tree` -> `float` | `costing.py` | `compute_total_cost` |
 | 13 | Persistir resultado | `SewerNetwork` -> banco | `repositories.py` | `save_sewer_network_to_postgis` |
 | 14 | Responder ao frontend | objetos processados -> `SewerNetwork` | `main.py` | `process_sewer_network` |

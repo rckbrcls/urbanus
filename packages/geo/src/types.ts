@@ -40,7 +40,7 @@ export interface ValidationResult {
 // --- Sewer domain types ---
 
 export type NodeType = "ROSA" | "VERDE" | "VERMELHO" | "AMARELO" | "AZUL_ESCURO";
-export type AccessoryType = "PV" | "TIL" | "TL" | "CP";
+export type AccessoryType = "PV";
 
 export interface SewerNode {
   id: string;
@@ -52,6 +52,7 @@ export interface SewerNode {
   degree: number;
   isIntersection: boolean;
   isEndpoint: boolean;
+  isCollectionPoint: boolean;
   accessoryType: AccessoryType | null;
 }
 

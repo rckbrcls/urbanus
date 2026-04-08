@@ -14,6 +14,7 @@ import GraphLayers from './GraphLayers';
 import GhostEdge from './GhostEdge';
 import SewerNetworkLayers, { type SewerViewMode } from './SewerNetworkLayers';
 import type { SewerNetwork } from '@/types/sewer';
+import type { VisibleRenderedNodeCategories } from '@/lib/sewer/renderLegend';
 
 interface GraphMapViewProps {
   center: [number, number];
@@ -26,13 +27,23 @@ interface GraphMapViewProps {
   sewerNetwork?: SewerNetwork | null;
   sewerViewMode?: SewerViewMode;
   sewerElevationRange?: { min: number; max: number } | null;
+  visibleNodeCategories?: VisibleRenderedNodeCategories;
 }
 
 /**
  * Main map component for the graph editor.
  * Renders graph nodes/edges via GraphLayers and delegates interactions to useGraphEditor.
  */
-export default function GraphMapView({ center, zoom, bounds, streetFeatures, sewerNetwork, sewerViewMode, sewerElevationRange }: GraphMapViewProps) {
+export default function GraphMapView({
+  center,
+  zoom,
+  bounds,
+  streetFeatures,
+  sewerNetwork,
+  sewerViewMode,
+  sewerElevationRange,
+  visibleNodeCategories,
+}: GraphMapViewProps) {
   const mapRef = useRef<MapRef>(null);
   const editingMode = useGraphStore((s) => s.editingMode);
 
@@ -101,6 +112,7 @@ export default function GraphMapView({ center, zoom, bounds, streetFeatures, sew
         edgesGeoJSON={edgesGeoJSON}
         viewMode={sewerViewMode}
         elevationRange={sewerElevationRange}
+        visibleNodeCategories={visibleNodeCategories}
       />
 
       {/* Flow arrows overlay when processed network exists */}
