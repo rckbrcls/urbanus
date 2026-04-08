@@ -21,7 +21,7 @@ export const en: Dictionary = {
   },
   landing: {
     tagline:
-      'Automated sanitary sewer network design — from map selection to hydraulic dimensioning, powered by open data and NBR\u00a09649.',
+      'Automated sanitary sewer network design — from map selection to hydraulic dimensioning, powered by open data and engineering checks.',
     startDesigning: 'Start Designing',
     howItWorks: 'How it works',
     features: 'Features',
@@ -48,10 +48,10 @@ export const en: Dictionary = {
         description:
           'From node classification to hydraulic dimensioning — a complete sewer design workflow automated end to end.',
       },
-      nbr: {
-        title: 'Standards Compliant',
+      standards: {
+        title: 'Engineering Checks',
         description:
-          "Manning's equation, minimum slopes, maximum depths, and pipe sizing all follow sanitary sewer engineering standards.",
+          "Manning's equation, slope validation, depth limits, and pipe sizing are applied automatically throughout the workflow.",
       },
       openData: {
         title: 'Open Data',
@@ -140,9 +140,7 @@ export const en: Dictionary = {
     segments: 'Segments',
     length: 'Length',
     pumpStations: 'Pump Stations',
-    totalCost: 'Total Cost',
     unreachable: 'Unreachable',
-    diameters: 'Diameters',
   },
   mapPage: {
     shiftDragInstruction: '+ drag to select (max',

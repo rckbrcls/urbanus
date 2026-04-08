@@ -21,7 +21,7 @@ export const ptBR: Dictionary = {
   },
   landing: {
     tagline:
-      'Projeto automatizado de redes de esgoto sanitário — da seleção no mapa ao dimensionamento hidráulico, com dados abertos e NBR\u00a09649.',
+      'Projeto automatizado de redes de esgoto sanitário — da seleção no mapa ao dimensionamento hidráulico, com dados abertos e verificações de engenharia.',
     startDesigning: 'Começar',
     howItWorks: 'Como funciona',
     features: 'Funcionalidades',
@@ -48,10 +48,10 @@ export const ptBR: Dictionary = {
         description:
           'Da classificação de nós ao dimensionamento hidráulico — um fluxo completo de projeto de esgoto automatizado de ponta a ponta.',
       },
-      nbr: {
-        title: 'Conforme Normas Técnicas',
+      standards: {
+        title: 'Verificações de Engenharia',
         description:
-          'Equação de Manning, declividades mínimas, profundidades máximas e dimensionamento de tubos seguem normas de engenharia de esgoto sanitário.',
+          'Equação de Manning, validação de declividade, limites de profundidade e dimensionamento de tubos são aplicados automaticamente ao longo do fluxo.',
       },
       openData: {
         title: 'Dados Abertos',
@@ -140,9 +140,7 @@ export const ptBR: Dictionary = {
     segments: 'Trechos',
     length: 'Extensão',
     pumpStations: 'Elevatórias',
-    totalCost: 'Custo Total',
     unreachable: 'Inalcançáveis',
-    diameters: 'Diâmetros',
   },
   mapPage: {
     shiftDragInstruction: '+ arraste para selecionar (máx',

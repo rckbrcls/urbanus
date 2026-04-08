@@ -2,7 +2,7 @@
  * Sewer-specific graph analysis functions.
  *
  * Hydrology / hydraulic calculations specific to the sewer network domain.
- * Uses NBR 9649 constants from @urbanus/constants.
+ * Uses shared hydraulic constants from @urbanus/constants.
  */
 
 import type { NetworkGraph } from './types';
@@ -24,10 +24,10 @@ export function calculateSWMMSlope(
 }
 
 /**
- * Validate slope against NBR 9649 thresholds.
+ * Validate slope against shared hydraulic thresholds.
  * Returns array of warnings/errors.
  */
-export function validateSlopeNBR(
+export function validateSlopeConstraints(
   slope: number | null,
   diameterMm: number = HYDRAULICS.MIN_DIAMETER_COLLECTOR,
 ): { valid: boolean; warnings: string[] } {

@@ -64,7 +64,7 @@ export function calculateSlope(
 }
 
 /**
- * Validate slope against NBR 9649 thresholds.
+ * Validate slope against shared hydraulic thresholds.
  */
 export function validateSlope(
   slope: number | null,

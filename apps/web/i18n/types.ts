@@ -31,7 +31,7 @@ export interface Dictionary {
     };
     featureCards: {
       pipeline: { title: string; description: string };
-      nbr: { title: string; description: string };
+      standards: { title: string; description: string };
       openData: { title: string; description: string };
       interactiveEditing: { title: string; description: string };
     };
@@ -110,9 +110,7 @@ export interface Dictionary {
     segments: string;
     length: string;
     pumpStations: string;
-    totalCost: string;
     unreachable: string;
-    diameters: string;
   };
   mapPage: {
     shiftDragInstruction: string;

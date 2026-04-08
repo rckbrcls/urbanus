@@ -39,11 +39,6 @@ export function PipelineResultsPanel({
     PV: 0,
   });
 
-  const diameterCount = result.pipes.reduce<Record<number, number>>((acc, p) => {
-    acc[p.diameter_mm] = (acc[p.diameter_mm] || 0) + 1;
-    return acc;
-  }, {});
-
   const totalLength = result.edges.reduce((sum, e) => sum + e.length_m, 0);
 
   return (
@@ -58,14 +53,6 @@ export function PipelineResultsPanel({
           <Stat label={t.segments} value={result.edges.length} />
           <Stat label={t.length} value={`${(totalLength / 1000).toFixed(2)} km`} />
           <Stat label={t.pumpStations} value={result.pump_stations.length} />
-          <Stat
-            label={t.totalCost}
-            value={
-              result.total_cost
-                ? `R$ ${(result.total_cost / 1000).toFixed(0)}k`
-                : '-'
-            }
-          />
           <Stat label={t.unreachable} value={result.unreachable_nodes.length} />
         </div>
       </div>
@@ -99,23 +86,6 @@ export function PipelineResultsPanel({
                 </div>
                 <span className="font-mono text-zinc-500 dark:text-zinc-400">{renderedNodeCount[category]}</span>
               </button>
-            ))}
-        </div>
-      </div>
-
-      {/* Pipe Diameters */}
-      <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          {t.diameters}
-        </h3>
-        <div className="space-y-1">
-          {Object.entries(diameterCount)
-            .sort((a, b) => Number(a[0]) - Number(b[0]))
-            .map(([dn, count]) => (
-              <div key={dn} className="flex items-center justify-between rounded px-2 py-1 text-xs">
-                <span className="text-zinc-700 dark:text-zinc-300">{dn} mm</span>
-                <span className="font-mono text-zinc-500">{count}</span>
-              </div>
             ))}
         </div>
       </div>

@@ -22,6 +22,7 @@ O URBANUS e uma plataforma de planejamento automatizado de redes coletoras de es
 | 11 | [Elevacao e Topografia](11-elevacao-e-topografia.md) | OpenTopography API, pipeline GeoTIFF, amostragem bilinear e limitacoes |
 | 12 | [Referencias](12-referencias.md) | Projetos open-source, literatura academica, normas e APIs |
 | 13 | [Fluxo Completo do Pipeline](13-fluxo-completo-pipeline.md) | Guia navegavel do endpoint de processamento, com etapas, objetos e links para os arquivos do backend |
+| 14 | [Algoritmo e Fluxo Real do Pipeline](14-algoritmo-e-fluxo-real.md) | Explicacao end-to-end do fluxo real, da elevacao inicial ao consumo do `SewerNetwork` no frontend |
 
 ## Convencoes
 

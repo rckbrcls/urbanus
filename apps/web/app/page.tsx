@@ -29,7 +29,7 @@ export default function LandingPage() {
 
   const features = [
     { icon: GitBranch, ...tl.featureCards.pipeline },
-    { icon: ShieldCheck, ...tl.featureCards.nbr },
+    { icon: ShieldCheck, ...tl.featureCards.standards },
     { icon: MapPin, ...tl.featureCards.openData },
     { icon: Layers, ...tl.featureCards.interactiveEditing },
   ];

@@ -47,6 +47,7 @@ A home usa `MapView` + `areaSelectionStore` para orquestrar tres etapas:
 3. nodes
 
 O nome visual `topography` ainda existe no estado da home, mas funcionalmente esse estagio significa apenas o enriquecimento de elevacao via `/api/elevation/enrich`.
+O texto da landing evita citar normas tecnicas especificas nominalmente e descreve essas validacoes de forma generica como verificacoes de engenharia.
 
 ## Editor
 
@@ -79,7 +80,10 @@ paleta dos nós no mapa, com excecao de `collection point`, que permanece
 visualmente destacado em relacao aos nós comuns. Os circulos de nós no editor,
 na preview da home e na rede processada agora usam expressoes de raio
 dependentes do zoom do MapLibre, com limites minimo e maximo, para evitar que
-ocupem area demais quando o usuario afasta muito o mapa.
+ocupem area demais quando o usuario afasta muito o mapa. O resumo exibido no
+painel de pipeline foi reduzido a metricas operacionais da rede: nós,
+segmentos, extensao, elevatorias e inalcançaveis. O frontend nao mostra mais
+custo total nem contagem por diametro de tubo nesse painel.
 
 ## Persistencia de projeto
 
