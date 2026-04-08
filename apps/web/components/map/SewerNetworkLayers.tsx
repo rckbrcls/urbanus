@@ -5,7 +5,12 @@ import { Source, Layer } from 'react-map-gl/maplibre';
 import type { SewerNetwork } from '@/types/sewer';
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import FlowArrows from './FlowArrows';
-import { DEFAULT_EDGE_COLOR, getElevationColor, getElevationLabel } from '@/lib/map/layers';
+import {
+  DEFAULT_EDGE_COLOR,
+  getElevationColor,
+  getElevationLabel,
+  SEWER_NODE_RADIUS_EXPRESSION,
+} from '@/lib/map/layers';
 import { HIGHWAY_COLORS } from '@/features/map/constants';
 
 export type SewerViewMode = 'default' | 'elevation' | 'streets';
@@ -17,6 +22,8 @@ interface SewerNetworkLayersProps {
   selectedNodeId?: string | null;
   /** When true, only renders flow arrows — nodes/edges are handled by GraphLayers */
   overlayOnly?: boolean;
+  /** Uses the live editor geometry so flow arrows track node drags immediately. */
+  edgeGeometryOverride?: GeoJSON.FeatureCollection | null;
 }
 
 /** Map pipe diameter to line width */
@@ -57,6 +64,7 @@ export default function SewerNetworkLayers({
   elevationRange,
   selectedNodeId,
   overlayOnly = false,
+  edgeGeometryOverride = null,
 }: SewerNetworkLayersProps) {
   const isElevation = viewMode === 'elevation';
   const range = elevationRange
@@ -64,8 +72,10 @@ export default function SewerNetworkLayers({
     : 1;
   const min = elevationRange?.min ?? 0;
 
-  const { nodesGeoJSON, edgesGeoJSON } = useMemo(() => {
-    const pipeLookup = new Map(network.pipes.map((p) => [p.edge_id, p]));
+  const nodesGeoJSON = useMemo(() => {
+    if (overlayOnly) {
+      return null;
+    }
 
     const nodeFeatures: GeoJSON.Feature[] = network.nodes.map((n) => {
       const elevationNormalized = normalizeElevation(n.elevation, min, range);
@@ -90,59 +100,105 @@ export default function SewerNetworkLayers({
       };
     });
 
-    const edgeFeatures: GeoJSON.Feature[] = network.edges.map((e) => {
-      const src = network.nodes.find((n) => n.id === e.source_node_id);
-      const tgt = network.nodes.find((n) => n.id === e.target_node_id);
-      const pipe = pipeLookup.get(e.id) ?? pipeLookup.get(`${e.source_node_id}->${e.target_node_id}`);
+    return { type: 'FeatureCollection' as const, features: nodeFeatures };
+  }, [network.nodes, min, range, selectedNodeId, overlayOnly]);
 
-      // Average elevation of the two endpoints for edge coloring
-      const srcElev = src?.elevation;
-      const tgtElev = tgt?.elevation;
-      let avgElevNorm = -1;
-      if (srcElev != null && tgtElev != null) {
-        avgElevNorm = normalizeElevation((srcElev + tgtElev) / 2, min, range);
-      } else if (srcElev != null) {
-        avgElevNorm = normalizeElevation(srcElev, min, range);
-      } else if (tgtElev != null) {
-        avgElevNorm = normalizeElevation(tgtElev, min, range);
-      }
+  const edgesGeoJSON = useMemo(() => {
+    const nodeLookup = new Map(network.nodes.map((node) => [node.id, node]));
+    const processedEdgeLookup = new Map(network.edges.map((edge) => [edge.id, edge]));
+    const pipeLookup = new Map(network.pipes.map((pipe) => [pipe.edge_id, pipe]));
 
-      const arrowColor = isElevation
-        ? getElevationColor(avgElevNorm)
-        : viewMode === 'streets'
-          ? highwayToColor(e.highway)
-          : DEFAULT_EDGE_COLOR;
+    const sourceFeatures = edgeGeometryOverride?.features ?? network.edges.map((edge) => {
+      const sourceNode = nodeLookup.get(edge.source_node_id);
+      const targetNode = nodeLookup.get(edge.target_node_id);
 
       return {
-        type: 'Feature',
-        id: e.id,
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [src?.lng ?? 0, src?.lat ?? 0],
-            ...(e.waypoints ?? []),
-            [tgt?.lng ?? 0, tgt?.lat ?? 0],
-          ],
-        },
+        type: 'Feature' as const,
+        id: edge.id,
         properties: {
-          id: e.id,
-          diameter_mm: pipe?.diameter_mm ?? 150,
-          is_pressurized: pipe?.is_pressurized ?? false,
-          width: diameterToWidth(pipe?.diameter_mm ?? 150),
-          color: pipe?.is_pressurized ? '#ff5722' : diameterToColor(pipe?.diameter_mm ?? 150),
-          slope: e.slope,
-          avg_elevation_normalized: avgElevNorm,
-          elevationColor: getElevationColor(avgElevNorm),
-          arrowColor,
+          id: edge.id,
+          sourceId: edge.source_node_id,
+          targetId: edge.target_node_id,
+          highway: edge.highway,
+        },
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: [
+            [sourceNode?.lng ?? 0, sourceNode?.lat ?? 0],
+            ...(edge.waypoints ?? []),
+            [targetNode?.lng ?? 0, targetNode?.lat ?? 0],
+          ],
         },
       };
     });
 
-    return {
-      nodesGeoJSON: { type: 'FeatureCollection' as const, features: nodeFeatures },
-      edgesGeoJSON: { type: 'FeatureCollection' as const, features: edgeFeatures },
-    };
-  }, [network, min, range, isElevation, viewMode]);
+    const edgeFeatures: GeoJSON.Feature[] = [];
+
+    for (const feature of sourceFeatures) {
+      if (feature.geometry?.type !== 'LineString') {
+        continue;
+      }
+
+      const edgeId = feature.id ?? feature.properties?.id;
+      if (edgeId == null) {
+        continue;
+      }
+
+      const id = String(edgeId);
+      const processedEdge = processedEdgeLookup.get(id);
+      const sourceId = processedEdge?.source_node_id ?? feature.properties?.sourceId;
+      const targetId = processedEdge?.target_node_id ?? feature.properties?.targetId;
+      const sourceNode = sourceId ? nodeLookup.get(String(sourceId)) : undefined;
+      const targetNode = targetId ? nodeLookup.get(String(targetId)) : undefined;
+      const pipe = pipeLookup.get(id)
+        ?? (processedEdge
+          ? pipeLookup.get(`${processedEdge.source_node_id}->${processedEdge.target_node_id}`)
+          : undefined);
+
+      let avgElevNorm = -1;
+      if (sourceNode?.elevation != null && targetNode?.elevation != null) {
+        avgElevNorm = normalizeElevation((sourceNode.elevation + targetNode.elevation) / 2, min, range);
+      } else if (sourceNode?.elevation != null) {
+        avgElevNorm = normalizeElevation(sourceNode.elevation, min, range);
+      } else if (targetNode?.elevation != null) {
+        avgElevNorm = normalizeElevation(targetNode.elevation, min, range);
+      }
+
+      const diameterMm =
+        pipe?.diameter_mm
+        ?? (typeof feature.properties?.diameter === 'number' ? feature.properties.diameter : 150);
+      const highway = processedEdge?.highway ?? feature.properties?.highway;
+      const arrowColor = isElevation
+        ? getElevationColor(avgElevNorm)
+        : viewMode === 'streets'
+          ? highwayToColor(highway)
+          : DEFAULT_EDGE_COLOR;
+
+      edgeFeatures.push({
+        type: 'Feature',
+        id,
+        geometry: {
+          type: 'LineString',
+          coordinates: feature.geometry.coordinates,
+        },
+        properties: {
+          id,
+          sourceId: sourceId ?? null,
+          targetId: targetId ?? null,
+          diameter_mm: diameterMm,
+          is_pressurized: pipe?.is_pressurized ?? false,
+          width: diameterToWidth(diameterMm),
+          color: pipe?.is_pressurized ? '#ff5722' : diameterToColor(diameterMm),
+          slope: processedEdge?.slope ?? feature.properties?.slope ?? null,
+          avg_elevation_normalized: avgElevNorm,
+          elevationColor: getElevationColor(avgElevNorm),
+          arrowColor,
+        },
+      });
+    }
+
+    return { type: 'FeatureCollection' as const, features: edgeFeatures };
+  }, [edgeGeometryOverride, isElevation, min, network.edges, network.nodes, network.pipes, range, viewMode]);
 
   // ============ PAINT OBJECTS ============
 
@@ -160,18 +216,18 @@ export default function SewerNetworkLayers({
 
   const nodesPaint: CircleLayerSpecification['paint'] = isElevation
     ? {
-        'circle-radius': 6,
+        'circle-radius': SEWER_NODE_RADIUS_EXPRESSION,
         'circle-color': ['get', 'elevationColor'] as unknown as string,
         'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#ffffff',
+        'circle-stroke-color': [
+          'case',
+          ['==', ['get', 'is_selected'], true], '#ff6f00',
+          ['==', ['get', 'is_collection_point'], true], '#004d40',
+          '#ffffff',
+        ] as unknown as string,
       }
     : {
-        'circle-radius': [
-          'case',
-          ['boolean', ['feature-state', 'hovered'], false], 9,
-          ['==', ['get', 'is_collection_point'], true], 10,
-          6,
-        ] as unknown as number,
+        'circle-radius': SEWER_NODE_RADIUS_EXPRESSION,
         'circle-color': [
           'case',
           ['==', ['get', 'is_selected'], true], '#ffab00',
@@ -179,6 +235,7 @@ export default function SewerNetworkLayers({
         ] as unknown as string,
         'circle-stroke-width': [
           'case',
+          ['==', ['get', 'is_selected'], true], 3,
           ['boolean', ['feature-state', 'hovered'], false], 3,
           ['==', ['get', 'is_collection_point'], true], 3,
           1.5,
@@ -218,7 +275,7 @@ export default function SewerNetworkLayers({
       </Source>
 
       {/* Sewer nodes */}
-      <Source id="sewer-nodes" type="geojson" data={nodesGeoJSON} promoteId="id">
+      <Source id="sewer-nodes" type="geojson" data={nodesGeoJSON ?? { type: 'FeatureCollection', features: [] }} promoteId="id">
         <Layer id="sewer-nodes-layer" type="circle" paint={nodesPaint} />
 
         {/* Elevation labels — only in elevation mode */}

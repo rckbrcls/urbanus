@@ -3,6 +3,7 @@
  */
 
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
+import { NODE_RADIUS_ZOOM_STOPS, type NodeRadiusStop } from '@/features/map/constants';
 
 const MISSING_ELEVATION_COLOR = '#9e9e9e';
 export const DEFAULT_EDGE_COLOR = '#60a5fa';
@@ -75,15 +76,67 @@ export function getElevationLabel(elevation: number | null | undefined): string 
   return `${Math.round(elevation)}m`;
 }
 
+function createZoomInterpolatedRadiusExpression(
+  stops: readonly NodeRadiusStop[],
+): number {
+  const expression: unknown[] = ['interpolate', ['linear'], ['zoom']];
+
+  for (const [zoom, radius] of stops) {
+    expression.push(zoom, radius);
+  }
+
+  return expression as unknown as number;
+}
+
+function createStateAwareNodeRadiusExpression(
+  conditions: {
+    selected: unknown[];
+    hovered: unknown[];
+    collection: unknown[];
+  },
+): number {
+  const expression: unknown[] = ['interpolate', ['linear'], ['zoom']];
+
+  for (const [index, [zoom, defaultRadius]] of NODE_RADIUS_ZOOM_STOPS.default.entries()) {
+    const hoveredRadius = NODE_RADIUS_ZOOM_STOPS.hovered[index]?.[1] ?? defaultRadius;
+    const selectedRadius = NODE_RADIUS_ZOOM_STOPS.selected[index]?.[1] ?? hoveredRadius;
+    const collectionRadius = NODE_RADIUS_ZOOM_STOPS.collection[index]?.[1] ?? defaultRadius;
+
+    expression.push(
+      zoom,
+      [
+        'case',
+        conditions.selected, selectedRadius,
+        conditions.hovered, hoveredRadius,
+        conditions.collection, collectionRadius,
+        defaultRadius,
+      ],
+    );
+  }
+
+  return expression as unknown as number;
+}
+
+export const DEFAULT_NODE_RADIUS_EXPRESSION = createZoomInterpolatedRadiusExpression(
+  NODE_RADIUS_ZOOM_STOPS.default,
+);
+
+export const GRAPH_NODE_RADIUS_EXPRESSION = createStateAwareNodeRadiusExpression({
+  selected: ['boolean', ['feature-state', 'selected'], false],
+  hovered: ['boolean', ['feature-state', 'hovered'], false],
+  collection: ['==', ['get', 'isCollectionPoint'], true],
+});
+
+export const SEWER_NODE_RADIUS_EXPRESSION = createStateAwareNodeRadiusExpression({
+  selected: ['==', ['get', 'is_selected'], true],
+  hovered: ['boolean', ['feature-state', 'hovered'], false],
+  collection: ['==', ['get', 'is_collection_point'], true],
+});
+
 // ============ NODES ============
 
 export const NODES_PAINT: CircleLayerSpecification['paint'] = {
-  'circle-radius': [
-    'case',
-    ['boolean', ['feature-state', 'selected'], false], 10,
-    ['boolean', ['feature-state', 'hovered'], false], 9,
-    7,
-  ] as unknown as number,
+  'circle-radius': GRAPH_NODE_RADIUS_EXPRESSION,
   'circle-color': [
     'case',
     ['boolean', ['feature-state', 'error'], false], '#ef4444',
@@ -180,13 +233,7 @@ export const GHOST_EDGE_PAINT: LineLayerSpecification['paint'] = {
 // ============ ELEVATION VIEW ============
 
 export const NODES_ELEVATION_PAINT: CircleLayerSpecification['paint'] = {
-  'circle-radius': [
-    'case',
-    ['boolean', ['feature-state', 'selected'], false], 10,
-    ['boolean', ['feature-state', 'hovered'], false], 9,
-    ['==', ['get', 'isCollectionPoint'], true], 10,
-    7,
-  ] as unknown as number,
+  'circle-radius': GRAPH_NODE_RADIUS_EXPRESSION,
   'circle-color': ['get', 'elevationColor'] as unknown as string,
   'circle-opacity': 1,
   'circle-stroke-width': [

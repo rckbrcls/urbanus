@@ -72,3 +72,34 @@ export const HIGHWAY_WEIGHTS: Record<string, number> = {
   unclassified: 2,
   default: 2,
 };
+
+// ============ NODE RADII ============
+
+export type NodeRadiusStop = readonly [zoom: number, radius: number];
+
+export const NODE_RADIUS_ZOOM_STOPS = {
+  default: [
+    [9, 2.5],
+    [12, 4],
+    [15, 5.5],
+    [18, 7],
+  ],
+  hovered: [
+    [9, 3.5],
+    [12, 5.25],
+    [15, 7],
+    [18, 8.5],
+  ],
+  selected: [
+    [9, 4],
+    [12, 6],
+    [15, 7.75],
+    [18, 9.5],
+  ],
+  collection: [
+    [9, 4],
+    [12, 6],
+    [15, 7.75],
+    [18, 9.5],
+  ],
+} as const satisfies Record<string, readonly NodeRadiusStop[]>;

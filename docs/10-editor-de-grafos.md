@@ -134,7 +134,7 @@ map.setFeatureState(
 
 Isso requer `promoteId: "id"` no source, que permite ao MapLibre associar feature-states por ID string (em vez de indice numerico).
 
-Vantagem: a GPU redesenha apenas o estilo (cor, raio) sem reprocessar a geometria. Hover e selecao sao instantaneos mesmo com milhares de features.
+Vantagem: a GPU redesenha apenas o estilo (cor, raio) sem reprocessar a geometria. Hover e selecao sao instantaneos mesmo com milhares de features. O raio dos nós e composto com expressoes dependentes de `zoom`, entao o destaque visual continua funcionando enquanto o tamanho base encolhe ao afastar o mapa e cresce de forma limitada ao aproximar.
 
 ## Drag de Nos
 
@@ -305,3 +305,6 @@ NetworkEdge -> GeoJSON LineString Feature
 ```
 
 Essas FeatureCollections alimentam os sources do MapLibre para renderizacao.
+Os layers de nós usam expressoes de raio interpoladas por zoom, compartilhadas
+entre editor, preview e visualizacao processada, para manter a escala visual
+consistente em diferentes distancias de camera.

@@ -122,6 +122,7 @@ export default function GraphMapView({
           viewMode={sewerViewMode}
           elevationRange={sewerElevationRange}
           overlayOnly
+          edgeGeometryOverride={edgesGeoJSON}
         />
       )}
 

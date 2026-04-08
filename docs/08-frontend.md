@@ -61,9 +61,13 @@ O nome visual `topography` ainda existe no estado da home, mas funcionalmente es
 O frontend nao tem mais fallback local para chamar o processamento sem body.
 
 Na visualizacao processada, o mapa renderiza chevrons de fluxo sobre a rede.
-Esses chevrons seguem a orientacao do `LineString` retornado no `SewerNetwork`
-e usam `text-keep-upright: false` no MapLibre para nao inverter a direcao em
-trechos cujo bearing faria o motor "virar" o simbolo por legibilidade.
+Esses chevrons usam as propriedades do `SewerNetwork`, mas a geometria e a
+lista de arestas visiveis vem do `graphStore` quando o usuario edita o grafo.
+Com isso, as setas seguem o `LineString` atualmente exibido no mapa e somem
+imediatamente quando um no ou aresta e removido, sem esperar um novo
+processamento. O layer continua usando `text-keep-upright: false` no MapLibre
+para nao inverter a direcao em trechos cujo bearing faria o motor "virar" o
+simbolo por legibilidade.
 O editor expõe apenas tres modos de visualizacao para o mapa: `default`,
 `streets` e `elevation`. Nos modos `default` e `streets`, os nós permanecem
 com a cor neutra padrao do editor tanto antes quanto depois do processamento;
@@ -72,7 +76,10 @@ apenas as arestas e chevrons mudam de acordo com o modo ativo. No modo
 cada trecho. Na aba de pipeline, a rede processada ainda expõe filtros de
 visibilidade para `PV` e `collection point`, mas esses filtros nao alteram a
 paleta dos nós no mapa, com excecao de `collection point`, que permanece
-visualmente destacado em relacao aos nós comuns.
+visualmente destacado em relacao aos nós comuns. Os circulos de nós no editor,
+na preview da home e na rede processada agora usam expressoes de raio
+dependentes do zoom do MapLibre, com limites minimo e maximo, para evitar que
+ocupem area demais quando o usuario afasta muito o mapa.
 
 ## Persistencia de projeto
 
