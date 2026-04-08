@@ -11,6 +11,56 @@ import type { MapNode } from '@/features/map/types/node.types';
 import type { NetworkGraph, NetworkNode, NetworkEdge } from './types';
 import { calculateSlope } from './operations';
 
+function isMeaningfulElevation(value: number | null | undefined): value is number {
+  return value != null && !Number.isNaN(value) && value !== 0;
+}
+
+function preferElevation(
+  current: number | null | undefined,
+  incoming: number | null | undefined,
+): number | null {
+  if (isMeaningfulElevation(current)) return current;
+  if (isMeaningfulElevation(incoming)) return incoming;
+  if (current != null && !Number.isNaN(current)) return current;
+  if (incoming != null && !Number.isNaN(incoming)) return incoming;
+  return null;
+}
+
+function mergeCanonicalNode(target: NetworkNode, incoming: MapNode): void {
+  const nextElevation = preferElevation(target.properties.elevation, incoming.elevation);
+  target.properties.elevation = nextElevation;
+  target.coordinates[2] = nextElevation ?? NaN;
+
+  target.properties.degree = Math.max(target.properties.degree, incoming.degree ?? 0);
+  target.properties.isEndpoint = Boolean(target.properties.isEndpoint || incoming.isEndpoint);
+  target.properties.isIntersection = Boolean(target.properties.isIntersection || incoming.isIntersection);
+  target.properties.isHighestElevation = Boolean(
+    target.properties.isHighestElevation || incoming.isHighestElevation,
+  );
+  target.properties.isLowestElevation = Boolean(
+    target.properties.isLowestElevation || incoming.isLowestElevation,
+  );
+
+  if (!target.properties.nodeType && incoming.nodeType) {
+    target.properties.nodeType = incoming.nodeType;
+  }
+  if (!target.properties.streetName && incoming.streetName) {
+    target.properties.streetName = incoming.streetName;
+  }
+  if (!target.properties.highway && incoming.highway) {
+    target.properties.highway = incoming.highway;
+  }
+
+  const connected = new Set(target.properties.connectedStreets ?? []);
+  for (const streetId of incoming.connectedStreets ?? []) {
+    connected.add(streetId);
+  }
+  if (incoming.streetId) {
+    connected.add(incoming.streetId);
+  }
+  target.properties.connectedStreets = Array.from(connected);
+}
+
 // ============ MapNode[] → NetworkGraph ============
 
 /**
@@ -107,6 +157,14 @@ export function mapNodesToNetworkGraph(nodes: MapNode[]): NetworkGraph {
         },
       };
       graph.nodes[id] = networkNode;
+    } else {
+      const existingId = positionMap.get(key);
+      if (!existingId) continue;
+
+      const existingNode = graph.nodes[existingId];
+      if (!existingNode) continue;
+
+      mergeCanonicalNode(existingNode, mn);
     }
   }
 
