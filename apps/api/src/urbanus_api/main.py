@@ -20,7 +20,6 @@ from urbanus_api.core.graph.classification import (
     enforce_direction_changes,
 )
 from urbanus_api.core.graph.builder import (
-    build_graph_from_postgis,
     build_graph_from_geojson,
     save_sewer_network_to_postgis,
 )

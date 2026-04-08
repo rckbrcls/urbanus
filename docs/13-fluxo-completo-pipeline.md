@@ -23,7 +23,7 @@ streets_geojson / grafo editado
     -> dimension_network
     -> assign_accessory_types
     -> compute_total_cost
-    -> save_graph_to_postgis
+    -> save_sewer_network_to_postgis
     -> SewerNetwork
 ```
 
@@ -56,7 +56,7 @@ streets_geojson / grafo editado
 | 12 | Dimensionar hidraulica | `tree` -> `pipes` | [`dimensioning.py`](../apps/api/src/urbanus_api/core/hydraulics/dimensioning.py) | [`dimension_network`](../apps/api/src/urbanus_api/core/hydraulics/dimensioning.py) |
 | 13 | Atribuir acessorios | `tree` + `pipes` -> `tree` anotado | [`accessories.py`](../apps/api/src/urbanus_api/core/graph/accessories.py) | [`assign_accessory_types`](../apps/api/src/urbanus_api/core/graph/accessories.py) |
 | 14 | Calcular custo total | `pipes` + `pump_stations` + `tree` -> `float` | [`costing.py`](../apps/api/src/urbanus_api/core/hydraulics/costing.py) | [`compute_total_cost`](../apps/api/src/urbanus_api/core/hydraulics/costing.py) |
-| 15 | Persistir resultado | `tree` -> banco | [`builder.py`](../apps/api/src/urbanus_api/core/graph/builder.py) | [`save_graph_to_postgis`](../apps/api/src/urbanus_api/core/graph/builder.py) |
+| 15 | Persistir resultado | `SewerNetwork` -> banco | [`builder.py`](../apps/api/src/urbanus_api/core/graph/builder.py) | [`save_sewer_network_to_postgis`](../apps/api/src/urbanus_api/core/graph/builder.py) |
 | 16 | Serializar resposta | `tree` + `pipes` + `pump_stations` -> `SewerNetwork` | [`types.py`](../py/urbanus-geo/src/urbanus_geo/types.py) / [`main.py`](../apps/api/src/urbanus_api/main.py) | [`SewerNetwork`](../py/urbanus-geo/src/urbanus_geo/types.py) |
 
 ## Como Cada Modulo Participa
@@ -77,7 +77,6 @@ streets_geojson / grafo editado
 
 - [`rsph.py`](../apps/api/src/urbanus_api/core/routing/rsph.py): gera a espinha dorsal da rede dirigida.
 - [`cost.py`](../apps/api/src/urbanus_api/core/routing/cost.py): define o custo da heuristica.
-- [`arborescence.py`](../apps/api/src/urbanus_api/core/routing/arborescence.py): alternativa conceitual ao RSPH, nao usada pelo endpoint atual.
 
 ### `core/optimizer`
 
@@ -116,8 +115,6 @@ Estas funcoes existem, mas nao sao chamadas pelo endpoint atual:
 
 - [`sanitize_long_edges`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
 - [`subdivide_steep_edges`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
-- [`build_graph_from_postgis`](../apps/api/src/urbanus_api/core/graph/builder.py)
-- [`minimum_spanning_arborescence` em `arborescence.py`](../apps/api/src/urbanus_api/core/routing/arborescence.py)
 
 ## Ordem Recomendada de Leitura
 

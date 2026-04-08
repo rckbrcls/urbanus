@@ -65,57 +65,13 @@ Para cada vertice (lng, lat) da LineString:
 vertex_elevations: [float | None, ...]
 ```
 
-### Interpolacao Bilinear
+### Nearest-Neighbor no Servico Atual
 
-Suaviza a elevacao usando os 4 pixels vizinhos, em contraste com nearest-neighbor que usa apenas o pixel mais proximo.
+O servico atual usa `src.sample([(lng, lat)])` do rasterio para obter o valor do pixel mais proximo em cada vertice. O valor e validado contra `NODATA_THRESHOLD = -9000` e contra o `nodata` do raster.
 
-```python
-def sample_elevation_bilinear(src, coordinates):
-    band = src.read(1)
-    nodata = src.nodata
+Depois da amostragem, `services/elevation.py` aplica `_interpolate_missing_elevations` para preencher lacunas com interpolacao linear entre vertices validos da mesma `LineString`.
 
-    for lng, lat in coordinates:
-        # Converter coordenadas para pixel (fracionario)
-        col_f, row_f = ~src.transform * (lng, lat)
-
-        # 4 pixels vizinhos
-        col0, row0 = floor(col_f), floor(row_f)
-        col1, row1 = col0 + 1, row0 + 1
-
-        # Verificar limites do raster
-        if col0 < 0 or row0 < 0 or col1 >= width or row1 >= height:
-            yield None; continue
-
-        # Valores nos 4 cantos
-        q11 = band[row0, col0]  # superior-esquerdo
-        q21 = band[row0, col1]  # superior-direito
-        q12 = band[row1, col0]  # inferior-esquerdo
-        q22 = band[row1, col1]  # inferior-direito
-
-        # Verificar nodata
-        if any(v == nodata or v < NODATA_THRESHOLD for v in [q11, q21, q12, q22]):
-            yield nearest_neighbor_fallback(); continue
-
-        # Pesos fracionarios
-        dx = col_f - col0
-        dy = row_f - row0
-
-        # Interpolacao bilinear
-        val = (q11 * (1-dx) * (1-dy) +
-               q21 * dx * (1-dy) +
-               q12 * (1-dx) * dy +
-               q22 * dx * dy)
-
-        yield val
-```
-
-Arquivo: `core/elevation/sampling.py`
-
-### Nearest-Neighbor (Fallback)
-
-Quando um dos 4 pixels vizinhos contem `nodata`, o sistema usa `src.sample([(lng, lat)])` do rasterio, que retorna o valor do pixel mais proximo. O valor e validado contra `NODATA_THRESHOLD = -9000`.
-
-Arquivo: `services/elevation.py` (`_sample_elevations_at`)
+Arquivo: `services/elevation.py`
 
 ## Calculo de Declividade 2D
 

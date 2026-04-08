@@ -66,8 +66,8 @@ Para redes de esgoto, o DTM e preferivel (a tubulacao segue o terreno, nao as co
 4. Para cada Feature (LineString) no GeoJSON:
    a. Extrai coordenadas de cada vertice
    b. Amostra elevacao em cada coordenada:
-      - Bilinear (sampling.py): 4 pixels vizinhos, interpolacao ponderada
-      - Fallback nearest-neighbor: src.sample([(lng, lat)])
+      - Nearest-neighbor: src.sample([(lng, lat)])
+      - Interpolacao de lacunas entre vertices validos da mesma rua
    c. Valida contra NODATA_THRESHOLD (-9000)
    d. Adiciona propriedades:
       - vertex_elevations: [float | null, ...]
@@ -78,38 +78,11 @@ Para redes de esgoto, o DTM e preferivel (a tubulacao segue o terreno, nao as co
 
 ## Amostragem de Elevacao
 
-### Interpolacao Bilinear (Preferida)
-
-**Arquivo**: `core/elevation/sampling.py`
-
-A interpolacao bilinear usa os 4 pixels vizinhos para calcular um valor suavizado:
-
-```
-(col0, row0)----(col1, row0)
-    q11              q21
-     |                |
-     |    (col_f,     |
-     |     row_f)     |
-     |       *        |
-     |                |
-    q12              q22
-(col0, row1)----(col1, row1)
-
-val = q11*(1-dx)*(1-dy) + q21*dx*(1-dy) + q12*(1-dx)*dy + q22*dx*dy
-```
-
-Onde:
-- `(col_f, row_f)` = coordenadas fracionarias do pixel
-- `dx = col_f - floor(col_f)`, `dy = row_f - floor(row_f)`
-- `q11, q21, q12, q22` = valores nos 4 cantos
-
-Vantagem: suaviza degraus entre pixels, produzindo perfis de elevacao mais realistas para calculo de declividade.
-
-### Nearest-Neighbor (Fallback)
+### Nearest-Neighbor
 
 **Arquivo**: `services/elevation.py`
 
-Usado quando algum dos 4 pixels vizinhos contem `nodata`:
+O servico atual amostra cada vertice com o valor do pixel mais proximo:
 
 ```python
 sample = src.sample([(lng, lat)])
@@ -117,6 +90,15 @@ value = next(sample)[0]
 ```
 
 O valor e validado contra `NODATA_THRESHOLD = -9000` e contra o valor `nodata` do raster.
+
+### Interpolacao de Lacunas
+
+Quando algum vertice recebe `None`, o servico tenta preencher a lacuna usando os vizinhos validos mais proximos da mesma `LineString`.
+
+Regras:
+- se existir valor valido dos dois lados, faz interpolacao linear;
+- se existir apenas um lado valido, propaga esse valor;
+- zeros espurios em borda de raster podem ser promovidos a `None` antes da interpolacao.
 
 ## Estatisticas por Feature
 

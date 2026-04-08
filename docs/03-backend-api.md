@@ -14,20 +14,17 @@ apps/api/src/urbanus_api/
 │   └── elevation.py                 # OpenTopography (GeoTIFF -> elevacao)
 ├── core/
 │   ├── graph/
-│   │   ├── builder.py              # GeoJSON/PostGIS <-> NetworkX
+│   │   ├── builder.py              # GeoJSON -> NetworkX + persistencia da SewerNetwork
 │   │   ├── classification.py       # Classificacao de nos e clustering espacial
 │   │   ├── sanitization.py         # Limpeza topologica, curvas e quebra de greide
 │   │   ├── coverage.py             # Garantia de cobertura completa das ruas
 │   │   └── accessories.py          # Atribuicao de PV/TIL/TL/CP
 │   ├── elevation/
-│   │   ├── sampling.py             # Amostragem bilinear de DEM
 │   │   └── extrema.py              # Etapa 5: maximos/minimos topograficos
 │   ├── routing/
 │   │   ├── rsph.py                 # Etapa 6: Repeated Shortest Path Heuristic
-│   │   ├── cost.py                 # Funcao de custo de arestas
-│   │   └── arborescence.py         # Alternativa: Edmonds/Chu-Liu
+│   │   └── cost.py                 # Funcao de custo de arestas
 │   ├── hydraulics/
-│   │   ├── manning.py              # Formula de Manning (re-exporta de urbanus-geo)
 │   │   ├── dimensioning.py         # Dimensionamento de tubos
 │   │   └── costing.py              # Custo total da rede
 │   └── optimizer/
@@ -209,15 +206,7 @@ Metodos internos de conversao:
 - `_bbox_to_polygon(bounds)` -> `ST_SetSRID(ST_MakeEnvelope(west, south, east, north), 4326)`
 - `_center_to_point(center)` -> `ST_SetSRID(ST_MakePoint(lng, lat), 4326)`
 
-## Conversao PostGIS <-> NetworkX (`core/graph/builder.py`)
-
-### `build_graph_from_postgis(project_id, session) -> nx.Graph`
-
-1. Consulta `NodeTable` para o projeto, extrai `ST_X` (lng), `ST_Y` (lat) e atributos
-2. Consulta `EdgeTable`, le `source_node_id` e `target_node_id` do campo JSONB `properties`
-3. Retorna grafo nao-direcionado NetworkX com:
-   - Nos: `{x, y, z, node_type, pv_obrigatorio, is_intersection, is_endpoint, degree}`
-   - Arestas: `{edge_id, length_m, name, highway, slope, cost}`
+## Grafo Base e Persistencia (`core/graph/builder.py`)
 
 ### `build_graph_from_geojson(geojson) -> nx.Graph`
 
@@ -229,11 +218,13 @@ E o caminho mais importante para entender o endpoint `process` atual:
 4. Garante cobertura minima para ruas sem anchors (`_ensure_street_coverage`)
 5. Conecta componentes desconectados (`_connect_components`)
 
-### `save_graph_to_postgis(project_id, G, session) -> None`
+### `save_sewer_network_to_postgis(project_id, network, session) -> None`
 
-1. Remove todos os nos e arestas existentes para o projeto
-2. Para cada no em `G`: cria `Point(x, y)` com SRID 4326 e insere `NodeTable`
-3. Para cada aresta `(u, v, data)` em `G`: cria `LineString([(u.x, u.y), (v.x, v.y)])` e insere `EdgeTable`
+1. Remove `nodes`, `edges`, `pipe_segments` e `pump_stations` existentes para o projeto
+2. Persiste os nos serializados do `SewerNetwork` em `NodeTable`
+3. Persiste as arestas serializadas, incluindo `waypoints`, em `EdgeTable`
+4. Persiste `pipes` em `PipeSegmentTable`
+5. Persiste `pump_stations` em `PumpStationTable`
 
 ## Servicos Externos
 

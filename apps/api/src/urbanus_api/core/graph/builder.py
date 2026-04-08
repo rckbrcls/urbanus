@@ -1,8 +1,8 @@
 """
-Graph builder: PostGIS ↔ NetworkX conversion.
+Graph builder: GeoJSON -> NetworkX and SewerNetwork -> PostGIS.
 
-Loads edges and nodes from PostGIS and constructs a NetworkX graph
-with spatial attributes. Also saves processed graphs back to PostGIS.
+Builds the base street graph from GeoJSON and persists the processed
+SewerNetwork payload back to PostGIS tables.
 """
 
 from __future__ import annotations
@@ -10,98 +10,24 @@ from __future__ import annotations
 from typing import Any
 
 import networkx as nx
-from geoalchemy2.functions import ST_X, ST_Y, ST_AsText
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from urbanus_api.data.tables import EdgeTable, NodeTable, PipeSegmentTable, PumpStationTable
 
 
-async def build_graph_from_postgis(
-    project_id: str,
-    session: AsyncSession,
-) -> nx.Graph:
-    """Load edges and nodes from PostGIS and build a NetworkX graph.
-
-    Args:
-        project_id: Project ID.
-        session: Async database session.
-
-    Returns:
-        NetworkX undirected graph with:
-        - Node attrs: x (lng), y (lat), z (elevation), node_type, pv_obrigatorio
-        - Edge attrs: length_m, name, highway, slope, cost
-    """
-    G = nx.Graph()
-
-    # Load nodes
-    result = await session.execute(
-        select(
-            NodeTable.id,
-            ST_X(NodeTable.geometry).label("lng"),
-            ST_Y(NodeTable.geometry).label("lat"),
-            NodeTable.elevation,
-            NodeTable.node_type,
-            NodeTable.pv_obrigatorio,
-            NodeTable.is_intersection,
-            NodeTable.is_endpoint,
-            NodeTable.degree,
-        ).where(NodeTable.project_id == project_id)
-        .order_by(NodeTable.id)
-    )
-    for row in result:
-        G.add_node(
-            row.id,
-            x=row.lng,
-            y=row.lat,
-            z=row.elevation,
-            node_type=row.node_type,
-            pv_obrigatorio=row.pv_obrigatorio or False,
-            is_intersection=row.is_intersection or False,
-            is_endpoint=row.is_endpoint or False,
-            degree=row.degree or 0,
-        )
-
-    # Load edges
-    result = await session.execute(
-        select(EdgeTable).where(EdgeTable.project_id == project_id)
-        .order_by(EdgeTable.id)
-    )
-    for edge in result.scalars():
-        # Parse LINESTRING to get source/target from geometry
-        # Edges reference nodes via properties JSONB or we infer from geometry
-        props = edge.properties or {}
-        source = props.get("source_node_id")
-        target = props.get("target_node_id")
-
-        if source and target and source in G and target in G:
-            G.add_edge(
-                source,
-                target,
-                edge_id=edge.id,
-                length_m=edge.length_m or 0,
-                name=edge.name,
-                highway=edge.highway,
-                slope=edge.slope,
-                cost=edge.cost,
-            )
-
-    return G
-
-
 def build_graph_from_geojson(geojson: dict) -> nx.Graph:
     """Build a NetworkX graph directly from streets GeoJSON.
 
-    Used as fallback when no graph data exists in PostGIS yet.
-    Extracts nodes via classification, keeps only anchors (intersections +
-    endpoints), and connects consecutive anchors along each street.
+    Extracts nodes via classification, keeps only anchors
+    (intersections + endpoints), and connects consecutive anchors
+    along each street.
 
     Args:
         geojson: Enriched GeoJSON (with elevations) from streets_geojson.
 
     Returns:
-        NetworkX undirected graph with same attribute format as
-        build_graph_from_postgis.
+        NetworkX undirected graph with node and edge attributes
+        used by the processing pipeline.
     """
     from urbanus_api.core.graph.classification import extract_nodes
     from urbanus_geo.calculations import haversine
@@ -380,79 +306,6 @@ def _connect_components(G: nx.Graph, haversine_fn) -> None:
             G.add_edge(u, v, length_m=best_dist, name=None, highway=None)
             # Absorb this component into main for next iterations
             main_component = main_component | comp
-
-
-async def save_graph_to_postgis(
-    project_id: str,
-    G: nx.Graph,
-    session: AsyncSession,
-) -> None:
-    """Save processed graph nodes and edges back to PostGIS.
-
-    Args:
-        project_id: Project ID.
-        G: NetworkX graph with node/edge attributes.
-        session: Async database session.
-    """
-    from geoalchemy2.functions import ST_SetSRID, ST_MakePoint
-    from geoalchemy2.shape import from_shape
-    from shapely.geometry import Point, LineString
-
-    # Clear existing processed data
-    await session.execute(
-        NodeTable.__table__.delete().where(NodeTable.project_id == project_id)
-    )
-    await session.execute(
-        EdgeTable.__table__.delete().where(EdgeTable.project_id == project_id)
-    )
-
-    # Save nodes
-    for node_id, data in G.nodes(data=True):
-        lng = data.get("x", 0)
-        lat = data.get("y", 0)
-        point = from_shape(Point(lng, lat), srid=4326)
-
-        node_row = NodeTable(
-            id=str(node_id),
-            project_id=project_id,
-            geometry=point,
-            elevation=data.get("z"),
-            degree=data.get("degree", G.degree(node_id)),
-            is_intersection=data.get("is_intersection", False),
-            is_endpoint=data.get("is_endpoint", False),
-            node_type=data.get("node_type"),
-            pv_obrigatorio=data.get("pv_obrigatorio", False),
-            accessory_type=data.get("accessory_type"),
-        )
-        session.add(node_row)
-
-    # Save edges
-    for u, v, data in G.edges(data=True):
-        u_data = G.nodes[u]
-        v_data = G.nodes[v]
-        line = from_shape(
-            LineString([(u_data["x"], u_data["y"]), (v_data["x"], v_data["y"])]),
-            srid=4326,
-        )
-
-        edge_row = EdgeTable(
-            id=f"e_{u}_{v}",
-            project_id=project_id,
-            geometry=line,
-            name=data.get("name"),
-            highway=data.get("highway"),
-            length_m=data.get("length_m"),
-            slope=data.get("slope"),
-            cost=data.get("cost"),
-            properties={
-                "source_node_id": str(u),
-                "target_node_id": str(v),
-            },
-        )
-        session.add(edge_row)
-
-    await session.commit()
-
 
 async def save_sewer_network_to_postgis(
     project_id: str,

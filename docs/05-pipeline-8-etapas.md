@@ -100,7 +100,7 @@ O endpoint pode seguir dois caminhos:
 
 ### Detalhe importante
 
-Hoje o fluxo principal **nao comeca carregando PostGIS processado**. O caminho mais comum e reconstruir o grafo a partir do `streets_geojson` salvo do projeto. O helper [`build_graph_from_postgis`](../apps/api/src/urbanus_api/core/graph/builder.py) existe, mas nao e o caminho usado pelo endpoint atual.
+Hoje o fluxo principal **nao comeca carregando PostGIS processado**. O caminho usado pelo endpoint atual parte do grafo editado enviado pelo frontend ou reconstrui `G` a partir do `streets_geojson` salvo do projeto.
 
 ### Como `build_graph_from_geojson` condensa a malha
 
@@ -498,7 +498,7 @@ Classifica cada no da rede final como:
 
 ### O que acontece
 
-1. [`save_graph_to_postgis`](../apps/api/src/urbanus_api/core/graph/builder.py) salva nos e arestas processados.
+1. [`save_sewer_network_to_postgis`](../apps/api/src/urbanus_api/core/graph/builder.py) salva a `SewerNetwork` completa nas tabelas do projeto.
 2. [`compute_total_cost`](../apps/api/src/urbanus_api/core/hydraulics/costing.py) calcula o custo agregado.
 3. O endpoint monta e retorna um [`SewerNetwork`](../py/urbanus-geo/src/urbanus_geo/types.py).
 
@@ -515,18 +515,6 @@ Ainda existe no codigo, mas o endpoint atual nao chama essa funcao. O comentario
 Arquivo: [`sanitization.py`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
 
 Tambem existe, mas nao participa do fluxo atual por razoes semelhantes.
-
-### `build_graph_from_postgis`
-
-Arquivo: [`builder.py`](../apps/api/src/urbanus_api/core/graph/builder.py)
-
-E util para reconstruir grafo a partir do banco, mas o `process` atual parte do `streets_geojson` ou do grafo editado.
-
-### `arborescence.py`
-
-Arquivo: [`arborescence.py`](../apps/api/src/urbanus_api/core/routing/arborescence.py)
-
-E uma alternativa conceitual ao RSPH, mas nao e chamada pelo endpoint atual.
 
 ## Ordem Recomendada de Leitura do Codigo
 
