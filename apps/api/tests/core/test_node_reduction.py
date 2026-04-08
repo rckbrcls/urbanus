@@ -1,4 +1,4 @@
-"""Tests for node optimization (Phase 1-3)."""
+"""Tests for node optimization."""
 
 import networkx as nx
 import pytest
@@ -164,42 +164,11 @@ class TestSimplifyJunctions:
         assert "J" in tree
 
 
-# --- Task 3: Spacing enforcement + full pipeline ---
+# --- Task 3: Full optimization pipeline ---
 
 from urbanus_api.core.optimizer.node_reduction import (
-    _enforce_spacing,
     optimize_node_placement,
 )
-
-
-class TestEnforceSpacing:
-    def test_long_edge_gets_intermediate_nodes(self):
-        tree = nx.DiGraph()
-        tree.add_node("A", x=0.0, y=0.0, z=10, pv_obrigatorio=True)
-        tree.add_node("B", x=0.0, y=0.002, z=8, pv_obrigatorio=True)
-        tree.add_edge("A", "B", length_m=200)
-
-        _enforce_spacing(tree, max_spacing=100)
-        assert tree.number_of_nodes() == 3
-        assert tree.number_of_edges() == 2
-
-    def test_short_edge_unchanged(self):
-        tree = nx.DiGraph()
-        tree.add_node("A", x=0.0, y=0.0, z=10, pv_obrigatorio=True)
-        tree.add_node("B", x=0.0, y=0.001, z=9, pv_obrigatorio=True)
-        tree.add_edge("A", "B", length_m=80)
-
-        _enforce_spacing(tree, max_spacing=100)
-        assert tree.number_of_nodes() == 2
-
-    def test_300m_edge_gets_2_nodes(self):
-        tree = nx.DiGraph()
-        tree.add_node("A", x=0.0, y=0.0, z=12, pv_obrigatorio=True)
-        tree.add_node("B", x=0.0, y=0.003, z=6, pv_obrigatorio=True)
-        tree.add_edge("A", "B", length_m=300)
-
-        _enforce_spacing(tree, max_spacing=100)
-        assert tree.number_of_nodes() == 4
 
 
 class TestOptimizeNodePlacement:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from urbanus_geo.calculations import haversine, area_km2, slope_2d, tube_elevation
+from urbanus_geo.calculations import haversine, area_km2, slope_2d
 
 
 class TestHaversine:
@@ -76,16 +76,3 @@ class TestSlope2d:
     def test_negative_distance_returns_zero(self):
         assert slope_2d(110, 100, -10) == 0.0
 
-
-class TestTubeElevation:
-    def test_standard(self):
-        """100 - 0.90 - 0.15 = 98.95."""
-        assert tube_elevation(100, 0.90, 0.15) == pytest.approx(98.95)
-
-    def test_sidewalk_cover(self):
-        """100 - 0.65 - 0.15 = 99.20."""
-        assert tube_elevation(100, 0.65, 0.15) == pytest.approx(99.20)
-
-    def test_larger_diameter(self):
-        """100 - 0.90 - 0.30 = 98.80."""
-        assert tube_elevation(100, 0.90, 0.30) == pytest.approx(98.80)

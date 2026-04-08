@@ -4,57 +4,11 @@ import networkx as nx
 import pytest
 
 from urbanus_api.core.graph.sanitization import (
-    sanitize_long_edges,
     remove_redundant_nodes,
     resolve_curve_clusters,
     detect_grade_breaks,
-    subdivide_steep_edges,
     enforce_min_pv_spacing,
 )
-
-
-class TestSanitizeLongEdges:
-    def test_long_edge_is_subdivided(self):
-        """Edge > dist_max → subdivided with VERDE nodes."""
-        G = nx.Graph()
-        G.add_node("A", x=0.0, y=0.0, z=100)
-        G.add_node("B", x=1.0, y=0.0, z=95)
-        G.add_edge("A", "B", length_m=200)
-
-        G = sanitize_long_edges(G, dist_max=100)
-
-        # Original edge removed, intermediate nodes added
-        assert not G.has_edge("A", "B")
-        assert G.number_of_nodes() > 2
-
-        # Check VERDE nodes were created
-        verde_nodes = [n for n in G.nodes if G.nodes[n].get("node_type") == "VERDE"]
-        assert len(verde_nodes) >= 1
-
-    def test_short_edge_unchanged(self):
-        """Edge < dist_max → no change."""
-        G = nx.Graph()
-        G.add_node("A", x=0.0, y=0.0, z=100)
-        G.add_node("B", x=0.5, y=0.0, z=99)
-        G.add_edge("A", "B", length_m=50)
-
-        G = sanitize_long_edges(G, dist_max=100)
-        assert G.has_edge("A", "B")
-        assert G.number_of_nodes() == 2
-
-    def test_interpolates_elevation(self):
-        """Intermediate nodes have linearly interpolated z."""
-        G = nx.Graph()
-        G.add_node("A", x=0.0, y=0.0, z=100)
-        G.add_node("B", x=1.0, y=0.0, z=80)
-        G.add_edge("A", "B", length_m=200)
-
-        G = sanitize_long_edges(G, dist_max=100)
-
-        verde = [n for n in G.nodes if G.nodes[n].get("node_type") == "VERDE"]
-        assert len(verde) >= 1
-        z = G.nodes[verde[0]]["z"]
-        assert 80 < z < 100  # Between A and B elevations
 
 
 class TestRemoveRedundantNodes:
@@ -171,29 +125,6 @@ class TestDetectGradeBreaks:
         assert G.nodes["B"].get("pv_obrigatorio") is not True
 
 
-class TestSubdivideSteepEdges:
-    def test_steep_edge_subdivided(self):
-        """Slope > 15% → subdivided with ROSA nodes."""
-        G = nx.Graph()
-        G.add_node("A", x=0.0, y=0.0, z=100)
-        G.add_node("B", x=1.0, y=0.0, z=80)  # 20m drop over 100m = 20%
-        G.add_edge("A", "B", length_m=100)
-
-        G = subdivide_steep_edges(G, max_slope=0.15)
-
-        assert G.number_of_nodes() > 2
-        rosa = [n for n in G.nodes if G.nodes[n].get("node_type") == "ROSA"]
-        assert len(rosa) >= 1
-
-    def test_gentle_slope_unchanged(self):
-        """Slope < 15% → no change."""
-        G = nx.Graph()
-        G.add_node("A", x=0.0, y=0.0, z=100)
-        G.add_node("B", x=1.0, y=0.0, z=95)  # 5% slope
-        G.add_edge("A", "B", length_m=100)
-
-        G = subdivide_steep_edges(G, max_slope=0.15)
-        assert G.number_of_nodes() == 2
 
 
 class TestEnforceMinPvSpacing:

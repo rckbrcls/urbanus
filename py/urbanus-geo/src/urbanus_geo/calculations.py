@@ -81,26 +81,6 @@ def min_slope(qi_ls: float) -> float:
     return 0.0055 * (qi ** -0.47)
 
 
-def critical_velocity(rh: float, g: float = 9.81) -> float:
-    """V_c = 6 × √(g × R_h) — Velocidade crítica.
-
-    Args:
-        rh: Raio hidráulico (m).
-        g: Aceleração da gravidade (m/s²).
-
-    Returns:
-        Velocidade crítica (m/s).
-    """
-    if rh <= 0:
-        return 0.0
-    return 6.0 * math.sqrt(g * rh)
-
-
-def flow_rate(area: float, velocity: float) -> float:
-    """Q = A × V — Vazão (m³/s)."""
-    return area * velocity
-
-
 def sewage_flow_estimate(
     population: int,
     per_capita: float = 150.0,
@@ -200,22 +180,6 @@ def slope_2d(z_up: float, z_down: float, distance_2d: float) -> float:
     if distance_2d <= 0:
         return 0.0
     return (z_up - z_down) / distance_2d
-
-
-def tube_elevation(terrain_z: float, cover: float, diameter_m: float) -> float:
-    """z_tubo = z_terreno - recobrimento - diâmetro.
-
-    Calcula a cota do geratriz inferior (invert) do tubo.
-
-    Args:
-        terrain_z: Cota do terreno (m).
-        cover: Recobrimento mínimo (m).
-        diameter_m: Diâmetro do tubo (m).
-
-    Returns:
-        Cota da geratriz inferior (m).
-    """
-    return terrain_z - cover - diameter_m
 
 
 def angle_at_node(

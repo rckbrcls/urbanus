@@ -9,8 +9,6 @@ from urbanus_geo.calculations import (
     hydraulic_radius_partial,
     tractive_stress,
     min_slope,
-    critical_velocity,
-    flow_rate,
     sewage_flow_estimate,
     peak_flow,
     pump_npv,
@@ -105,30 +103,6 @@ class TestMinSlope:
         assert min_slope(20.0) < min_slope(5.0)
 
 
-class TestCriticalVelocity:
-    def test_typical_value(self):
-        """Vc = 6 × √(9.81 × 0.05) ≈ 4.20 m/s."""
-        vc = critical_velocity(0.05)
-        expected = 6.0 * math.sqrt(9.81 * 0.05)
-        assert vc == pytest.approx(expected)
-
-    def test_zero_rh_returns_zero(self):
-        assert critical_velocity(0) == 0.0
-
-    def test_negative_rh_returns_zero(self):
-        assert critical_velocity(-0.01) == 0.0
-
-
-class TestFlowRate:
-    def test_multiplication(self):
-        """Q = A × V = 0.01 × 2.0 = 0.02 m³/s."""
-        assert flow_rate(0.01, 2.0) == pytest.approx(0.02)
-
-    def test_zero_area(self):
-        assert flow_rate(0, 5.0) == 0.0
-
-    def test_zero_velocity(self):
-        assert flow_rate(0.01, 0) == 0.0
 
 
 class TestSewageFlowEstimate:

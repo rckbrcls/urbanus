@@ -109,13 +109,6 @@ streets_geojson / grafo editado
 | `pump_stations` | [`low_points.py`](../apps/api/src/urbanus_api/core/optimizer/low_points.py) | elevatorias adicionadas apos o roteamento |
 | `pipes` | [`dimensioning.py`](../apps/api/src/urbanus_api/core/hydraulics/dimensioning.py) | resultado do dimensionamento de cada trecho |
 
-## O Que Nao Esta no Fluxo Principal Hoje
-
-Estas funcoes existem, mas nao sao chamadas pelo endpoint atual:
-
-- [`sanitize_long_edges`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
-- [`subdivide_steep_edges`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
-
 ## Ordem Recomendada de Leitura
 
 1. [`main.py`](../apps/api/src/urbanus_api/main.py)

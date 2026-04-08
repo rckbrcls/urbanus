@@ -317,9 +317,9 @@ async def process_sewer_network(
     enforce_direction_changes(G)
 
     # Etapas 2/2.5 (subdivisão) removidas — criavam centenas de nós
-    # intermediários que inflavam a rede. O RSPH funciona com arestas
-    # longas e o optimize_node_placement._enforce_spacing cuida do
-    # espaçamento máximo no final.
+    # intermediários que inflavam a rede. O pipeline atual trabalha
+    # diretamente com arestas longas e reduz nós apenas no estágio
+    # posterior de otimização.
 
     # Etapa 3: Remove redundant nodes
     G = remove_redundant_nodes(G)

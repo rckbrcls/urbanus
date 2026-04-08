@@ -89,19 +89,6 @@ Implementacoes:
 - Python: `urbanus_geo.calculations.slope_2d(z_up, z_down, distance_2d)`
 - TypeScript: `GeoCalculations.slope2d(zUp, zDown, distance2d)`
 
-## Elevacao do Tubo (Cota de Fundo)
-
-```python
-def tube_elevation(terrain_z, cover, diameter_m) -> float:
-    """z_tubo = z_terreno - recobrimento - diametro"""
-    return terrain_z - cover - diameter_m
-```
-
-Onde:
-- `terrain_z`: cota do terreno no ponto (m)
-- `cover`: recobrimento minimo (0.90 m para rua, 0.65 m para calcada)
-- `diameter_m`: diâmetro interno do tubo em metros
-
 ## Angulo entre Segmentos
 
 Calcula o angulo interior no vertice B entre os segmentos BA e BC.
@@ -208,15 +195,3 @@ def _compute_prominence(G, start, start_z, direction, max_hops=20) -> float:
 O limiar de proeminencia (`ELEVATION_PROMINENCE_MIN = 2.0 m`) filtra ruido do DEM -- picos e vales com menos de 2 m de proeminencia sao ignorados.
 
 Arquivo: `core/elevation/extrema.py`
-
-## Velocidade Critica
-
-Velocidade minima para evitar deposicao de solidos:
-
-```python
-def critical_velocity(rh, g=9.81) -> float:
-    """V_c = 6 * sqrt(g * Rh)"""
-    return 6.0 * sqrt(g * rh)
-```
-
-Na pratica, o criterio de tensao trativa (tau >= 1.0 Pa) e mais restritivo e substitui a verificacao de velocidade critica na NBR 9649.

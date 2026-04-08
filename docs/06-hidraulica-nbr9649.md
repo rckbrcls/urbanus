@@ -35,7 +35,7 @@ Q = A * V
 
 Onde `A` e a area molhada da secao transversal.
 
-Implementacao: `urbanus_geo.calculations.flow_rate(area, velocity)`
+No pipeline atual, a vazao volumetrica parcial e calculada diretamente dentro do dimensionamento a partir da area molhada e da velocidade de Manning.
 
 ## Raio Hidraulico para Secao Circular Parcialmente Cheia
 

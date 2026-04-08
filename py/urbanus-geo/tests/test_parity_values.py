@@ -8,7 +8,7 @@ Both files MUST produce the same results within 0.5% tolerance.
 
 import pytest
 
-from urbanus_geo.calculations import haversine, area_km2, slope_2d, tube_elevation, angle_at_node
+from urbanus_geo.calculations import haversine, area_km2, slope_2d, angle_at_node
 
 
 # Shared parity test vectors
@@ -32,10 +32,6 @@ PARITY_VECTORS = {
     "slope_standard": {
         "input": (110, 100, 100),
         "expected": 0.10,
-    },
-    "tube_elevation_standard": {
-        "input": (100, 0.90, 0.15),
-        "expected": 98.95,
     },
 }
 
@@ -70,12 +66,6 @@ class TestParitySlope:
     def test_standard(self):
         args = PARITY_VECTORS["slope_standard"]["input"]
         assert slope_2d(*args) == pytest.approx(PARITY_VECTORS["slope_standard"]["expected"])
-
-
-class TestParityTubeElevation:
-    def test_standard(self):
-        args = PARITY_VECTORS["tube_elevation_standard"]["input"]
-        assert tube_elevation(*args) == pytest.approx(PARITY_VECTORS["tube_elevation_standard"]["expected"])
 
 
 class TestParityAngle:

@@ -1,7 +1,6 @@
 """
-Etapas 2-4 — Sanitização do grafo de rede de esgoto.
+Etapas 3-4 — Sanitização do grafo de rede de esgoto.
 
-Etapa 2: Subdivisão de arestas longas (> dist_max) com nós VERDE.
 Etapa 3: Remoção de nós redundantes (< dist_min) marcados VERMELHO.
 Etapa 4: Resolução de clusters de curva (ângulo < threshold).
 """
@@ -14,75 +13,12 @@ import networkx as nx
 
 from urbanus_geo.calculations import haversine, angle_at_node, line_intersection
 from urbanus_geo.constants import (
-    LONG_EDGE_MAX_DISTANCE,
     REDUNDANT_NODE_MIN_DISTANCE,
     CURVE_ANGLE_THRESHOLD,
     GRADE_BREAK_THRESHOLD,
-    MAX_TERRAIN_SLOPE,
     MIN_PV_SPACING,
     SNAP_DISTANCE_METERS,
 )
-
-
-def sanitize_long_edges(
-    G: nx.Graph,
-    dist_max: float = LONG_EDGE_MAX_DISTANCE,
-) -> nx.Graph:
-    """Etapa 2 — Subdivisão de arestas longas.
-
-    Arestas com comprimento > dist_max são subdivididas inserindo nós VERDE
-    intermediários com elevação interpolada linearmente.
-
-    Args:
-        G: Grafo NetworkX com atributos de nó (x=lng, y=lat, z=elevation).
-        dist_max: Distância máxima permitida (metros).
-
-    Returns:
-        Grafo modificado (in-place).
-    """
-    edges_to_process = []
-    for u, v, data in G.edges(data=True):
-        length = data.get("length_m", 0)
-        if length > dist_max:
-            edges_to_process.append((u, v, data, length))
-
-    for u, v, data, length in edges_to_process:
-        n_segments = int(length / dist_max) + 1
-        u_data = G.nodes[u]
-        v_data = G.nodes[v]
-
-        lat_u, lng_u = u_data["y"], u_data["x"]
-        lat_v, lng_v = v_data["y"], v_data["x"]
-        z_u = u_data.get("z")
-        z_v = v_data.get("z")
-
-        G.remove_edge(u, v)
-
-        prev_node = u
-        for i in range(1, n_segments):
-            frac = i / n_segments
-            new_lat = lat_u + frac * (lat_v - lat_u)
-            new_lng = lng_u + frac * (lng_v - lng_u)
-            new_z = None
-            if z_u is not None and z_v is not None:
-                new_z = z_u + frac * (z_v - z_u)
-
-            new_id = f"verde_{u}_{v}_{i}"
-            G.add_node(new_id, x=new_lng, y=new_lat, z=new_z, node_type="VERDE")
-
-            seg_length = length / n_segments
-            edge_data = {k: v_ for k, v_ in data.items() if k != "length_m"}
-            edge_data["length_m"] = seg_length
-            G.add_edge(prev_node, new_id, **edge_data)
-            prev_node = new_id
-
-        # Last segment to v
-        seg_length = length / n_segments
-        edge_data = {k: v_ for k, v_ in data.items() if k != "length_m"}
-        edge_data["length_m"] = seg_length
-        G.add_edge(prev_node, v, **edge_data)
-
-    return G
 
 
 def remove_redundant_nodes(
@@ -275,85 +211,6 @@ def detect_grade_breaks(
             # before merging and will keep this node if truly needed.
 
     return G
-
-
-def subdivide_steep_edges(
-    G: nx.Graph,
-    max_slope: float = MAX_TERRAIN_SLOPE,
-) -> nx.Graph:
-    """Subdivide edges with terrain slope > max_slope.
-
-    On steep terrain (>15%), pipe velocity exceeds 5 m/s even at DN150.
-    Inserting intermediate nodes allows controlled gradients with drop
-    manholes (tubos de queda / degraus) at each PV.
-
-    Args:
-        G: Graph with node attributes (x, y, z) and edge 'length_m'.
-        max_slope: Maximum allowable terrain slope (m/m).
-
-    Returns:
-        Graph modified in-place.
-    """
-    edges_to_process = []
-    for u, v, data in G.edges(data=True):
-        z_u = G.nodes[u].get("z")
-        z_v = G.nodes[v].get("z")
-        length = data.get("length_m", 0)
-        if z_u is None or z_v is None or length <= 0:
-            continue
-
-        terrain_slope = abs(z_u - z_v) / length
-        if terrain_slope > max_slope:
-            edges_to_process.append((u, v, data, length, terrain_slope))
-
-    for u, v, data, length, terrain_slope in edges_to_process:
-        if u not in G or v not in G or not G.has_edge(u, v):
-            continue
-
-        n_segments = math.ceil(terrain_slope / max_slope)
-        if n_segments < 2:
-            continue
-
-        u_data = G.nodes[u]
-        v_data = G.nodes[v]
-
-        lat_u, lng_u = u_data["y"], u_data["x"]
-        lat_v, lng_v = v_data["y"], v_data["x"]
-        z_u = u_data.get("z")
-        z_v = v_data.get("z")
-
-        G.remove_edge(u, v)
-
-        prev_node = u
-        for i in range(1, n_segments):
-            frac = i / n_segments
-            new_lat = lat_u + frac * (lat_v - lat_u)
-            new_lng = lng_u + frac * (lng_v - lng_u)
-            new_z = None
-            if z_u is not None and z_v is not None:
-                new_z = z_u + frac * (z_v - z_u)
-
-            new_id = f"steep_{u}_{v}_{i}"
-            G.add_node(
-                new_id, x=new_lng, y=new_lat, z=new_z,
-                node_type="ROSA",
-                # NOT pv_obrigatorio — optimizer decides based on slope.
-            )
-
-            seg_length = length / n_segments
-            edge_data = {k: v_ for k, v_ in data.items() if k != "length_m"}
-            edge_data["length_m"] = seg_length
-            G.add_edge(prev_node, new_id, **edge_data)
-            prev_node = new_id
-
-        seg_length = length / n_segments
-        edge_data = {k: v_ for k, v_ in data.items() if k != "length_m"}
-        edge_data["length_m"] = seg_length
-        G.add_edge(prev_node, v, **edge_data)
-
-    return G
-
-
 def enforce_min_pv_spacing(
     G: nx.Graph,
     min_spacing: float = MIN_PV_SPACING,

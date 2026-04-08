@@ -413,7 +413,7 @@ Se `scipy.optimize.milp` estiver disponivel, resolve quais nos de cadeias podem 
 
 #### Observacao importante
 
-A funcao `_enforce_spacing` existe, mas o proprio comentario de [`optimize_node_placement`](../apps/api/src/urbanus_api/core/optimizer/node_reduction.py) explica que o pipeline atual **nao a executa** para evitar reintroduzir uma quantidade grande de nos.
+O pipeline atual nao reintroduz nos por espacamento apos a contracao. A otimizacao termina com contracao gulosa, agrupamento espacial, quebra de ciclos quando necessario e refinamento MILP opcional.
 
 ## Etapa 8 -- Dimensionamento Hidraulico
 
@@ -503,18 +503,6 @@ Classifica cada no da rede final como:
 3. O endpoint monta e retorna um [`SewerNetwork`](../py/urbanus-geo/src/urbanus_geo/types.py).
 
 ## Etapas Que Existem no Codigo, Mas Nao Estao no Fluxo Principal
-
-### `sanitize_long_edges`
-
-Arquivo: [`sanitization.py`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
-
-Ainda existe no codigo, mas o endpoint atual nao chama essa funcao. O comentario em [`main.py`](../apps/api/src/urbanus_api/main.py) explica que ela gerava muitos nos intermediarios e inflava a rede.
-
-### `subdivide_steep_edges`
-
-Arquivo: [`sanitization.py`](../apps/api/src/urbanus_api/core/graph/sanitization.py)
-
-Tambem existe, mas nao participa do fluxo atual por razoes semelhantes.
 
 ## Ordem Recomendada de Leitura do Codigo
 

@@ -4,7 +4,7 @@ Otimizacao de nos da rede de esgoto.
 Minimiza o numero de PVs (pocos de visita) na rede usando:
   Phase 1: Contracao gulosa (pass-through + cadeias + juncoes)
   Phase 2: Refinamento MILP (scipy, opcional)
-  Phase 3: Re-enforcement de espacamento NBR 9649
+  Phase 3: Agrupamento espacial e validacao final
 """
 
 from __future__ import annotations
@@ -334,63 +334,7 @@ def _milp_refine(tree: nx.DiGraph, max_spacing: float) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 — Spacing enforcement
-# ---------------------------------------------------------------------------
-
-def _enforce_spacing(tree: nx.DiGraph, max_spacing: float) -> None:
-    """Phase 3: Insert intermediate nodes on edges exceeding max_spacing.
-
-    For each edge longer than max_spacing, inserts the minimum number of
-    equally-spaced intermediate nodes with linearly interpolated elevation.
-    """
-    edges_to_split = [
-        (u, v, d)
-        for u, v, d in tree.edges(data=True)
-        if d.get("length_m", 0) > max_spacing
-    ]
-
-    for u, v, data in edges_to_split:
-        if u not in tree or v not in tree or not tree.has_edge(u, v):
-            continue
-
-        length = data.get("length_m", 0)
-        n_segments = math.ceil(length / max_spacing)
-        if n_segments < 2:
-            continue
-
-        u_data = tree.nodes[u]
-        v_data = tree.nodes[v]
-        lat_u, lng_u = u_data.get("y", 0), u_data.get("x", 0)
-        lat_v, lng_v = v_data.get("y", 0), v_data.get("x", 0)
-        z_u = u_data.get("z")
-        z_v = v_data.get("z")
-
-        tree.remove_edge(u, v)
-        edge_data = {k: val for k, val in data.items() if k != "length_m"}
-        seg_length = length / n_segments
-
-        prev = u
-        for i in range(1, n_segments):
-            frac = i / n_segments
-            new_id = f"spacing_{u}_{v}_{i}"
-            new_lat = lat_u + frac * (lat_v - lat_u)
-            new_lng = lng_u + frac * (lng_v - lng_u)
-            new_z = None
-            if z_u is not None and z_v is not None:
-                new_z = z_u + frac * (z_v - z_u)
-
-            tree.add_node(
-                new_id, x=new_lng, y=new_lat, z=new_z,
-                node_type="VERDE",
-            )
-            tree.add_edge(prev, new_id, **edge_data, length_m=seg_length)
-            prev = new_id
-
-        tree.add_edge(prev, v, **edge_data, length_m=seg_length)
-
-
-# ---------------------------------------------------------------------------
-# Phase 4 — Spatial clustering of close nodes
+# Phase 3 — Spatial clustering of close nodes
 # ---------------------------------------------------------------------------
 
 def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> None:
@@ -512,8 +456,7 @@ def optimize_node_placement(
              Uses NO length limit — merge everything that's geometrically
              valid (angle < 45°, grade break < 3%).
     Phase 2: MILP refinement (scipy, optional)
-    Phase 3: Spacing enforcement — re-inserts intermediate nodes so that
-             no edge exceeds ``max_spacing``.
+    Phase 3: Spatial clustering of nearby nodes plus final DAG validation.
 
     Args:
         tree: Directed sewer network DAG.
@@ -523,10 +466,9 @@ def optimize_node_placement(
     if outlet and tree.has_node(outlet):
         tree.nodes[outlet]["pv_obrigatorio"] = True
 
-    # Phase 1: merge only when the result doesn't need spacing enforcement.
-    # Merging with inf creates very long edges that _enforce_spacing then
-    # splits, adding back MORE nodes than were removed. Using the real
-    # max_spacing ensures every merge produces a net node reduction.
+    # Phase 1: merge only when the result fits the real spacing target.
+    # Using the real max_spacing ensures every merge produces a net
+    # node reduction in the current pipeline.
     _greedy_contract(tree, max_spacing)
 
     # Phase 2: Merge spatially clustered nodes (< 20m apart)
@@ -551,9 +493,3 @@ def optimize_node_placement(
 
     # Phase 3: MILP refine with real spacing
     _milp_refine(tree, max_spacing)
-
-    # Phase 4 (spacing enforcement) is intentionally skipped.
-    # The graph already has nodes at every street intersection (~100-150m
-    # apart), which satisfies NBR 9649 spacing (80-120m range).
-    # Running _enforce_spacing would ADD nodes on every edge > 100m,
-    # inflating the output beyond the input — the opposite of optimization.
