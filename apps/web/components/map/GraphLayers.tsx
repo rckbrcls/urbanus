@@ -6,6 +6,7 @@ import {
   NODES_PAINT, EDGES_DEFAULT_PAINT, EDGES_STREETS_PAINT, EDGES_LAYOUT,
   NODES_ELEVATION_PAINT, EDGES_ELEVATION_PAINT,
   ELEVATION_LABEL_LAYOUT, ELEVATION_LABEL_PAINT,
+  getElevationColor, getElevationLabel,
 } from '@/lib/map/layers';
 import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
 
@@ -45,22 +46,25 @@ export default function GraphLayers({
   const min = elevationRange?.min ?? 0;
   const range = elevationRange ? elevationRange.max - elevationRange.min || 1 : 1;
 
-  // Inject elevation_normalized into GeoJSON features for the paint expression
+  // Precompute elevation-derived properties to keep MapLibre layers on simple `get` expressions.
   const enrichedNodesGeoJSON = useMemo(() => {
     if (!isElevation) return nodesGeoJSON;
     return {
       ...nodesGeoJSON,
-      features: nodesGeoJSON.features.map((f) => ({
-        ...f,
-        properties: {
-          ...f.properties,
-          elevation_normalized: normalizeElevation(
-            f.properties?.elevation as number | null,
-            min,
-            range,
-          ),
-        },
-      })),
+      features: nodesGeoJSON.features.map((f) => {
+        const elevation = f.properties?.elevation as number | null;
+        const elevationNormalized = normalizeElevation(elevation, min, range);
+
+        return {
+          ...f,
+          properties: {
+            ...f.properties,
+            elevation_normalized: elevationNormalized,
+            elevationColor: getElevationColor(elevationNormalized),
+            elevationLabel: getElevationLabel(elevation),
+          },
+        };
+      }),
     };
   }, [nodesGeoJSON, isElevation, min, range]);
 
@@ -93,7 +97,11 @@ export default function GraphLayers({
         }
         return {
           ...f,
-          properties: { ...f.properties, elevation_normalized: elevNorm },
+          properties: {
+            ...f.properties,
+            elevation_normalized: elevNorm,
+            elevationColor: getElevationColor(elevNorm),
+          },
         };
       }),
     };

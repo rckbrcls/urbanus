@@ -6,6 +6,7 @@ import type { SewerNetwork } from '@/types/sewer';
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import FlowArrows from './FlowArrows';
 import { getRenderedNodeCategory, RENDERED_NODE_COLORS } from '@/lib/sewer/renderLegend';
+import { getElevationColor, getElevationLabel } from '@/lib/map/layers';
 
 export type SewerViewMode = 'default' | 'elevation' | 'streets';
 
@@ -45,34 +46,6 @@ function normalizeElevation(
   return range === 0 ? 0 : (elevation - min) / range;
 }
 
-// ============ ELEVATION PAINT EXPRESSIONS (RdYlBu reversed — topographic) ============
-
-const ELEVATION_COLOR_EXPR = [
-  'case',
-  ['==', ['get', 'elevation_normalized'], -1], '#9e9e9e',
-  [
-    'interpolate', ['linear'], ['get', 'elevation_normalized'],
-    0.0, '#313695',
-    0.25, '#4575b4',
-    0.5, '#fee090',
-    0.75, '#f46d43',
-    1.0, '#a50026',
-  ],
-] as unknown;
-
-const EDGE_ELEVATION_COLOR_EXPR = [
-  'case',
-  ['==', ['get', 'avg_elevation_normalized'], -1], '#9e9e9e',
-  [
-    'interpolate', ['linear'], ['get', 'avg_elevation_normalized'],
-    0.0, '#313695',
-    0.25, '#4575b4',
-    0.5, '#fee090',
-    0.75, '#f46d43',
-    1.0, '#a50026',
-  ],
-] as unknown;
-
 export default function SewerNetworkLayers({
   network,
   viewMode = 'default',
@@ -89,22 +62,28 @@ export default function SewerNetworkLayers({
   const { nodesGeoJSON, edgesGeoJSON } = useMemo(() => {
     const pipeLookup = new Map(network.pipes.map((p) => [p.edge_id, p]));
 
-    const nodeFeatures: GeoJSON.Feature[] = network.nodes.map((n) => ({
-      type: 'Feature',
-      id: n.id,
-      geometry: { type: 'Point', coordinates: [n.lng, n.lat] },
-      properties: {
+    const nodeFeatures: GeoJSON.Feature[] = network.nodes.map((n) => {
+      const elevationNormalized = normalizeElevation(n.elevation, min, range);
+
+      return {
+        type: 'Feature',
         id: n.id,
-        node_type: n.node_type ?? 'OTHER',
-        accessory_type: n.accessory_type ?? '',
-        elevation: n.elevation,
-        elevation_normalized: normalizeElevation(n.elevation, min, range),
-        pv_obrigatorio: n.pv_obrigatorio,
-        is_collection_point: n.is_collection_point ?? false,
-        is_selected: n.id === selectedNodeId,
-        color: RENDERED_NODE_COLORS[getRenderedNodeCategory(n)],
-      },
-    }));
+        geometry: { type: 'Point', coordinates: [n.lng, n.lat] },
+        properties: {
+          id: n.id,
+          node_type: n.node_type ?? 'OTHER',
+          accessory_type: n.accessory_type ?? '',
+          elevation: n.elevation,
+          elevation_normalized: elevationNormalized,
+          elevationColor: getElevationColor(elevationNormalized),
+          elevationLabel: getElevationLabel(n.elevation),
+          pv_obrigatorio: n.pv_obrigatorio,
+          is_collection_point: n.is_collection_point ?? false,
+          is_selected: n.id === selectedNodeId,
+          color: RENDERED_NODE_COLORS[getRenderedNodeCategory(n)],
+        },
+      };
+    });
 
     const edgeFeatures: GeoJSON.Feature[] = network.edges.map((e) => {
       const src = network.nodes.find((n) => n.id === e.source_node_id);
@@ -142,6 +121,7 @@ export default function SewerNetworkLayers({
           color: pipe?.is_pressurized ? '#ff5722' : diameterToColor(pipe?.diameter_mm ?? 150),
           slope: e.slope,
           avg_elevation_normalized: avgElevNorm,
+          elevationColor: getElevationColor(avgElevNorm),
         },
       };
     });
@@ -156,7 +136,7 @@ export default function SewerNetworkLayers({
 
   const pipesPaint: LineLayerSpecification['paint'] = isElevation
     ? {
-        'line-color': EDGE_ELEVATION_COLOR_EXPR as string,
+        'line-color': ['get', 'elevationColor'] as unknown as string,
         'line-width': ['get', 'width'] as unknown as number,
         'line-opacity': 0.95,
       }
@@ -169,7 +149,7 @@ export default function SewerNetworkLayers({
   const nodesPaint: CircleLayerSpecification['paint'] = isElevation
     ? {
         'circle-radius': 6,
-        'circle-color': ELEVATION_COLOR_EXPR as string,
+        'circle-color': ['get', 'elevationColor'] as unknown as string,
         'circle-stroke-width': 1.5,
         'circle-stroke-color': '#ffffff',
       }
@@ -200,13 +180,9 @@ export default function SewerNetworkLayers({
       };
 
   const elevationLabelLayout: SymbolLayerSpecification['layout'] = {
-    'text-field': [
-      'case',
-      ['==', ['get', 'elevation_normalized'], -1], 'N/A',
-      ['concat', ['to-string', ['round', ['get', 'elevation']]], 'm'],
-    ],
+    'text-field': ['get', 'elevationLabel'] as unknown as string,
     'text-size': 10,
-    'text-offset': [0, 1.5],
+    'text-offset': ['literal', [0, 1.5]] as unknown as [number, number],
     'text-allow-overlap': false,
     'text-optional': true,
   };

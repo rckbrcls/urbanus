@@ -136,6 +136,8 @@ Duas camadas MapLibre sobre o mesmo GeoJSON source:
 
 Usa `promoteId="id"` para habilitar `map.setFeatureState()` sem repaint do source. Isso permite feedback visual instantaneo (hover, selecao) sem recriar os GeoJSON features.
 
+No modo de elevacao, `GraphLayers` enriquece os features com propriedades derivadas (`elevationColor`, `elevationLabel`) antes de enviar para o MapLibre. A rampa topografica e calculada no proprio React, e as layers usam apenas `['get', ...]` simples. Isso evita erros de parser/avaliacao de expressoes ao alternar dinamicamente entre os modos do editor.
+
 Quando o editor esta exibindo uma `SewerNetwork` processada (via `sewerNetworkToGraph()`), a cor dos nos passa a seguir a semantica operacional da rede em vez da classificacao bruta do editor:
 - `isCollectionPoint` -> `Collection point`
 - `accessoryType=PV` -> `Manhole (PV)`

@@ -5,6 +5,76 @@
 import type { CircleLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
 import { RENDERED_NODE_COLORS } from '@/lib/sewer/renderLegend';
 
+const MISSING_ELEVATION_COLOR = '#9e9e9e';
+
+const ELEVATION_COLOR_STOPS = [
+  { value: 0, color: '#313695' },
+  { value: 0.25, color: '#4575b4' },
+  { value: 0.5, color: '#fee090' },
+  { value: 0.75, color: '#f46d43' },
+  { value: 1, color: '#a50026' },
+] as const;
+
+function hexToRgb(hex: string): [number, number, number] {
+  const sanitized = hex.replace('#', '');
+  const value = Number.parseInt(sanitized, 16);
+
+  return [
+    (value >> 16) & 255,
+    (value >> 8) & 255,
+    value & 255,
+  ];
+}
+
+function interpolateChannel(start: number, end: number, ratio: number): number {
+  return Math.round(start + (end - start) * ratio);
+}
+
+function rgbToHex([r, g, b]: [number, number, number]): string {
+  return `#${[r, g, b]
+    .map((channel) => channel.toString(16).padStart(2, '0'))
+    .join('')}`;
+}
+
+/**
+ * Convert a normalized elevation value (0-1) into the topographic ramp used by the map.
+ * We precompute colors in JS to avoid brittle runtime expression parsing in MapLibre.
+ */
+export function getElevationColor(normalized: number): string {
+  if (!Number.isFinite(normalized) || normalized < 0) {
+    return MISSING_ELEVATION_COLOR;
+  }
+
+  const clamped = Math.min(Math.max(normalized, 0), 1);
+
+  for (let index = 0; index < ELEVATION_COLOR_STOPS.length - 1; index += 1) {
+    const current = ELEVATION_COLOR_STOPS[index];
+    const next = ELEVATION_COLOR_STOPS[index + 1];
+
+    if (clamped <= next.value) {
+      const ratio = (clamped - current.value) / (next.value - current.value || 1);
+      const currentRgb = hexToRgb(current.color);
+      const nextRgb = hexToRgb(next.color);
+
+      return rgbToHex([
+        interpolateChannel(currentRgb[0], nextRgb[0], ratio),
+        interpolateChannel(currentRgb[1], nextRgb[1], ratio),
+        interpolateChannel(currentRgb[2], nextRgb[2], ratio),
+      ]);
+    }
+  }
+
+  return ELEVATION_COLOR_STOPS[ELEVATION_COLOR_STOPS.length - 1].color;
+}
+
+export function getElevationLabel(elevation: number | null | undefined): string {
+  if (elevation == null || Number.isNaN(elevation)) {
+    return '';
+  }
+
+  return `${Math.round(elevation)}m`;
+}
+
 // ============ NODES ============
 
 export const NODES_PAINT: CircleLayerSpecification['paint'] = {
@@ -121,20 +191,6 @@ export const GHOST_EDGE_PAINT: LineLayerSpecification['paint'] = {
 
 // ============ ELEVATION VIEW ============
 
-/** Topographic color ramp (RdYlBu reversed): blue=low → red=high */
-const ELEVATION_COLOR = [
-  'case',
-  ['==', ['get', 'elevation_normalized'], -1], '#9e9e9e',
-  [
-    'interpolate', ['linear'], ['get', 'elevation_normalized'],
-    0.0, '#313695',
-    0.25, '#4575b4',
-    0.5, '#fee090',
-    0.75, '#f46d43',
-    1.0, '#a50026',
-  ],
-] as unknown;
-
 export const NODES_ELEVATION_PAINT: CircleLayerSpecification['paint'] = {
   'circle-radius': [
     'case',
@@ -143,7 +199,7 @@ export const NODES_ELEVATION_PAINT: CircleLayerSpecification['paint'] = {
     ['==', ['get', 'isCollectionPoint'], true], 10,
     7,
   ] as unknown as number,
-  'circle-color': ELEVATION_COLOR as string,
+  'circle-color': ['get', 'elevationColor'] as unknown as string,
   'circle-opacity': 1,
   'circle-stroke-width': [
     'case',
@@ -155,7 +211,7 @@ export const NODES_ELEVATION_PAINT: CircleLayerSpecification['paint'] = {
 };
 
 export const EDGES_ELEVATION_PAINT: LineLayerSpecification['paint'] = {
-  'line-color': ELEVATION_COLOR as string,
+  'line-color': ['get', 'elevationColor'] as unknown as string,
   'line-width': [
     'case',
     ['boolean', ['feature-state', 'selected'], false], 5,
@@ -166,13 +222,9 @@ export const EDGES_ELEVATION_PAINT: LineLayerSpecification['paint'] = {
 };
 
 export const ELEVATION_LABEL_LAYOUT: SymbolLayerSpecification['layout'] = {
-  'text-field': [
-    'case',
-    ['==', ['get', 'elevation_normalized'], -1], '',
-    ['concat', ['to-string', ['round', ['get', 'elevation']]], 'm'],
-  ],
+  'text-field': ['get', 'elevationLabel'] as unknown as string,
   'text-size': 10,
-  'text-offset': [0, 1.5],
+  'text-offset': ['literal', [0, 1.5]] as unknown as [number, number],
   'text-allow-overlap': false,
   'text-optional': true,
 };
