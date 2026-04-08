@@ -14,6 +14,7 @@ import networkx as nx
 from urbanus_geo.calculations import haversine, angle_at_node, line_intersection
 from urbanus_geo.constants import (
     REDUNDANT_NODE_MIN_DISTANCE,
+    LONG_EDGE_MAX_DISTANCE,
     CURVE_ANGLE_THRESHOLD,
     GRADE_BREAK_THRESHOLD,
     MIN_PV_SPACING,

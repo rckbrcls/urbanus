@@ -187,6 +187,8 @@ Esta fase responde: **quais pontos da geometria viaria merecem sobreviver como d
 
 [`remove_redundant_nodes`](../apps/api/src/urbanus_api/core/graph/sanitization.py) remove nos de grau 2 nao obrigatorios quando ambos os lados sao curtos e a fusao nao cria um trecho longo demais.
 
+O teto desse trecho mesclado vem da constante compartilhada `LONG_EDGE_MAX_DISTANCE`, importada de `urbanus_geo.constants`. Isso evita que a limpeza topologica transforme dois segmentos pequenos em uma aresta artificialmente longa demais para as etapas seguintes.
+
 Intuicao: se um no nao muda conectividade, nao marca curva importante e esta entre dois trechos curtinhos, ele so infla a rede.
 
 ### 2.2 Resolucao de clusters de curva
