@@ -51,16 +51,16 @@ interface ValidationResult {
 ### Enumeracoes de Dominio
 
 ```typescript
-type NodeType = "ROSA" | "VERDE" | "VERMELHO" | "AMARELO" | "AZUL_ESCURO";
+type NodeType = "MANDATORY" | "INTERMEDIATE" | "REDUNDANT" | "HIGH_POINT" | "LOW_POINT";
 ```
 
-| Tipo | Cor | Significado |
-|------|-----|-------------|
-| `ROSA` | Rosa | PV obrigatorio -- intersecao, confluencia, extremidade |
-| `VERDE` | Verde | No intermediario -- subdivisao de arestas longas (Etapa 2) |
-| `VERMELHO` | Vermelho | No redundante -- marcado para remocao (Etapa 3) |
-| `AMARELO` | Amarelo | Ponto alto -- maximo local de elevacao (Etapa 5) |
-| `AZUL_ESCURO` | Azul escuro | Ponto baixo -- minimo local de elevacao (Etapa 5) |
+| Tipo | Significado |
+|------|-------------|
+| `MANDATORY` | No estruturalmente preservado ou obrigatorio para o pipeline |
+| `INTERMEDIATE` | No intermediario/transitorio inserido por sanitizacao |
+| `REDUNDANT` | No identificado para remocao ou merge |
+| `HIGH_POINT` | Maximo local de elevacao relevante |
+| `LOW_POINT` | Minimo local de elevacao relevante |
 
 ```typescript
 type AccessoryType = "PV";
@@ -72,6 +72,9 @@ type AccessoryType = "PV";
 
 `isCollectionPoint` permanece separado de `accessoryType` e identifica o papel
 do no como ponto de coleta no roteamento.
+
+Snapshots legados ainda podem conter `ROSA`, `VERDE`, `VERMELHO`, `AMARELO` e
+`AZUL_ESCURO`; o backend normaliza esses aliases para os nomes acima.
 
 ### Tipos da Rede de Esgoto
 
@@ -124,11 +127,11 @@ class BoundingBox(BaseModel):
     northEast: LatLng
 
 class NodeType(str, Enum):
-    ROSA = "ROSA"
-    VERDE = "VERDE"
-    VERMELHO = "VERMELHO"
-    AMARELO = "AMARELO"
-    AZUL_ESCURO = "AZUL_ESCURO"
+    MANDATORY = "MANDATORY"
+    INTERMEDIATE = "INTERMEDIATE"
+    REDUNDANT = "REDUNDANT"
+    HIGH_POINT = "HIGH_POINT"
+    LOW_POINT = "LOW_POINT"
 
 class AccessoryType(str, Enum):
     PV = "PV"

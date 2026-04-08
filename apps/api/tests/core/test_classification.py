@@ -57,7 +57,7 @@ class TestClusterNearbyNodes:
                 "connectedStreets": ["s1"],
                 "streetNames": [],
                 "pvObrigatorio": True,
-                "nodeType": "ROSA",
+                "nodeType": "MANDATORY",
                 "accessoryType": "PV",
                 "isEndpoint": False,
             },
@@ -134,8 +134,8 @@ class TestClusterNearbyNodes:
 
 
 class TestEnforceDirectionChanges:
-    def test_sharp_bend_marks_rosa(self):
-        """Node with > 45° deflection → ROSA."""
+    def test_sharp_bend_marks_mandatory(self):
+        """Node with > 45° deflection becomes mandatory."""
         G = nx.Graph()
         G.add_node("A", x=0.0, y=0.0)
         G.add_node("B", x=1.0, y=0.0, pv_obrigatorio=False)
@@ -146,7 +146,7 @@ class TestEnforceDirectionChanges:
         enforce_direction_changes(G)
         # B has 90° angle → 90° deflection > 45° threshold
         assert G.nodes["B"].get("pv_obrigatorio") is True
-        assert G.nodes["B"].get("node_type") == "ROSA"
+        assert G.nodes["B"].get("node_type") == "MANDATORY"
 
     def test_straight_line_unchanged(self):
         """180° angle → 0° deflection → no change."""

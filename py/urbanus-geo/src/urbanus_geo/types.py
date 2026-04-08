@@ -19,11 +19,43 @@ class BoundingBox(BaseModel):
 
 
 class NodeType(str, Enum):
-    ROSA = "ROSA"               # PV obrigatório (interseção, confluência)
-    VERDE = "VERDE"             # Intermediário (subdivisão de aresta longa)
-    VERMELHO = "VERMELHO"       # Redundante (será removido)
-    AMARELO = "AMARELO"         # Ponto alto (início de rede)
-    AZUL_ESCURO = "AZUL_ESCURO" # Ponto baixo (problemático)
+    MANDATORY = "MANDATORY"      # Structurally preserved or mandatory node
+    INTERMEDIATE = "INTERMEDIATE"  # Temporary intermediate node
+    REDUNDANT = "REDUNDANT"      # Node marked for removal/merge
+    HIGH_POINT = "HIGH_POINT"    # Relevant local elevation maximum
+    LOW_POINT = "LOW_POINT"      # Relevant local elevation minimum
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if not isinstance(value, str):
+            return None
+
+        normalized = _LEGACY_NODE_TYPE_ALIASES.get(value)
+        if normalized is None:
+            return None
+
+        return cls(normalized)
+
+
+_LEGACY_NODE_TYPE_ALIASES: dict[str, str] = {
+    "ROSA": NodeType.MANDATORY.value,
+    "VERDE": NodeType.INTERMEDIATE.value,
+    "VERMELHO": NodeType.REDUNDANT.value,
+    "AMARELO": NodeType.HIGH_POINT.value,
+    "AZUL_ESCURO": NodeType.LOW_POINT.value,
+}
+
+
+def normalize_node_type(value: NodeType | str | None) -> NodeType | None:
+    if value is None:
+        return None
+    if isinstance(value, NodeType):
+        return value
+
+    try:
+        return NodeType(value)
+    except ValueError:
+        return None
 
 
 class AccessoryType(str, Enum):

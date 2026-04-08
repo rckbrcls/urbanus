@@ -1,7 +1,6 @@
 /** Types mirroring the Python Pydantic models for the sewer network pipeline. */
 
-export type NodeType = "ROSA" | "VERDE" | "VERMELHO" | "AMARELO" | "AZUL_ESCURO";
-export type AccessoryType = "PV";
+import type { AccessoryType, NodeType } from '@urbanus/geo';
 
 export interface SewerNode {
   id: string;

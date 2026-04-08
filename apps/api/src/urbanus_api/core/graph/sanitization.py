@@ -1,8 +1,8 @@
 """
-Etapas 3-4 — Sanitização do grafo de rede de esgoto.
+Steps 3-4 — Sewer graph sanitization.
 
-Etapa 3: Remoção de nós redundantes (< dist_min) marcados VERMELHO.
-Etapa 4: Resolução de clusters de curva (ângulo < threshold).
+Step 3: remove redundant nodes.
+Step 4: resolve sharp-curve clusters.
 """
 
 from __future__ import annotations
@@ -11,15 +11,15 @@ import math
 
 import networkx as nx
 
-from urbanus_geo.calculations import haversine, angle_at_node, line_intersection
+from urbanus_geo.calculations import angle_at_node, line_intersection
 from urbanus_geo.constants import (
     REDUNDANT_NODE_MIN_DISTANCE,
     LONG_EDGE_MAX_DISTANCE,
     CURVE_ANGLE_THRESHOLD,
     GRADE_BREAK_THRESHOLD,
     MIN_PV_SPACING,
-    SNAP_DISTANCE_METERS,
 )
+from urbanus_geo.types import NodeType
 
 
 def remove_redundant_nodes(
@@ -30,7 +30,7 @@ def remove_redundant_nodes(
     """Etapa 3 — Remoção de nós redundantes.
 
     Nós com grau 2 e distância < dist_min para ambos os vizinhos são
-    marcados VERMELHO e removidos (arestas mescladas).
+    marked redundant and removed (merged edges).
 
     Nós obrigatórios (pv_obrigatorio=True) nunca são removidos.
 
@@ -74,7 +74,7 @@ def remove_redundant_nodes(
             e2_data = dict(G.edges[node, n2])
             merged_data = {**e1_data, **e2_data, "length_m": merged_length}
 
-            G.nodes[node]["node_type"] = "VERMELHO"
+            G.nodes[node]["node_type"] = NodeType.REDUNDANT.value
             G.remove_node(node)
             G.add_edge(n1, n2, **merged_data)
             removed = True
@@ -156,7 +156,7 @@ def resolve_curve_clusters(
 
             new_id = f"curve_{n1}_{n2}"
             G.remove_node(node)
-            G.add_node(new_id, x=new_lng, y=new_lat, z=new_z, node_type="VERDE")
+            G.add_node(new_id, x=new_lng, y=new_lat, z=new_z, node_type=NodeType.INTERMEDIATE.value)
             G.add_edge(n1, new_id, **e1_data)
             G.add_edge(new_id, n2, **e2_data)
             processed = True
@@ -168,7 +168,7 @@ def detect_grade_breaks(
     G: nx.Graph,
     threshold: float = GRADE_BREAK_THRESHOLD,
 ) -> nx.Graph:
-    """Mark degree-2 nodes where terrain slope changes abruptly as ROSA.
+    """Mark degree-2 nodes with abrupt terrain slope changes as mandatory.
 
     When the slope difference between the two adjacent edges exceeds the
     threshold, a PV is needed to allow different pipe gradients on each side.
@@ -207,11 +207,13 @@ def detect_grade_breaks(
         slope2 = abs(z_n - z_2) / max(d2, 0.1)
 
         if abs(slope1 - slope2) > threshold:
-            ndata["node_type"] = "ROSA"
+            ndata["node_type"] = NodeType.MANDATORY.value
             # NOT pv_obrigatorio — the optimizer checks slope break
             # before merging and will keep this node if truly needed.
 
     return G
+
+
 def enforce_min_pv_spacing(
     G: nx.Graph,
     min_spacing: float = MIN_PV_SPACING,

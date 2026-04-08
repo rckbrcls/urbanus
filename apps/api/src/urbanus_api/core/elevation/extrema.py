@@ -1,11 +1,11 @@
 """
-Etapa 5 — Análise de elevação: detecção de máximos e mínimos locais.
+Step 5 — Elevation analysis: local maxima and minima detection.
 
-Classifica nós como:
-- AMARELO: ponto alto (todos vizinhos mais baixos) — início de fluxo
-- AZUL_ESCURO: ponto baixo (todos vizinhos mais altos) — problemático
+Labels nodes as:
+- HIGH_POINT: all neighbors are lower
+- LOW_POINT: all neighbors are higher
 
-Filtra por proeminência via BFS para evitar falsos positivos.
+Prominence filtering via BFS reduces DEM noise false positives.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from collections import deque
 import networkx as nx
 
 from urbanus_geo.constants import ELEVATION_PROMINENCE_MIN
+from urbanus_geo.types import NodeType
 
 
 def detect_extrema(
@@ -62,11 +63,11 @@ def detect_extrema(
         if all_lower:
             prominence = _compute_prominence(G, node, z, direction="down")
             if prominence >= min_prominence:
-                ndata["node_type"] = "AMARELO"
+                ndata["node_type"] = NodeType.HIGH_POINT.value
         elif all_higher:
             prominence = _compute_prominence(G, node, z, direction="up")
             if prominence >= min_prominence:
-                ndata["node_type"] = "AZUL_ESCURO"
+                ndata["node_type"] = NodeType.LOW_POINT.value
 
     return G
 

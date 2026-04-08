@@ -69,7 +69,7 @@ class NodeTable(Base):
     degree = Column(Integer)
     is_intersection = Column(Boolean, default=False)
     is_endpoint = Column(Boolean, default=False)
-    node_type = Column(Text)           # ROSA, VERDE, VERMELHO, AMARELO, AZUL_ESCURO
+    node_type = Column(Text)           # MANDATORY, INTERMEDIATE, REDUNDANT, HIGH_POINT, LOW_POINT
     pv_obrigatorio = Column(Boolean, default=False)
     accessory_type = Column(Text)      # PV (legacy rows may still contain old values)
     properties = Column(JSONB)

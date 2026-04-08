@@ -39,7 +39,7 @@ def make_linear_graph(
             x=-46.65 + i * 0.001,  # lng
             y=-23.55,               # lat
             z=z,
-            node_type="ROSA" if i in (0, n - 1) else None,
+            node_type="MANDATORY" if i in (0, n - 1) else None,
             pv_obrigatorio=(i in (0, n - 1)),
         )
 

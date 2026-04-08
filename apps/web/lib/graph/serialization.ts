@@ -6,7 +6,7 @@
  * unique nodes by position and builds edges between adjacent anchors.
  */
 
-import { GeoCalculations } from '@urbanus/geo';
+import { GeoCalculations, normalizeNodeType } from '@urbanus/geo';
 import type { MapNode } from '@/features/map/types/node.types';
 import type { NetworkGraph, NetworkNode, NetworkEdge } from './types';
 import { calculateSlope } from './operations';
@@ -41,8 +41,9 @@ function mergeCanonicalNode(target: NetworkNode, incoming: MapNode): void {
     target.properties.isLowestElevation || incoming.isLowestElevation,
   );
 
-  if (!target.properties.nodeType && incoming.nodeType) {
-    target.properties.nodeType = incoming.nodeType;
+  const incomingNodeType = normalizeNodeType(incoming.nodeType);
+  if (!target.properties.nodeType && incomingNodeType) {
+    target.properties.nodeType = incomingNodeType;
   }
   if (!target.properties.streetName && incoming.streetName) {
     target.properties.streetName = incoming.streetName;
@@ -141,7 +142,7 @@ export function mapNodesToNetworkGraph(nodes: MapNode[]): NetworkGraph {
         id,
         coordinates: [mn.position.lng, mn.position.lat, mn.elevation ?? NaN],
         properties: {
-          nodeType: mn.nodeType,
+          nodeType: normalizeNodeType(mn.nodeType) ?? undefined,
           elevation: mn.elevation,
           degree: mn.degree ?? 0,
           edgeIds: [],

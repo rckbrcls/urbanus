@@ -1,6 +1,8 @@
 # 14 -- Algoritmo e Fluxo Real do Pipeline
 
 > Status em 2026-04-08: as secoes abaixo sobre `low_points`, `dimensioning`, `costing`, `PipeSegment`, `PumpStation` e `total_cost` descrevem um fluxo antigo. O pipeline ativo hoje termina em `rsph_sewer_routing -> ensure_full_coverage -> _break_cycles -> optimize_node_placement -> assign_accessory_types`, e o `SewerNetwork` serializado contem apenas `nodes`, `edges` e `unreachable_nodes`.
+>
+> `node_type` tambem foi simplificado: o runtime atual usa `MANDATORY`, `INTERMEDIATE`, `REDUNDANT`, `HIGH_POINT` e `LOW_POINT`. Snapshots legados com nomes por cor sao normalizados na leitura.
 
 ## Objetivo
 
@@ -160,8 +162,8 @@ Para cada vertice de cada rua:
 - calcula `isIntersection` quando `degree >= 2`
 - calcula `isEndpoint` no inicio/fim da geometria
 - copia a elevacao daquele indice em `vertex_elevations`
-- marca `ROSA` e `pvObrigatorio=True` para endpoints
-- marca `ROSA` e `pvObrigatorio=True` quando detecta queda abrupta maior que `0.50 m` para um vizinho adjacente
+- marca `MANDATORY` e `pvObrigatorio=True` para endpoints
+- marca `MANDATORY` e `pvObrigatorio=True` quando detecta queda abrupta maior que `0.50 m` para um vizinho adjacente
 
 ### Clustering espacial
 
@@ -185,8 +187,8 @@ Depois do clustering, `extract_nodes` ainda identifica:
 
 Se esses nos ainda nao tiverem classificacao:
 
-- maior elevacao recebe `AMARELO`
-- menor elevacao recebe `AZUL_ESCURO`
+- maior elevacao recebe `HIGH_POINT`
+- menor elevacao recebe `LOW_POINT`
 
 ### Observacao importante
 
@@ -361,7 +363,7 @@ Para cada um:
 - calcula o angulo entre as duas arestas adjacentes
 - transforma em deflexao: `180 - angulo`
 - se a deflexao passar de `DIRECTION_CHANGE_THRESHOLD`, marca:
-  - `node_type = "ROSA"`
+  - `node_type = "MANDATORY"`
   - `pv_obrigatorio = True`
 
 Ideia: joelhos de tubulacao importantes precisam de PV.
@@ -428,8 +430,8 @@ Depois calcula proeminencia via BFS limitada.
 
 So marca:
 
-- `AMARELO` para maximos relevantes
-- `AZUL_ESCURO` para minimos relevantes
+- `HIGH_POINT` para maximos relevantes
+- `LOW_POINT` para minimos relevantes
 
 Isso reduz falso positivo de ruido de DEM.
 
@@ -444,7 +446,7 @@ Para cada lado do no:
 
 Se a diferenca passar de `GRADE_BREAK_THRESHOLD`, marca:
 
-- `node_type = "ROSA"`
+- `node_type = "MANDATORY"`
 
 Ponto sutil:
 
@@ -460,7 +462,7 @@ Arquivo principal: `apps/api/src/urbanus_api/main.py`
 Depois da sanitizacao, o backend recalcula o conjunto obrigatorio:
 
 - `pv_obrigatorio = True`
-- ou `node_type == "ROSA"`
+- ou `node_type == "MANDATORY"`
 
 ### `outlet`
 
@@ -483,7 +485,7 @@ Se houver nos com `is_collection_point=True` no payload editado:
 
 Se nao houver selecao manual:
 
-- o backend escolhe candidatos com `node_type == "AZUL_ESCURO"`
+- o backend escolhe candidatos com `node_type == "LOW_POINT"`
 - ordena do mais baixo para o mais alto
 - deduplica espacialmente usando `MIN_PV_SPACING`
 - preserva sempre o `outlet`
@@ -566,7 +568,7 @@ Apesar do nome sugerir tratamento geral de low points, o loop principal percorre
 
 Ou seja:
 
-- ela nao percorre automaticamente todos os nos `AZUL_ESCURO`
+- ela nao percorre automaticamente todos os nos `LOW_POINT`
 - ela tenta resolver os nos que o RSPH nao conseguiu conectar gravitacionalmente
 
 ### Opcoes avaliadas por no
@@ -987,7 +989,7 @@ A execucao real tambem inclui:
 
 Ele processa `unreachable`.
 
-Os `AZUL_ESCURO` influenciam principalmente:
+Os `LOW_POINT` influenciam principalmente:
 
 - selecao automatica de `collection_points`
 

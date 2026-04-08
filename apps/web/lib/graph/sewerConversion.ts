@@ -3,6 +3,7 @@
  * so the same editor works before and after processing.
  */
 
+import { normalizeNodeType } from '@urbanus/geo';
 import type { SewerNetwork } from '@/types/sewer';
 import type { NetworkNode, NetworkEdge, NetworkGraph } from './types';
 
@@ -26,7 +27,7 @@ export function sewerNetworkToGraph(network: SewerNetwork): NetworkGraph {
       id: n.id,
       coordinates: [n.lng, n.lat, n.elevation ?? NaN],
       properties: {
-        nodeType: n.node_type ?? undefined,
+        nodeType: normalizeNodeType(n.node_type) ?? undefined,
         elevation: n.elevation,
         degree: n.degree,
         edgeIds: nodeEdgeIds[n.id] ?? [],
@@ -67,7 +68,7 @@ export function graphToSewerNetwork(
     lat: node.coordinates[1],
     lng: node.coordinates[0],
     elevation: Number.isNaN(node.coordinates[2]) ? null : node.coordinates[2],
-    node_type: node.properties.nodeType ?? null,
+    node_type: normalizeNodeType(node.properties.nodeType) ?? null,
     pv_obrigatorio: node.properties.pvObrigatorio ?? false,
     degree: node.properties.degree ?? node.properties.edgeIds.length,
     is_intersection: node.properties.isIntersection ?? false,

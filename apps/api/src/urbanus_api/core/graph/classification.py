@@ -1,12 +1,12 @@
 """
-Etapa 1 — Classificação de nós obrigatórios.
+Step 1 — Structural node classification.
 
-Extrai nós de um GeoJSON de ruas enriquecido com elevação e classifica:
-- ROSA: PV obrigatório (interseção, confluência, mudança de direção, queda)
-- AMARELO: Ponto alto (todos vizinhos mais baixos)
-- AZUL_ESCURO: Ponto baixo (todos vizinhos mais altos)
+Extracts nodes from an elevation-enriched street GeoJSON and labels:
+- MANDATORY: structurally preserved node
+- HIGH_POINT: locally high node
+- LOW_POINT: locally low node
 
-Modos:
+Modes:
   - "intersections": apenas nós com grau >= 2 (cruzamentos reais)
   - "all": todos os vértices de cada rua (para edição completa)
 """
@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from urbanus_geo.calculations import haversine
 from urbanus_geo.constants import DIRECTION_CHANGE_THRESHOLD, SNAP_DISTANCE_METERS
+from urbanus_geo.types import NodeType
 
 
 def _is_meaningful_elevation(value: float | None) -> bool:
@@ -127,7 +128,7 @@ def _cluster_nearby_nodes(
             rep["elevation"] = None
         if any_pv:
             rep["pvObrigatorio"] = True
-            rep["nodeType"] = "ROSA"
+            rep["nodeType"] = NodeType.MANDATORY.value
             rep["accessoryType"] = "PV"
         # Intersections are structural (for graph connectivity) but NOT
         # mandatory PVs — the pipeline will decide which actually need PVs
@@ -140,7 +141,7 @@ def _cluster_nearby_nodes(
 
 
 def enforce_direction_changes(G) -> None:
-    """Mark degree-2 nodes with direction change > threshold as ROSA/pv_obrigatorio.
+    """Mark degree-2 nodes with sharp deflection as mandatory.
 
     For each degree-2 node in the graph, compute the angle between the two
     adjacent edges. If the deflection (180 - angle) exceeds
@@ -172,7 +173,7 @@ def enforce_direction_changes(G) -> None:
         deflection = 180.0 - angle
 
         if deflection > DIRECTION_CHANGE_THRESHOLD:
-            ndata["node_type"] = "ROSA"
+            ndata["node_type"] = NodeType.MANDATORY.value
             ndata["pv_obrigatorio"] = True
 
 
@@ -278,7 +279,7 @@ def extract_nodes(
                 pv_obrigatorio = False
 
                 if is_endpoint:
-                    node_type = "ROSA"
+                    node_type = NodeType.MANDATORY.value
                     pv_obrigatorio = True
 
                 # Detecção de queda abrupta (> 0.50m entre vértices adjacentes)
@@ -287,7 +288,7 @@ def extract_nodes(
                         ni = i + di
                         if 0 <= ni < len(elevations) and elevations[ni] is not None:
                             if abs(elevation - elevations[ni]) > 0.50:
-                                node_type = "ROSA"
+                                node_type = NodeType.MANDATORY.value
                                 pv_obrigatorio = True
                                 break
 
@@ -337,11 +338,11 @@ def extract_nodes(
         if node["id"] == highest_id:
             node["isHighestElevation"] = True
             if node["nodeType"] is None:
-                node["nodeType"] = "AMARELO"
+                node["nodeType"] = NodeType.HIGH_POINT.value
         if node["id"] == lowest_id:
             node["isLowestElevation"] = True
             if node["nodeType"] is None:
-                node["nodeType"] = "AZUL_ESCURO"
+                node["nodeType"] = NodeType.LOW_POINT.value
 
     # Metadata (totalUniquePositions reflects pre-clustering count)
     total_unique = len(position_map)

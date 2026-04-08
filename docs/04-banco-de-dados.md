@@ -49,7 +49,7 @@ Nos da rede (intersecoes, intermediarios, extremidades).
 | `degree` | Integer | -- | Numero de arestas conectadas |
 | `is_intersection` | Boolean | default false | Grau >= 2 |
 | `is_endpoint` | Boolean | default false | Primeiro ou ultimo vertice |
-| `node_type` | Text | -- | ROSA, VERDE, VERMELHO, AMARELO, AZUL_ESCURO |
+| `node_type` | Text | -- | MANDATORY, INTERMEDIATE, REDUNDANT, HIGH_POINT, LOW_POINT |
 | `pv_obrigatorio` | Boolean | default false | PV obrigatorio neste no |
 | `accessory_type` | Text | -- | PV (valores antigos podem existir em rows legadas) |
 | `properties` | JSONB | -- | Metadados adicionais |
@@ -78,6 +78,9 @@ Indices:
 - `idx_edges_geom` (geometry, GiST) -- consultas espaciais
 
 O campo `properties` (JSONB) armazena `source_node_id` e `target_node_id` como metadados de conectividade usados pelo runtime para reconstruir e persistir a conectividade da rede processada.
+
+Rows legadas podem conter os aliases por cor; o runtime atual normaliza esses
+valores na leitura e na serializacao da rede.
 
 ## Diagrama de Relacionamentos
 

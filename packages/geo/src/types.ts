@@ -39,8 +39,35 @@ export interface ValidationResult {
 
 // --- Sewer domain types ---
 
-export type NodeType = "ROSA" | "VERDE" | "VERMELHO" | "AMARELO" | "AZUL_ESCURO";
+export type NodeType =
+  | "MANDATORY"
+  | "INTERMEDIATE"
+  | "REDUNDANT"
+  | "HIGH_POINT"
+  | "LOW_POINT";
 export type AccessoryType = "PV";
+
+export function normalizeNodeType(value: string | null | undefined): NodeType | null {
+  switch (value) {
+    case "MANDATORY":
+    case "ROSA":
+      return "MANDATORY";
+    case "INTERMEDIATE":
+    case "VERDE":
+      return "INTERMEDIATE";
+    case "REDUNDANT":
+    case "VERMELHO":
+      return "REDUNDANT";
+    case "HIGH_POINT":
+    case "AMARELO":
+      return "HIGH_POINT";
+    case "LOW_POINT":
+    case "AZUL_ESCURO":
+      return "LOW_POINT";
+    default:
+      return null;
+  }
+}
 
 export interface SewerNode {
   id: string;

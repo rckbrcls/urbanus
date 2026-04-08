@@ -11,7 +11,7 @@ interface NetworkNode {
   id: string;
   coordinates: [lng, lat, elevation];    // elevation pode ser NaN
   properties: {
-    nodeType?: string;                   // ROSA, VERDE, VERMELHO, etc.
+    nodeType?: string;                   // MANDATORY, INTERMEDIATE, REDUNDANT, etc.
     classification?: string;
     elevation: number | null;
     invertElevation?: number | null;     // cota de fundo do tubo

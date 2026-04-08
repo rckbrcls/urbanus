@@ -7,8 +7,8 @@ from urbanus_api.core.elevation.extrema import detect_extrema
 
 
 class TestDetectExtrema:
-    def test_local_maximum_marked_amarelo(self):
-        """Node higher than all neighbors → AMARELO."""
+    def test_local_maximum_marked_high_point(self):
+        """Node higher than all neighbors becomes HIGH_POINT."""
         G = nx.Graph()
         G.add_node("peak", x=0.0, y=0.0, z=100)
         G.add_node("left", x=-1.0, y=0.0, z=90)
@@ -17,10 +17,10 @@ class TestDetectExtrema:
         G.add_edge("peak", "right", length_m=50)
 
         G = detect_extrema(G, epsilon=0.5, min_prominence=2.0)
-        assert G.nodes["peak"].get("node_type") == "AMARELO"
+        assert G.nodes["peak"].get("node_type") == "HIGH_POINT"
 
-    def test_local_minimum_marked_azul_escuro(self):
-        """Node lower than all neighbors → AZUL_ESCURO."""
+    def test_local_minimum_marked_low_point(self):
+        """Node lower than all neighbors becomes LOW_POINT."""
         G = nx.Graph()
         G.add_node("valley", x=0.0, y=0.0, z=80)
         G.add_node("left", x=-1.0, y=0.0, z=90)
@@ -29,7 +29,7 @@ class TestDetectExtrema:
         G.add_edge("valley", "right", length_m=50)
 
         G = detect_extrema(G, epsilon=0.5, min_prominence=2.0)
-        assert G.nodes["valley"].get("node_type") == "AZUL_ESCURO"
+        assert G.nodes["valley"].get("node_type") == "LOW_POINT"
 
     def test_low_prominence_ignored(self):
         """Node barely higher than neighbors (< min_prominence) → not marked."""

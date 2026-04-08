@@ -34,6 +34,7 @@ from urbanus_api.data.database import get_db
 from urbanus_api.data.repositories import ProjectRepository, save_sewer_network_to_postgis
 from urbanus_geo.calculations import haversine
 from urbanus_geo.constants import MIN_PV_SPACING
+from urbanus_geo.types import NodeType, normalize_node_type
 
 app = FastAPI()
 
@@ -176,7 +177,7 @@ def _select_collection_points(
 
     Priority:
     1. Explicitly marked collection points from the edited graph.
-    2. Automatic low points (`AZUL_ESCURO`), spatially deduplicated so we
+    2. Automatic low points (`LOW_POINT`), spatially deduplicated so we
        keep only the deepest low point inside each local cluster.
 
     The outlet is always preserved.
@@ -186,7 +187,7 @@ def _select_collection_points(
 
     candidates = [
         node for node, data in G.nodes(data=True)
-        if data.get("node_type") == "AZUL_ESCURO"
+        if normalize_node_type(data.get("node_type")) == NodeType.LOW_POINT
     ]
     candidates.sort(
         key=lambda node: (
@@ -226,12 +227,13 @@ def _build_graph_from_edited(data: ProcessRequest) -> nx.Graph:
 
     G = nx.Graph()
     for n in data.nodes or []:
+        node_type = normalize_node_type(n.get("node_type") or n.get("nodeType"))
         G.add_node(
             n["id"],
             x=n.get("lng", n.get("x", 0)),
             y=n.get("lat", n.get("y", 0)),
             z=n.get("elevation", n.get("z")),
-            node_type=n.get("node_type") or n.get("nodeType"),
+            node_type=node_type.value if node_type else None,
             pv_obrigatorio=n.get("pv_obrigatorio") or n.get("pvObrigatorio", False),
             is_intersection=n.get("is_intersection") or n.get("isIntersection", False),
             is_endpoint=n.get("is_endpoint") or n.get("isEndpoint", False),
@@ -326,7 +328,7 @@ async def process_sewer_network(
     # Update mandatory set after sanitization
     mandatory = {
         n for n, d in G.nodes(data=True)
-        if d.get("pv_obrigatorio", False) or d.get("node_type") == "ROSA"
+        if d.get("pv_obrigatorio", False) or normalize_node_type(d.get("node_type")) == NodeType.MANDATORY
     }
 
     # Find outlet (lowest elevation node)

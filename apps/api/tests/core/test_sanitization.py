@@ -94,8 +94,8 @@ class TestResolveCurveClusters:
 
 
 class TestDetectGradeBreaks:
-    def test_slope_change_marks_rosa(self):
-        """Abrupt slope change → ROSA."""
+    def test_slope_change_marks_mandatory(self):
+        """Abrupt slope change marks the node as mandatory."""
         G = nx.Graph()
         G.add_node("A", x=0.0, y=0.0, z=100)
         G.add_node("B", x=1.0, y=0.0, z=95, pv_obrigatorio=False)
@@ -107,7 +107,7 @@ class TestDetectGradeBreaks:
         # diff = 0.09 > 0.03 threshold
 
         G = detect_grade_breaks(G)
-        assert G.nodes["B"].get("node_type") == "ROSA"
+        assert G.nodes["B"].get("node_type") == "MANDATORY"
 
     def test_gradual_slope_unchanged(self):
         """Consistent slope → no marking."""
