@@ -1,15 +1,12 @@
 """
-Etapa 6 — Repeated Shortest Path Heuristic (RSPH) para roteamento gravitacional.
+Step 6 - Repeated Shortest Path Heuristic (RSPH) for gravity routing.
 
-Constrói uma árvore de escoamento por gravidade conectando todos os nós
-obrigatórios ao ponto de descarga (outlet) pelo caminho de menor custo.
-
-O algoritmo:
-1. Cria um grafo direcionado (alto → baixo = gravidade).
-2. Para cada nó obrigatório, encontra o caminho de menor custo até o outlet.
-3. Arestas já usadas ganham desconto (REUSE_BONUS) para favorecer
-   convergência em troncos coletores.
-4. Nós sem caminho viável ficam em unreachable.
+RSPH builds a directed sewer flow tree by connecting mandatory nodes to one of
+the available collection points. Edges are oriented downhill when elevation is
+known, each mandatory node is connected through the least-cost Dijkstra path,
+and edges already inserted in the tree become cheaper so future paths converge
+into collector trunks. Nodes without a feasible gravity path are reported as
+unreachable instead of being forced into the tree.
 """
 
 from __future__ import annotations
@@ -24,26 +21,25 @@ def rsph_sewer_routing(
     mandatory_nodes: set[str],
     collection_points: set[str] | None = None,
 ) -> tuple[nx.DiGraph, list[str]]:
-    """Executa RSPH para rotear esgoto por gravidade.
+    """Route mandatory nodes into a directed sewer tree.
 
-    Supports multiple collection points via a virtual super-sink.
-    Each mandatory node is routed to the nearest collection point
-    (determined by Dijkstra cost), not necessarily to the global outlet.
+    Multiple collection points are modeled by adding a temporary virtual
+    super-sink connected by zero-length edges. Dijkstra can then choose the
+    cheapest sink for each mandatory node without special-case branching.
 
     Args:
-        G: Grafo não-direcionado com atributos (x, y, z) nos nós
-           e (length_m) nas arestas.
-        outlet: ID do nó de descarga (ponto mais baixo).
-        mandatory_nodes: Conjunto de IDs de nós que devem ser conectados.
-        collection_points: IDs dos pontos de coleta. If None, uses only
-            the outlet as the single collection point.
+        G: Undirected source graph with node coordinates/elevation (``x``,
+            ``y``, ``z``) and edge lengths in ``length_m``.
+        outlet: Fallback discharge node. It is always treated as a sink.
+        mandatory_nodes: Node ids that must be routed if a path exists.
+        collection_points: Optional sink node ids. When omitted, only the
+            outlet is used.
 
     Returns:
-        Tupla (tree, unreachable):
-        - tree: DiGraph representando a árvore de escoamento.
-        - unreachable: Lista de IDs de nós sem caminho gravitacional.
+        A tuple ``(tree, unreachable)`` where ``tree`` is the directed sewer
+        flow tree and ``unreachable`` contains mandatory nodes with no path.
     """
-    # 1. Criar grafo direcionado (gravidade: alto → baixo)
+    # Convert the undirected street graph into a directed gravity graph.
     DG = nx.DiGraph()
     for node, data in G.nodes(data=True):
         DG.add_node(node, **data)
@@ -53,18 +49,21 @@ def rsph_sewer_routing(
         z_v = G.nodes[v].get("z")
 
         if z_u is not None and z_v is not None:
+            # Equal elevations intentionally allow both directions; the cost
+            # function will still reject non-positive slopes when appropriate.
             if z_u >= z_v:
                 DG.add_edge(u, v, **data)
             if z_v >= z_u:
                 DG.add_edge(v, u, **data)
         else:
-            # Without elevation data, allow both directions
+            # With incomplete terrain data, keep both directions available and
+            # let edge_cost apply the missing-elevation penalty.
             DG.add_edge(u, v, **data)
             DG.add_edge(v, u, **data)
 
-    # 2. Virtual super-sink for multiple collection points
+    # A virtual super-sink lets one Dijkstra call route to the cheapest sink.
     sinks = collection_points or set()
-    sinks = sinks | {outlet}  # outlet is always a collection point
+    sinks = sinks | {outlet}
 
     SUPER_SINK = "__super_sink__"
     DG.add_node(SUPER_SINK)
@@ -72,7 +71,7 @@ def rsph_sewer_routing(
         if cp in DG:
             DG.add_edge(cp, SUPER_SINK, length_m=0)
 
-    # 3. Iteratively connect mandatory nodes to nearest collection point
+    # Seed the output tree with all real sinks so routed branches can terminate.
     tree = nx.DiGraph()
     for cp in sinks:
         if cp in G:
@@ -80,7 +79,8 @@ def rsph_sewer_routing(
     reused_edges: set[tuple[str, str]] = set()
     unreachable: list[str] = []
 
-    # Sort by elevation descending (highest first → longest paths first).
+    # Higher nodes are routed first because they tend to produce the longest
+    # trunk paths; later lower nodes can then reuse those trunks at a discount.
     sorted_nodes = sorted(
         mandatory_nodes - sinks,
         key=lambda n: (G.nodes[n].get("z") is None, -(G.nodes[n].get("z") or 0)),
@@ -102,11 +102,12 @@ def rsph_sewer_routing(
             unreachable.append(node)
             continue
 
-        # Add path to tree (excluding the virtual super-sink)
+        # Copy only real graph nodes/edges into the result; the super-sink is
+        # an internal routing trick and must never appear in API output.
         for i in range(len(path) - 1):
             u, v = path[i], path[i + 1]
             if v == SUPER_SINK:
-                break  # Don't add super-sink to real tree
+                break
             if not tree.has_node(u):
                 tree.add_node(u, **DG.nodes[u])
             if not tree.has_node(v):
@@ -115,7 +116,7 @@ def rsph_sewer_routing(
                 tree.add_edge(u, v, **DG.edges[u, v])
             reused_edges.add((u, v))
 
-    # Cleanup: remove super-sink
+    # Keep the temporary directed graph clean for easier debugging.
     DG.remove_node(SUPER_SINK)
 
     return tree, unreachable

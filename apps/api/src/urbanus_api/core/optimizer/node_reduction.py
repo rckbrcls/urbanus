@@ -1,10 +1,11 @@
 """
-Otimizacao de nos da rede de esgoto.
+Sewer node reduction and PV placement optimization.
 
-Minimiza o numero de PVs (pocos de visita) na rede usando:
-  Phase 1: Contracao gulosa (pass-through + cadeias + juncoes)
-  Phase 2: Refinamento MILP (scipy, opcional)
-  Phase 3: Agrupamento espacial e validacao final
+This module minimizes the number of physical access nodes left in the directed
+sewer network while preserving constraints that make a through-pipe valid:
+maximum PV spacing, maximum direction deflection, and maximum terrain grade
+break. The optimizer mutates the NetworkX graph in-place and keeps the outlet
+protected from removal.
 """
 
 from __future__ import annotations
@@ -27,7 +28,17 @@ from urbanus_geo.constants import (
 def _direction_angle(tree: nx.DiGraph, a: str, b: str, c: str) -> float:
     """Deflection angle at node b between edges a->b and b->c (degrees).
 
-    Returns 0 for a straight line, 180 for a U-turn.
+    The internal geometric angle is converted to deflection so a straight line
+    returns 0 degrees and a U-turn returns 180 degrees.
+
+    Args:
+        tree: Directed sewer graph with node coordinates in ``x``/``y``.
+        a: Upstream neighbor id.
+        b: Node where the direction changes.
+        c: Downstream neighbor id.
+
+    Returns:
+        Deflection angle in degrees.
     """
     from urbanus_geo.calculations import angle_at_node
 
@@ -43,7 +54,20 @@ def _direction_angle(tree: nx.DiGraph, a: str, b: str, c: str) -> float:
 
 
 def _slope_break(tree: nx.DiGraph, a: str, b: str, c: str) -> float:
-    """Absolute slope difference (m/m) between edges a->b and b->c."""
+    """Return the absolute terrain-slope change at a pass-through node.
+
+    Missing elevation means the grade break cannot be proven, so the helper
+    returns ``0`` and lets other constraints decide whether the node can merge.
+
+    Args:
+        tree: Directed sewer graph with ``z`` node elevations.
+        a: Upstream neighbor id.
+        b: Candidate node id.
+        c: Downstream neighbor id.
+
+    Returns:
+        Absolute slope difference in m/m between ``a -> b`` and ``b -> c``.
+    """
     z_a = tree.nodes[a].get("z")
     z_b = tree.nodes[b].get("z")
     z_c = tree.nodes[c].get("z")
@@ -69,6 +93,17 @@ def _is_through_pipe(
     - Deflection angle < DIRECTION_CHANGE_THRESHOLD (45 deg)
     - Slope break < GRADE_BREAK_THRESHOLD (3%)
     - Merged length <= max_spacing
+
+    Args:
+        tree: Directed sewer graph.
+        node: Candidate node that may be removed.
+        pred: The only upstream node for this through-pipe check.
+        succ: The only downstream node for this through-pipe check.
+        max_spacing: Maximum allowed length after merging both edges.
+
+    Returns:
+        ``True`` when the middle node can be removed without violating the
+        current geometric and spacing constraints.
     """
     d1 = tree.edges[pred, node].get("length_m", 0)
     d2 = tree.edges[node, succ].get("length_m", 0)
@@ -93,6 +128,16 @@ def _merge_edge_pair(
     Preserves only pre-existing edge waypoints. The removed node position
     is intentionally not promoted to the merged edge geometry, so the
     processed network reflects the simplified topology immediately.
+
+    Args:
+        tree: Directed sewer graph to mutate.
+        pred: Upstream node id.
+        node: Middle node id to remove.
+        succ: Downstream node id.
+
+    Returns:
+        None. The graph is rewired in-place when no ``pred -> succ`` edge
+        already exists.
     """
     d1 = tree.edges[pred, node].get("length_m", 0)
     d2 = tree.edges[node, succ].get("length_m", 0)
@@ -100,7 +145,8 @@ def _merge_edge_pair(
     e2 = dict(tree.edges[node, succ])
     merged = {**e1, **e2, "length_m": d1 + d2}
 
-    # Keep only geometry that already existed on the input edges.
+    # Keep only geometry that already existed on the input edges. The removed
+    # node is a topology simplification, not a new waypoint to render.
     wp1 = list(e1.get("waypoints") or [])
     wp2 = list(e2.get("waypoints") or [])
     waypoints = wp1 + wp2
@@ -112,6 +158,8 @@ def _merge_edge_pair(
     tree.remove_edge(pred, node)
     tree.remove_edge(node, succ)
 
+    # The node may still have other incident edges when called from junction
+    # simplification; remove it only after the local pair is fully detached.
     if tree.in_degree(node) == 0 and tree.out_degree(node) == 0:
         tree.remove_node(node)
 
@@ -120,7 +168,7 @@ def _merge_edge_pair(
 
 
 # ---------------------------------------------------------------------------
-# Phase 1 — Greedy contraction
+# Phase 1 - Greedy contraction
 # ---------------------------------------------------------------------------
 
 def _simplify_junctions(tree: nx.DiGraph, max_spacing: float) -> None:
@@ -133,6 +181,13 @@ def _simplify_junctions(tree: nx.DiGraph, max_spacing: float) -> None:
     - Remaining in-edges (X->J) become X->S (flow to downstream)
     - Remaining out-edges (J->Y) become P->Y (flow from upstream)
     Then J is removed entirely.
+
+    Args:
+        tree: Directed sewer graph to mutate.
+        max_spacing: Maximum allowed length for any merged through-pipe.
+
+    Returns:
+        None. Eligible junctions are simplified in-place until stable.
     """
     changed = True
     while changed:
@@ -153,6 +208,8 @@ def _simplify_junctions(tree: nx.DiGraph, max_spacing: float) -> None:
                         continue
                     if not _is_through_pipe(tree, node, pred, succ, max_spacing):
                         continue
+                    # Prefer the straightest valid through-pipe so the junction
+                    # keeps the most natural trunk alignment.
                     angle = _direction_angle(tree, pred, node, succ)
                     score = (45.0 - angle) / 45.0
                     if score > best_score:
@@ -172,6 +229,8 @@ def _simplify_junctions(tree: nx.DiGraph, max_spacing: float) -> None:
                     edata = dict(tree.edges[x, node])
                     tree.remove_edge(x, node)
                     if x != succ and not tree.has_edge(x, succ):
+                        # Empty waypoint lists are removed to avoid serializing
+                        # misleading geometry on synthetic shortcut edges.
                         if not edata.get("waypoints"):
                             edata.pop("waypoints", None)
                         tree.add_edge(x, succ, **edata)
@@ -180,6 +239,8 @@ def _simplify_junctions(tree: nx.DiGraph, max_spacing: float) -> None:
                     edata = dict(tree.edges[node, y])
                     tree.remove_edge(node, y)
                     if y != pred and not tree.has_edge(pred, y):
+                        # Route outgoing branches through the upstream side of
+                        # the selected trunk once the junction disappears.
                         if not edata.get("waypoints"):
                             edata.pop("waypoints", None)
                         tree.add_edge(pred, y, **edata)
@@ -196,6 +257,13 @@ def _greedy_contract(tree: nx.DiGraph, max_spacing: float) -> None:
     Iterates until no more contractions are possible:
     1. Simplify junctions (merge through-pipe pairs)
     2. Remove pass-through nodes (degree 2, 1-in 1-out)
+
+    Args:
+        tree: Directed sewer graph to mutate.
+        max_spacing: Maximum allowed spacing between consecutive kept PVs.
+
+    Returns:
+        None. Nodes are removed in-place until no local merge is valid.
     """
     changed = True
     while changed:
@@ -214,6 +282,8 @@ def _greedy_contract(tree: nx.DiGraph, max_spacing: float) -> None:
             if tree.in_degree(node) != 1 or tree.out_degree(node) != 1:
                 continue
 
+            # A pure pass-through node has exactly one upstream and one
+            # downstream edge, so merging it cannot change branch topology.
             pred = next(tree.predecessors(node))
             succ = next(tree.successors(node))
             if pred == succ:
@@ -226,13 +296,24 @@ def _greedy_contract(tree: nx.DiGraph, max_spacing: float) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — MILP refinement
+# Optional MILP refinement
 # ---------------------------------------------------------------------------
 
 def _milp_refine(tree: nx.DiGraph, max_spacing: float) -> None:
-    """Phase 2: MILP refinement of remaining non-mandatory nodes.
+    """Refine remaining non-mandatory nodes with an optional MILP solve.
 
-    Uses scipy.optimize.milp if available; otherwise skips silently.
+    Candidate degree-2 nodes are modeled as binary variables where ``1`` means
+    keep the node and ``0`` means remove it. Chain constraints keep enough nodes
+    to satisfy ``max_spacing`` along long uninterrupted runs. If SciPy is not
+    installed, or if the solver cannot find a valid solution, this refinement is
+    skipped without changing the graph.
+
+    Args:
+        tree: Directed sewer graph to mutate.
+        max_spacing: Maximum allowed spacing between consecutive kept PVs.
+
+    Returns:
+        None. Successful solves remove nodes in-place.
     """
     try:
         from scipy.optimize import LinearConstraint, milp
@@ -243,6 +324,8 @@ def _milp_refine(tree: nx.DiGraph, max_spacing: float) -> None:
 
     candidates = []
     for node in tree.nodes:
+        # MILP only reasons about simple pass-through nodes. Branches and
+        # mandatory PVs were already protected by earlier phases.
         if tree.nodes[node].get("pv_obrigatorio"):
             continue
         if tree.in_degree(node) != 1 or tree.out_degree(node) != 1:
@@ -271,6 +354,8 @@ def _milp_refine(tree: nx.DiGraph, max_spacing: float) -> None:
         chain = [node]
         visited.add(node)
 
+        # Expand left and right across adjacent candidates to build one linear
+        # chain whose spacing can be constrained as a group.
         cur = node
         while True:
             pred = next(tree.predecessors(cur))
@@ -298,6 +383,8 @@ def _milp_refine(tree: nx.DiGraph, max_spacing: float) -> None:
             total_length += tree.edges[chain[i - 1], chain[i]].get("length_m", 0)
         total_length += tree.edges[chain[-1], chain_end].get("length_m", 0)
 
+        # Keep the minimum number of interior nodes needed so no segment
+        # between preserved PVs exceeds max_spacing.
         n_min = max(0, math.ceil(total_length / max_spacing) - 1)
         if n_min > 0:
             row = [0.0] * n
@@ -308,6 +395,8 @@ def _milp_refine(tree: nx.DiGraph, max_spacing: float) -> None:
 
     c = np.ones(n)
     integrality = np.ones(n)
+    # Bound every binary variable to [0, 1]. The objective minimizes the number
+    # of kept nodes, while chain constraints prevent over-aggressive removal.
     bounds = LinearConstraint(speye(n), 0, 1)
 
     if constraints_A:
@@ -328,11 +417,13 @@ def _milp_refine(tree: nx.DiGraph, max_spacing: float) -> None:
                 pred = next(tree.predecessors(node))
                 succ = next(tree.successors(node))
                 if pred != succ:
+                    # Re-check local topology before mutating because earlier
+                    # removals in this loop may have changed neighboring edges.
                     _merge_edge_pair(tree, pred, node, succ)
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 — Spatial clustering of close nodes
+# Spatial clustering of close nodes
 # ---------------------------------------------------------------------------
 
 def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> None:
@@ -343,6 +434,15 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
     other members are redirected to the representative.
 
     The outlet node is never absorbed into another node.
+
+    Args:
+        tree: Directed sewer graph to mutate.
+        radius: Clustering radius in meters.
+        outlet: Optional outlet node id that must remain the representative of
+            any cluster containing it.
+
+    Returns:
+        None. Close nodes are merged in-place.
     """
     from urbanus_geo.calculations import haversine
 
@@ -351,39 +451,42 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
     if n < 2:
         return
 
-    # Union-Find
+    # Union-Find groups all nodes linked by pairwise proximity.
     parent = {nd: nd for nd in nodes}
 
     def find(x: str) -> str:
+        """Return the representative id for a proximity cluster."""
         while parent[x] != x:
             parent[x] = parent[parent[x]]
             x = parent[x]
         return x
 
     def union(a: str, b: str) -> None:
+        """Merge two proximity clusters."""
         ra, rb = find(a), find(b)
         if ra != rb:
             parent[rb] = ra
 
-    # Build clusters within radius
+    # Cache coordinates so the pair scan does not repeatedly touch node attrs.
     coords = {
         nd: (tree.nodes[nd].get("y", 0), tree.nodes[nd].get("x", 0))
         for nd in nodes
     }
-    # Quick filter: ~0.0002 degrees ≈ 20m at equator
+    # Quick degree filter avoids haversine calls for obviously distant nodes.
     deg_threshold = radius / 111_000
     for i in range(n):
         ai = coords[nodes[i]]
         for j in range(i + 1, n):
             bj = coords[nodes[j]]
-            # Fast euclidean pre-filter in degrees
+            # The pre-filter is conservative near the equator and acceptable as
+            # an early rejection before the exact haversine distance.
             if abs(ai[0] - bj[0]) > deg_threshold or abs(ai[1] - bj[1]) > deg_threshold:
                 continue
             dist = haversine(ai[0], ai[1], bj[0], bj[1])
             if dist <= radius:
                 union(nodes[i], nodes[j])
 
-    # Group by cluster root
+    # Convert Union-Find parent links into explicit member lists.
     clusters: dict[str, list[str]] = {}
     for nd in nodes:
         root = find(nd)
@@ -393,7 +496,8 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
         if len(members) < 2:
             continue
 
-        # Pick representative: outlet > highest total degree > first
+        # Preserve the outlet when present; otherwise keep the node with the
+        # most incident flow because it best represents the local topology.
         rep = members[0]
         for m in members:
             if m == outlet:
@@ -415,6 +519,8 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
                 edata = dict(tree.edges[pred, m])
                 tree.remove_edge(pred, m)
                 if pred in member_set or pred == rep:
+                    # Internal cluster edges disappear because all members now
+                    # collapse to the same representative.
                     continue
                 if not tree.has_edge(pred, rep):
                     if not edata.get("waypoints"):
@@ -425,6 +531,7 @@ def _merge_close_nodes(tree: nx.DiGraph, radius: float, outlet: str | None) -> N
                 edata = dict(tree.edges[m, succ])
                 tree.remove_edge(m, succ)
                 if succ in member_set or succ == rep:
+                    # Avoid self-loops after the cluster collapses.
                     continue
                 if not tree.has_edge(rep, succ):
                     if not edata.get("waypoints"):
@@ -446,18 +553,21 @@ def optimize_node_placement(
 ) -> None:
     """Minimize nodes in the sewer network tree (in-place).
 
-    Phase 1: Greedy contraction (pass-through + chains + junctions)
-             Uses NO length limit — merge everything that's geometrically
-             valid (angle < 45°, grade break < 3%).
-    Phase 2: MILP refinement (scipy, optional)
-    Phase 3: Spatial clustering of nearby nodes plus final DAG validation.
+    The optimizer protects the outlet, greedily removes valid through-pipe
+    nodes and junction shortcuts, merges spatially duplicated nodes, repairs any
+    cycles created by spatial merging, and finally runs an optional MILP pass to
+    remove additional simple pass-through nodes while respecting spacing.
 
     Args:
-        tree: Directed sewer network DAG.
+        tree: Directed sewer network DAG to mutate.
         max_spacing: Maximum distance between consecutive PVs (m).
         outlet: Outlet node ID (always kept).
+
+    Returns:
+        None. ``tree`` is modified in-place.
     """
     if outlet and tree.has_node(outlet):
+        # The discharge point must survive every optimization phase.
         tree.nodes[outlet]["pv_obrigatorio"] = True
 
     # Phase 1: merge only when the result fits the real spacing target.
@@ -465,17 +575,18 @@ def optimize_node_placement(
     # node reduction in the current pipeline.
     _greedy_contract(tree, max_spacing)
 
-    # Phase 2: Merge spatially clustered nodes (< 20m apart)
+    # Spatial cleanup: merge clustered nodes (< 20m apart).
     _merge_close_nodes(tree, radius=20.0, outlet=outlet)
 
-    # Safety: spatial merging can create cycles — break them
+    # Safety: spatial merging can create cycles, so break them.
     if not nx.is_directed_acyclic_graph(tree):
         while True:
             try:
                 cycle = nx.find_cycle(tree)
             except nx.NetworkXNoCycle:
                 break
-            # Remove the edge with smallest elevation drop (most uphill)
+            # Remove the least gravity-friendly edge in the cycle. This keeps
+            # the strongest downhill edges when there is a topological conflict.
             worst = min(
                 cycle,
                 key=lambda e: (
@@ -485,5 +596,5 @@ def optimize_node_placement(
             )
             tree.remove_edge(worst[0], worst[1])
 
-    # Phase 3: MILP refine with real spacing
+    # Optional final refinement with real spacing.
     _milp_refine(tree, max_spacing)

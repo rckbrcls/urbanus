@@ -1,20 +1,11 @@
 """
-Etapa 6.5 — Garantir cobertura total da rede.
+Step 6.5 - Ensure full street coverage after RSPH.
 
-Após o RSPH construir a árvore principal (tronco coletor),
-adiciona de volta TODAS as arestas do grafo original que não
-foram incluídas na árvore. Cada rua precisa de um coletor —
-casas ao longo de arestas descartadas ficariam sem esgoto.
-
-Para cada aresta adicionada:
-- Direção gravitacional (alto → baixo) se ambos nós têm elevação.
-- Se só um tem elevação, a aresta aponta para o nó com elevação.
-- Se nenhum tem, usa a direção original do grafo.
-
-Após adicionar todas as arestas, faz limpeza final:
-- Remove nós isolados (grau 0).
-- Remove nós intermediários redundantes (grau 2 total, não-obrigatórios)
-  mesclando suas arestas — minimiza custo de construção de PVs.
+RSPH builds the main gravity trunk from mandatory nodes, but it can omit street
+edges that were not part of a cheapest path. This module adds those missing
+edges back into the directed tree so every original street segment can receive
+a collector. Added edges prefer gravity direction, then fall back to
+connectivity heuristics when elevation is incomplete.
 """
 
 from __future__ import annotations
@@ -23,9 +14,18 @@ import networkx as nx
 
 
 def _would_create_cycle(tree: nx.DiGraph, src: str, dst: str) -> bool:
-    """Return True if adding edge src→dst would create a cycle.
+    """Return True if adding edge ``src -> dst`` would create a cycle.
 
-    A cycle forms if dst already has a directed path to src in the tree.
+    A cycle forms when ``dst`` already has a directed path back to ``src``.
+    Missing nodes cannot create a cycle because NetworkX has no path to follow.
+
+    Args:
+        tree: Directed sewer graph that should remain acyclic.
+        src: Candidate edge source.
+        dst: Candidate edge target.
+
+    Returns:
+        ``True`` when adding ``src -> dst`` would break DAG invariants.
     """
     if src == dst:
         return True
@@ -35,38 +35,44 @@ def _would_create_cycle(tree: nx.DiGraph, src: str, dst: str) -> bool:
 
 
 def ensure_full_coverage(tree: nx.DiGraph, G: nx.Graph) -> None:
-    """Adiciona ao ``tree`` todas as arestas de ``G`` que ainda não existem.
+    """Add every missing source-graph edge to the directed sewer tree.
 
-    Modifica ``tree`` in-place. After adding edges, cleans up:
-    - Isolated nodes (degree 0)
-    - Redundant intermediate nodes (total degree 2, not mandatory)
+    The function mutates ``tree`` in-place and does not return a value. It
+    preserves existing tree edges, creates missing endpoint nodes, chooses a
+    directed orientation for each missing edge, rejects orientations that would
+    create cycles, and removes isolated nodes after coverage is restored.
 
     Args:
-        tree: Árvore de escoamento resultante do RSPH.
-        G: Grafo original completo (não-direcionado).
+        tree: Directed tree produced by RSPH and previous repair passes.
+        G: Complete sanitized undirected graph whose edges must be covered.
     """
     for u, v, data in G.edges(data=True):
-        # Skip if edge already in tree (either direction)
+        # A street segment already covered in either direction does not need a
+        # duplicate collector edge.
         if tree.has_edge(u, v) or tree.has_edge(v, u):
             continue
 
-        # Ensure both nodes exist in tree
+        # Coverage repair can introduce nodes that RSPH never touched.
         if not tree.has_node(u):
             tree.add_node(u, **G.nodes[u])
         if not tree.has_node(v):
             tree.add_node(v, **G.nodes[v])
 
-        # Determine direction: high → low (gravity)
+        # Prefer high-to-low direction whenever both elevations are known.
         z_u = G.nodes[u].get("z")
         z_v = G.nodes[v].get("z")
 
         if z_u is not None and z_v is not None:
             src, dst = (u, v) if z_u >= z_v else (v, u)
         elif z_u is not None:
+            # With one known elevation, route toward the known terrain point so
+            # the edge can connect into an already measured graph.
             src, dst = v, u
         elif z_v is not None:
             src, dst = u, v
         else:
+            # With no terrain data, favor attaching the new segment into the
+            # already-routed core rather than extending flow away from it.
             if _is_connected_to_tree_core(tree, u):
                 src, dst = v, u
             else:
@@ -74,10 +80,10 @@ def ensure_full_coverage(tree: nx.DiGraph, G: nx.Graph) -> None:
 
         if _would_create_cycle(tree, src, dst):
             # Gravity direction creates cycle. In a DAG, at most one
-            # direction can create a cycle — try the reverse.
+            # direction can create a cycle, so try the reverse.
             src, dst = dst, src
             if _would_create_cycle(tree, src, dst):
-                # Both directions cycle → edge already reachable
+                # Both directions cycle, so the edge is already reachable.
                 continue
 
         tree.add_edge(src, dst, **data)
@@ -88,5 +94,13 @@ def ensure_full_coverage(tree: nx.DiGraph, G: nx.Graph) -> None:
 
 
 def _is_connected_to_tree_core(tree: nx.DiGraph, node: str) -> bool:
-    """Check if a node has any outgoing edges in the tree (i.e., is already routed)."""
+    """Return True when a node already participates in routed downstream flow.
+
+    Args:
+        tree: Directed sewer graph being repaired.
+        node: Candidate node id.
+
+    Returns:
+        ``True`` when the node exists and has at least one outgoing edge.
+    """
     return tree.has_node(node) and tree.out_degree(node) > 0

@@ -1,5 +1,5 @@
 """
-Step 1 — Structural node classification.
+Step 1 - Structural node extraction and classification.
 
 Extracts nodes from an elevation-enriched street GeoJSON and labels:
 - MANDATORY: structurally preserved node
@@ -7,8 +7,8 @@ Extracts nodes from an elevation-enriched street GeoJSON and labels:
 - LOW_POINT: locally low node
 
 Modes:
-  - "intersections": apenas nós com grau >= 2 (cruzamentos reais)
-  - "all": todos os vértices de cada rua (para edição completa)
+  - "intersections": only real intersections and endpoints
+  - "all": every street vertex, used when the graph editor needs full detail
 """
 
 from __future__ import annotations
@@ -22,7 +22,12 @@ from urbanus_geo.types import NodeType
 
 
 def _is_meaningful_elevation(value: float | None) -> bool:
-    """Return True for valid, non-zero elevations."""
+    """Return True when an elevation value can be trusted for averaging.
+
+    The DEM enrichment path can produce ``0`` for boundary artifacts. Those
+    zeros are tracked separately during clustering so they do not dilute valid
+    elevations from coincident nodes.
+    """
     return value is not None and value != 0
 
 
@@ -30,27 +35,39 @@ def _cluster_nearby_nodes(
     nodes: list[dict[str, Any]],
     snap_distance: float = 5.0,
 ) -> list[dict[str, Any]]:
-    """Merge nodes within snap_distance meters using Union-Find.
+    """Merge nearby extracted nodes into one logical graph node.
 
-    The representative of each cluster is the node with highest degree.
-    Properties are merged: street_ids union, degree recalculated,
-    elevation averaged, pv_obrigatorio = any True in cluster.
+    Nodes closer than ``snap_distance`` meters are grouped with Union-Find.
+    Each cluster keeps the highest-degree node as representative because it is
+    the best structural anchor for intersections. Street ids/names are merged,
+    degree is recalculated from unique streets, valid elevations are averaged,
+    and mandatory-PV status is preserved if any member requires it.
+
+    Args:
+        nodes: Extracted node dictionaries using frontend-facing camelCase keys.
+        snap_distance: Maximum distance, in meters, for grouping nodes.
+
+    Returns:
+        A new list where clustered nodes are represented once.
     """
     n = len(nodes)
     if n == 0:
         return nodes
 
-    # Union-Find
+    # Union-Find keeps transitive nearby nodes in the same cluster, e.g. when
+    # A is near B and B is near C even if A is just outside C's radius.
     parent = list(range(n))
     rank = [0] * n
 
     def find(x: int) -> int:
+        """Return the canonical cluster index, compressing the path."""
         while parent[x] != x:
             parent[x] = parent[parent[x]]
             x = parent[x]
         return x
 
     def union(a: int, b: int) -> None:
+        """Join two clusters while keeping the tree shallow via rank."""
         ra, rb = find(a), find(b)
         if ra == rb:
             return
@@ -60,7 +77,8 @@ def _cluster_nearby_nodes(
         if rank[ra] == rank[rb]:
             rank[ra] += 1
 
-    # Build pairs within snap_distance
+    # Compare every pair because extracted node counts are small enough here,
+    # and the exact haversine distance avoids projection assumptions.
     for i in range(n):
         pi = nodes[i]["position"]
         for j in range(i + 1, n):
@@ -69,24 +87,25 @@ def _cluster_nearby_nodes(
             if dist <= snap_distance:
                 union(i, j)
 
-    # Group by cluster
+    # Materialize cluster membership after all pair unions are known.
     clusters: dict[int, list[int]] = {}
     for i in range(n):
         root = find(i)
         clusters.setdefault(root, []).append(i)
 
-    # Build merged nodes
+    # Build one representative node per spatial cluster.
     merged: list[dict[str, Any]] = []
     for indices in clusters.values():
         if len(indices) == 1:
             merged.append(nodes[indices[0]])
             continue
 
-        # Pick representative: highest original degree
+        # Prefer the node that already looked most connected before merging.
         rep_idx = max(indices, key=lambda i: (nodes[i].get("degree", 0), nodes[i].get("id", "")))
         rep = dict(nodes[rep_idx])
 
-        # Merge street_ids and street_names
+        # Aggregate every structural and display attribute contributed by the
+        # clustered vertices before rewriting the representative.
         all_street_ids: set[str] = set()
         all_street_names: set[str] = set()
         meaningful_elevations: list[float] = []
@@ -97,7 +116,7 @@ def _cluster_nearby_nodes(
         for i in indices:
             nd = nodes[i]
             all_street_ids.update(nd.get("connectedStreets", []))
-            # Include primary streetId — may not be in connectedStreets
+            # Include primary streetId; it may not be in connectedStreets.
             sid = nd.get("streetId")
             if sid:
                 all_street_ids.add(sid)
@@ -131,7 +150,7 @@ def _cluster_nearby_nodes(
             rep["nodeType"] = NodeType.MANDATORY.value
             rep["accessoryType"] = "PV"
         # Intersections are structural (for graph connectivity) but NOT
-        # mandatory PVs — the pipeline will decide which actually need PVs
+        # mandatory PVs; the pipeline will decide which actually need PVs
         # based on tree topology (junctions, direction changes, etc.).
         # Only mark as intersection for graph construction purposes.
 
@@ -141,11 +160,18 @@ def _cluster_nearby_nodes(
 
 
 def enforce_direction_changes(G) -> None:
-    """Mark degree-2 nodes with sharp deflection as mandatory.
+    """Mark sharp degree-2 pipe bends as mandatory PV nodes.
 
-    For each degree-2 node in the graph, compute the angle between the two
-    adjacent edges. If the deflection (180 - angle) exceeds
-    DIRECTION_CHANGE_THRESHOLD, the node needs a PV for the pipe bend.
+    The function mutates ``G`` in-place. Only simple pass-through nodes are
+    considered: existing mandatory PVs, endpoints, and intersections are left
+    untouched. A node becomes mandatory when the deflection angle between its
+    two adjacent edges exceeds ``DIRECTION_CHANGE_THRESHOLD``.
+
+    Args:
+        G: Graph whose nodes store longitude in ``x`` and latitude in ``y``.
+
+    Returns:
+        None. Matching nodes receive ``node_type`` and ``pv_obrigatorio``.
     """
     from urbanus_geo.calculations import angle_at_node
 
@@ -161,6 +187,7 @@ def enforce_direction_changes(G) -> None:
             continue
         n1, n2 = neighbors
 
+        # angle_at_node expects coordinate tuples ordered as (lat, lng).
         nd = G.nodes[node]
         n1d = G.nodes[n1]
         n2d = G.nodes[n2]
@@ -173,6 +200,8 @@ def enforce_direction_changes(G) -> None:
         deflection = 180.0 - angle
 
         if deflection > DIRECTION_CHANGE_THRESHOLD:
+            # A sharp bend needs a physical access point so the optimized pipe
+            # network cannot remove it later as a simple through-pipe.
             ndata["node_type"] = NodeType.MANDATORY.value
             ndata["pv_obrigatorio"] = True
 
@@ -181,16 +210,22 @@ def extract_nodes(
     geojson: dict[str, Any],
     mode: Literal["intersections", "all"] = "intersections",
 ) -> dict[str, Any]:
-    """
-    Extrai nós de um GeoJSON de ruas.
+    """Extract editable sewer graph nodes from street GeoJSON.
+
+    The input is expected to be a FeatureCollection whose LineString or
+    MultiLineString features may include ``properties.vertex_elevations`` with
+    one elevation per coordinate. The function performs two passes: first it
+    counts which streets share each rounded coordinate, then it emits nodes with
+    structural metadata and optional elevation classification.
 
     Args:
-        geojson: FeatureCollection com LineStrings enriquecidas (vertex_elevations)
-        mode: "intersections" retorna apenas grau >= 2;
-              "all" retorna todos os vértices (um por vértice por rua)
+        geojson: Street FeatureCollection, optionally enriched with vertex
+            elevation arrays.
+        mode: ``"intersections"`` keeps intersections and endpoints only;
+            ``"all"`` emits every street vertex.
 
     Returns:
-        Dict com "nodes" (lista) e "metadata" (estatísticas)
+        A dictionary with ``nodes`` and extraction ``metadata`` for the API.
     """
     features = geojson.get("features", [])
 
@@ -201,7 +236,8 @@ def extract_nodes(
         props = feature.get("properties", {})
         feature_ids.append(str(props.get("id", str(uuid.uuid4()))))
 
-    # Passo 1: Mapear posições -> street_ids (para calcular degree)
+    # First pass: map rounded positions to streets so degree is based on
+    # distinct connected streets rather than repeated vertices on one feature.
     position_map: dict[str, dict[str, Any]] = {}
     total_vertices = 0
 
@@ -226,6 +262,8 @@ def extract_nodes(
                     continue
 
                 lng, lat = coord[0], coord[1]
+                # Six decimals is roughly decimeter precision and matches the
+                # existing extraction contract before spatial clustering.
                 pos_key = f"{lat:.6f},{lng:.6f}"
 
                 if pos_key not in position_map:
@@ -234,7 +272,7 @@ def extract_nodes(
                 position_map[pos_key]["street_ids"].add(street_id)
                 position_map[pos_key]["street_names"].add(street_name)
 
-    # Passo 2: Construir nós
+    # Second pass: emit node records with elevation and structural flags.
     nodes = []
 
     for feature, street_id in zip(features, feature_ids):
@@ -266,7 +304,8 @@ def extract_nodes(
                 is_intersection = degree >= 2
                 is_endpoint = i == 0 or i == len(coordinates) - 1
 
-                # Filtrar por modo
+                # In compact mode, keep endpoints as well as true intersections
+                # so every street segment still has graph anchors.
                 if mode == "intersections" and not (is_intersection or is_endpoint):
                     continue
 
@@ -274,7 +313,8 @@ def extract_nodes(
                 if i < len(elevations) and elevations[i] is not None:
                     elevation = elevations[i]
 
-                # Classificação de nó (Etapa 1)
+                # Endpoints are preserved because open street ends need a
+                # stable graph node for routing and later editing.
                 node_type = None
                 pv_obrigatorio = False
 
@@ -282,7 +322,8 @@ def extract_nodes(
                     node_type = NodeType.MANDATORY.value
                     pv_obrigatorio = True
 
-                # Detecção de queda abrupta (> 0.50m entre vértices adjacentes)
+                # Abrupt per-vertex terrain changes are treated as mandatory
+                # split points so later simplification cannot smooth them away.
                 if elevation is not None and not pv_obrigatorio:
                     for di in [-1, 1]:
                         ni = i + di
@@ -313,10 +354,12 @@ def extract_nodes(
                 }
                 nodes.append(node)
 
-    # Passo 3.5: Clustering espacial — merge nós dentro de SNAP_DISTANCE_METERS
+    # Merge coincident or near-coincident vertices produced by different street
+    # features into one logical node before computing global extrema.
     nodes = _cluster_nearby_nodes(nodes, snap_distance=SNAP_DISTANCE_METERS)
 
-    # Passo 4: Marcar nós de maior e menor elevação
+    # Mark the highest and lowest intersection nodes for UI context. These
+    # labels do not override already-mandatory endpoint or PV decisions.
     highest_id = None
     lowest_id = None
     highest_elev = float("-inf")
@@ -344,7 +387,8 @@ def extract_nodes(
             if node["nodeType"] is None:
                 node["nodeType"] = NodeType.LOW_POINT.value
 
-    # Metadata (totalUniquePositions reflects pre-clustering count)
+    # totalUniquePositions intentionally reflects the pre-clustering coordinate
+    # map; filteredNodes reflects the final emitted node list.
     total_unique = len(position_map)
 
     metadata = {

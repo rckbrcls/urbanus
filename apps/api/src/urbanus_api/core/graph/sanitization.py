@@ -1,8 +1,11 @@
 """
-Steps 3-4 — Sewer graph sanitization.
+Steps 3-5.5 - Sewer graph sanitization.
 
-Step 3: remove redundant nodes.
-Step 4: resolve sharp-curve clusters.
+These helpers simplify the undirected street graph before gravity routing:
+- Step 3 removes very short non-mandatory pass-through nodes.
+- Step 4 replaces sharp curve vertices with a better curve control node.
+- Step 4.5 reduces mandatory PVs that are too close to each other.
+- Step 5.5 marks terrain grade breaks that should be preserved.
 """
 
 from __future__ import annotations
@@ -27,25 +30,26 @@ def remove_redundant_nodes(
     dist_min: float = REDUNDANT_NODE_MIN_DISTANCE,
     dist_max: float = LONG_EDGE_MAX_DISTANCE,
 ) -> nx.Graph:
-    """Etapa 3 — Remoção de nós redundantes.
+    """Remove short non-mandatory degree-2 nodes in-place.
 
-    Nós com grau 2 e distância < dist_min para ambos os vizinhos são
-    marked redundant and removed (merged edges).
-
-    Nós obrigatórios (pv_obrigatorio=True) nunca são removidos.
+    A node is removed only when it is a simple pass-through node, is not marked
+    ``pv_obrigatorio``, both adjacent edges are shorter than ``dist_min``, and
+    the merged edge would not exceed ``dist_max``. The two adjacent edges are
+    replaced by one edge whose ``length_m`` is their sum.
 
     Args:
-        G: Grafo NetworkX.
-        dist_min: Distância mínima entre nós (metros).
-        dist_max: Distância máxima resultante após merge.
+        G: Undirected graph with edge lengths in ``length_m``.
+        dist_min: Minimum useful spacing between kept nodes, in meters.
+        dist_max: Maximum allowed length for the merged replacement edge.
 
     Returns:
-        Grafo modificado (in-place).
+        The same graph instance after redundant nodes are removed.
     """
     removed = True
     while removed:
         removed = False
         for node in list(G.nodes):
+            # Iterate over a snapshot because nodes may be removed mid-pass.
             if node not in G:
                 continue
             ndata = G.nodes[node]
@@ -69,11 +73,14 @@ def remove_redundant_nodes(
             if merged_length > dist_max:
                 continue
 
-            # Merge edges
+            # Preserve existing edge metadata where possible, then override the
+            # physical length with the length of the new direct segment.
             e1_data = dict(G.edges[node, n1])
             e2_data = dict(G.edges[node, n2])
             merged_data = {**e1_data, **e2_data, "length_m": merged_length}
 
+            # Mark before removal so debugging snapshots taken earlier can see
+            # the reason this node was considered disposable.
             G.nodes[node]["node_type"] = NodeType.REDUNDANT.value
             G.remove_node(node)
             G.add_edge(n1, n2, **merged_data)
@@ -86,24 +93,27 @@ def resolve_curve_clusters(
     G: nx.Graph,
     angle_threshold: float = CURVE_ANGLE_THRESHOLD,
 ) -> nx.Graph:
-    """Etapa 4 — Resolução de clusters de curva.
+    """Replace sharp non-mandatory curve vertices with tangent intersections.
 
-    Sequências de nós com ângulo interno < angle_threshold são
-    substituídas por um único nó no ponto de interseção das
-    tangentes de entrada e saída.
+    Each eligible degree-2 node whose internal angle is below
+    ``angle_threshold`` is replaced by a synthetic intermediate node placed at
+    the intersection of the incoming and outgoing tangent lines. Mandatory PVs
+    are never replaced.
 
     Args:
-        G: Grafo NetworkX.
-        angle_threshold: Ângulo mínimo (graus). Nós com ângulo menor
-                         formam uma curva acentuada.
+        G: Undirected graph whose nodes store ``x``/``y`` coordinates.
+        angle_threshold: Minimum internal angle, in degrees. Smaller angles are
+            treated as sharp curves.
 
     Returns:
-        Grafo modificado (in-place).
+        The same graph instance after curve nodes are resolved.
     """
     processed = True
     while processed:
         processed = False
         for node in list(G.nodes):
+            # Repeat until stable because replacing one curve node can expose
+            # another eligible curve in the modified graph.
             if node not in G:
                 continue
             ndata = G.nodes[node]
@@ -125,11 +135,13 @@ def resolve_curve_clusters(
             b = (nd["y"], nd["x"])
             c = (n2d["y"], n2d["x"])
 
+            # Only sharp internal angles are candidates for tangent placement.
             angle = angle_at_node(a, b, c)
             if angle >= angle_threshold:
                 continue
 
-            # Find intersection of tangent lines for better placement
+            # The tangent intersection better represents the control point for
+            # a bend than keeping the original dense street vertex.
             intersection = line_intersection(a, b, b, c)
             if intersection is not None:
                 new_lat, new_lng = intersection
@@ -143,14 +155,16 @@ def resolve_curve_clusters(
             if math.isclose(new_lat, nd["y"], abs_tol=1e-9) and math.isclose(new_lng, nd["x"], abs_tol=1e-9):
                 continue
 
-            # Interpolate elevation
+            # The synthetic point has no DEM sample, so use the adjacent mean
+            # only when both neighbor elevations are available.
             z_n1 = n1d.get("z")
             z_n2 = n2d.get("z")
             new_z = None
             if z_n1 is not None and z_n2 is not None:
                 new_z = (z_n1 + z_n2) / 2.0
 
-            # Replace node with better-positioned one
+            # Rewire through the synthetic node and keep edge metadata from the
+            # two original adjacent edges.
             e1_data = dict(G.edges[node, n1])
             e2_data = dict(G.edges[node, n2])
 
@@ -171,10 +185,13 @@ def detect_grade_breaks(
     """Mark degree-2 nodes with abrupt terrain slope changes as mandatory.
 
     When the slope difference between the two adjacent edges exceeds the
-    threshold, a PV is needed to allow different pipe gradients on each side.
+    threshold, the node is marked ``MANDATORY`` so the optimizer can preserve
+    it if the grade break remains relevant. The function intentionally does not
+    set ``pv_obrigatorio``; later merge checks still verify slope continuity.
 
     Args:
-        G: Graph with node attribute 'z' and edge attribute 'length_m'.
+        G: Graph with node elevations in ``z`` and edge lengths in
+            ``length_m``.
         threshold: Minimum slope change (m/m) to trigger PV.
 
     Returns:
@@ -203,12 +220,14 @@ def detect_grade_breaks(
 
         d1 = G.edges[node, n1].get("length_m", 1.0)
         d2 = G.edges[node, n2].get("length_m", 1.0)
+        # Use absolute terrain slopes on each side; direction is irrelevant
+        # because this stage only decides whether the grade changes abruptly.
         slope1 = abs(z_n - z_1) / max(d1, 0.1)
         slope2 = abs(z_n - z_2) / max(d2, 0.1)
 
         if abs(slope1 - slope2) > threshold:
             ndata["node_type"] = NodeType.MANDATORY.value
-            # NOT pv_obrigatorio — the optimizer checks slope break
+            # NOT pv_obrigatorio: the optimizer checks slope break
             # before merging and will keep this node if truly needed.
 
     return G
@@ -218,16 +237,15 @@ def enforce_min_pv_spacing(
     G: nx.Graph,
     min_spacing: float = MIN_PV_SPACING,
 ) -> nx.Graph:
-    """Merge PV nodes that are closer than min_spacing (80m).
+    """Merge mandatory PV nodes that are closer than the spacing target.
 
-    Only removes a node if:
-    - It has degree 2 (not a real intersection)
-    - Both it and a neighbor are pv_obrigatorio
-    - It has no special criteria (grade break, direction change)
-    - Edge between them < min_spacing
+    The current implementation removes only the active node being inspected,
+    and only when it is a degree-2 PV with another mandatory PV neighbor closer
+    than ``min_spacing``. Real intersections are preserved because their degree
+    is not 2.
 
     Args:
-        G: Graph.
+        G: Undirected graph with ``pv_obrigatorio`` node flags.
         min_spacing: Minimum PV spacing (m).
 
     Returns:
@@ -256,7 +274,8 @@ def enforce_min_pv_spacing(
                 if edge_len >= min_spacing:
                     continue
 
-                # This PV is too close to another PV — remove and merge edges
+                # This PV is too close to another PV; remove the current node
+                # and bridge its two neighbors with a single edge.
                 n1, n2 = neighbors
                 other = n2 if nb == n1 else n1
                 d1 = G.edges[node, n1].get("length_m", 0)
