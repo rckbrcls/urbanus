@@ -14,7 +14,10 @@ from collections.abc import Callable
 import networkx as nx
 
 from urbanus_geo.constants import (
+    LONG_EDGE_MAX_DISTANCE,
     GRADE_BREAK_THRESHOLD,
+    MIN_PV_SPACING,
+    REDUNDANT_NODE_MIN_DISTANCE,
 )
 from urbanus_geo.types import NodeType
 
@@ -61,6 +64,49 @@ def collapse_degree2_nodes_by_distance(
             break
 
     return G
+
+
+def remove_redundant_nodes(
+    G: nx.Graph,
+    dist_min: float = REDUNDANT_NODE_MIN_DISTANCE,
+    dist_max: float = LONG_EDGE_MAX_DISTANCE,
+) -> nx.Graph:
+    """Remove short non-mandatory degree-2 nodes in-place.
+
+    A node is removed only when it is a simple pass-through node, is not marked
+    ``pv_obrigatorio``, both adjacent edges are shorter than ``dist_min``, and
+    the merged edge would not exceed ``dist_max``. The two adjacent edges are
+    replaced by one edge whose ``length_m`` is their sum.
+    """
+    return collapse_degree2_nodes_by_distance(
+        G,
+        should_collapse=lambda graph, node, neighbors, d1, d2: (
+            not graph.nodes[node].get("pv_obrigatorio", False)
+            and d1 < dist_min
+            and d2 < dist_min
+            and (d1 + d2) <= dist_max
+        ),
+    )
+
+
+def enforce_min_pv_spacing(
+    G: nx.Graph,
+    min_spacing: float = MIN_PV_SPACING,
+) -> nx.Graph:
+    """Merge mandatory PV nodes that are closer than the spacing target.
+
+    This collapses degree-2 PVs that are too close to another mandatory PV,
+    but it preserves explicit collection points so sinks are not removed.
+    """
+    return collapse_degree2_nodes_by_distance(
+        G,
+        should_collapse=lambda graph, node, neighbors, d1, d2: (
+            graph.nodes[node].get("pv_obrigatorio", False)
+            and not graph.nodes[node].get("is_collection_point", False)
+            and any(graph.nodes[nb].get("pv_obrigatorio", False) for nb in neighbors)
+            and min(d1, d2) < min_spacing
+        ),
+    )
 
 
 def detect_grade_breaks(
