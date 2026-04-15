@@ -23,7 +23,6 @@ from urbanus_api.core.graph.sanitization import (
     detect_grade_breaks,
     enforce_min_pv_spacing,
     remove_redundant_nodes,
-    resolve_curve_clusters,
 )
 from urbanus_api.core.graph.accessories import assign_accessory_types
 from urbanus_api.core.graph.coverage import ensure_full_coverage

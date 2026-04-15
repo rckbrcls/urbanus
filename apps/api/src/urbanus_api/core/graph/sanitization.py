@@ -3,22 +3,17 @@ Steps 3-5.5 - Sewer graph sanitization.
 
 These helpers simplify the undirected street graph before gravity routing:
 - Step 3 removes very short non-mandatory pass-through nodes.
-- Step 4 replaces sharp curve vertices with a better curve control node.
 - Step 4.5 reduces mandatory PVs that are too close to each other.
 - Step 5.5 marks terrain grade breaks that should be preserved.
 """
 
 from __future__ import annotations
 
-import math
-
 import networkx as nx
 
-from urbanus_geo.calculations import angle_at_node, line_intersection
 from urbanus_geo.constants import (
     REDUNDANT_NODE_MIN_DISTANCE,
     LONG_EDGE_MAX_DISTANCE,
-    CURVE_ANGLE_THRESHOLD,
     GRADE_BREAK_THRESHOLD,
     MIN_PV_SPACING,
 )
@@ -85,95 +80,6 @@ def remove_redundant_nodes(
             G.remove_node(node)
             G.add_edge(n1, n2, **merged_data)
             removed = True
-
-    return G
-
-
-def resolve_curve_clusters(
-    G: nx.Graph,
-    angle_threshold: float = CURVE_ANGLE_THRESHOLD,
-) -> nx.Graph:
-    """Replace sharp non-mandatory curve vertices with tangent intersections.
-
-    Each eligible degree-2 node whose internal angle is below
-    ``angle_threshold`` is replaced by a synthetic intermediate node placed at
-    the intersection of the incoming and outgoing tangent lines. Mandatory PVs
-    are never replaced.
-
-    Args:
-        G: Undirected graph whose nodes store ``x``/``y`` coordinates.
-        angle_threshold: Minimum internal angle, in degrees. Smaller angles are
-            treated as sharp curves.
-
-    Returns:
-        The same graph instance after curve nodes are resolved.
-    """
-    processed = True
-    while processed:
-        processed = False
-        for node in list(G.nodes):
-            # Repeat until stable because replacing one curve node can expose
-            # another eligible curve in the modified graph.
-            if node not in G:
-                continue
-            ndata = G.nodes[node]
-            if ndata.get("pv_obrigatorio", False):
-                continue
-            if G.degree(node) != 2:
-                continue
-
-            neighbors = list(G.neighbors(node))
-            if len(neighbors) != 2:
-                continue
-            n1, n2 = neighbors
-
-            nd = G.nodes[node]
-            n1d = G.nodes[n1]
-            n2d = G.nodes[n2]
-
-            a = (n1d["y"], n1d["x"])
-            b = (nd["y"], nd["x"])
-            c = (n2d["y"], n2d["x"])
-
-            # Only sharp internal angles are candidates for tangent placement.
-            angle = angle_at_node(a, b, c)
-            if angle >= angle_threshold:
-                continue
-
-            # The tangent intersection better represents the control point for
-            # a bend than keeping the original dense street vertex.
-            intersection = line_intersection(a, b, b, c)
-            if intersection is not None:
-                new_lat, new_lng = intersection
-            else:
-                continue
-
-            # The tangent-intersection heuristic can degenerate to the
-            # original vertex position. Replacing the node with an
-            # identical one makes no progress and causes the outer loop
-            # to repeat forever on frontend-edited graphs.
-            if math.isclose(new_lat, nd["y"], abs_tol=1e-9) and math.isclose(new_lng, nd["x"], abs_tol=1e-9):
-                continue
-
-            # The synthetic point has no DEM sample, so use the adjacent mean
-            # only when both neighbor elevations are available.
-            z_n1 = n1d.get("z")
-            z_n2 = n2d.get("z")
-            new_z = None
-            if z_n1 is not None and z_n2 is not None:
-                new_z = (z_n1 + z_n2) / 2.0
-
-            # Rewire through the synthetic node and keep edge metadata from the
-            # two original adjacent edges.
-            e1_data = dict(G.edges[node, n1])
-            e2_data = dict(G.edges[node, n2])
-
-            new_id = f"curve_{n1}_{n2}"
-            G.remove_node(node)
-            G.add_node(new_id, x=new_lng, y=new_lat, z=new_z, node_type=NodeType.INTERMEDIATE.value)
-            G.add_edge(n1, new_id, **e1_data)
-            G.add_edge(new_id, n2, **e2_data)
-            processed = True
 
     return G
 

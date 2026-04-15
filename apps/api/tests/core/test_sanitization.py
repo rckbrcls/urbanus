@@ -5,7 +5,6 @@ import pytest
 
 from urbanus_api.core.graph.sanitization import (
     remove_redundant_nodes,
-    resolve_curve_clusters,
     detect_grade_breaks,
     enforce_min_pv_spacing,
 )
@@ -50,47 +49,6 @@ class TestRemoveRedundantNodes:
 
         G = remove_redundant_nodes(G, dist_min=20, dist_max=100)
         assert "M" in G
-
-
-class TestResolveCurveClusters:
-    def test_straight_node_unchanged(self):
-        """Node at 180° → no change."""
-        G = nx.Graph()
-        G.add_node("A", x=0.0, y=0.0, z=100)
-        G.add_node("B", x=1.0, y=0.0, z=99, pv_obrigatorio=False)
-        G.add_node("C", x=2.0, y=0.0, z=98)
-        G.add_edge("A", "B", length_m=50)
-        G.add_edge("B", "C", length_m=50)
-
-        G = resolve_curve_clusters(G, angle_threshold=150)
-        assert "B" in G
-
-    def test_sharp_curve_noop_intersection_is_skipped(self):
-        """A no-op tangent intersection must not loop forever."""
-        G = nx.Graph()
-        G.add_node("A", x=0.0, y=0.0, z=100)
-        G.add_node("B", x=1.0, y=0.0, z=99, pv_obrigatorio=False)
-        G.add_node("C", x=1.0, y=1.0, z=98)
-        G.add_edge("A", "B", length_m=50)
-        G.add_edge("B", "C", length_m=50)
-
-        G = resolve_curve_clusters(G, angle_threshold=150)
-
-        assert "B" in G
-        assert G.number_of_nodes() == 3
-        assert set(G.neighbors("B")) == {"A", "C"}
-
-    def test_mandatory_curve_node_preserved(self):
-        """pv_obrigatorio=True curve node → not processed."""
-        G = nx.Graph()
-        G.add_node("A", x=0.0, y=0.0, z=100)
-        G.add_node("B", x=1.0, y=0.0, z=99, pv_obrigatorio=True)
-        G.add_node("C", x=1.0, y=1.0, z=98)
-        G.add_edge("A", "B", length_m=50)
-        G.add_edge("B", "C", length_m=50)
-
-        G = resolve_curve_clusters(G, angle_threshold=150)
-        assert "B" in G
 
 
 class TestDetectGradeBreaks:
