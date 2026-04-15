@@ -302,7 +302,7 @@ async def process_sewer_network(
         if d.get("pv_obrigatorio", False)
     }
 
-    # Etapa 1.5: Enforce direction changes > 45° → PV obrigatório
+    # Etapa 2: Enforce direction changes > 45° → PV obrigatório
     enforce_direction_changes(G)
 
     # Etapa 3: Remove redundant nodes
@@ -311,13 +311,13 @@ async def process_sewer_network(
     # Etapa 4: Resolve curve clusters
     G = resolve_curve_clusters(G)
 
-    # Etapa 4.5: Enforce minimum PV spacing (80m)
+    # Etapa 5: Enforce minimum PV spacing (80m)
     G = enforce_min_pv_spacing(G)
 
-    # Etapa 5: Detect elevation extrema
+    # Etapa 6: Detect elevation extrema
     G = detect_extrema(G)
 
-    # Etapa 5.5: Detect grade breaks (slope change > 3%)
+    # Etapa 7: Detect grade breaks (slope change > 3%)
     G = detect_grade_breaks(G)
 
     # Update mandatory set after sanitization
@@ -359,10 +359,10 @@ async def process_sewer_network(
             G.nodes[cp]["is_collection_point"] = True
             G.nodes[cp]["pv_obrigatorio"] = True
 
-    # Etapa 6: RSPH gravity routing (multi-outlet via super-sink)
+    # Etapa 8: RSPH gravity routing (multi-outlet via super-sink)
     tree, unreachable = rsph_sewer_routing(G, outlet, mandatory, collection_points)
 
-    # Etapa 7: Ensure full street coverage — every street needs a collector.
+    # Etapa 9: Ensure full street coverage — every street needs a collector.
     # Uses sanitized G so node IDs match the RSPH tree exactly.
     ensure_full_coverage(tree, G)
 
@@ -373,11 +373,11 @@ async def process_sewer_network(
         # The tree is now a DAG, so re-adding edges is safe.
         ensure_full_coverage(tree, G)
 
-    # Etapa 7.5: Optimize node placement — minimize PVs using greedy
+    # Etapa 10: Optimize node placement — minimize PVs using greedy
     # contraction with junction simplification + MILP refinement.
     optimize_node_placement(tree, outlet=outlet)
 
-    # Etapa 8: Accessory type assignment
+    # Etapa 11: Accessory type assignment
     tree = assign_accessory_types(tree)
 
     # Build response
