@@ -370,7 +370,7 @@ async def process_sewer_network(
         ensure_full_coverage(tree, G)
 
     # Etapa 10: Optimize node placement — minimize PVs using greedy
-    # contraction with junction simplification + MILP refinement.
+    # contraction with junction simplification.
     optimize_node_placement(tree, outlet=outlet)
 
     # Etapa 11: Accessory type assignment
