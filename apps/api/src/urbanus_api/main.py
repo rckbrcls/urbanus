@@ -305,11 +305,6 @@ async def process_sewer_network(
     # Etapa 1.5: Enforce direction changes > 45° → PV obrigatório
     enforce_direction_changes(G)
 
-    # Etapas 2/2.5 (subdivisão) removidas — criavam centenas de nós
-    # intermediários que inflavam a rede. O pipeline atual trabalha
-    # diretamente com arestas longas e reduz nós apenas no estágio
-    # posterior de otimização.
-
     # Etapa 3: Remove redundant nodes
     G = remove_redundant_nodes(G)
 

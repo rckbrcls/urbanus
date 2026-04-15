@@ -54,7 +54,7 @@ export function AppHeader() {
       {/* Logo — top left */}
       <div className="fixed top-0 left-0 z-20 m-4 flex h-10 items-center rounded-2xl border border-border bg-background px-4">
         <Link href="/" className="flex items-center">
-          <span className="text-lg font-bold" style={{ fontFamily: 'var(--font-baskerville)' }}>Urbanus</span>
+          <span className="text-sm font-normal uppercase tracking-[0.18em]">Urbanus</span>
         </Link>
       </div>
 

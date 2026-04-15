@@ -40,9 +40,8 @@ export default function LandingPage() {
       <section className="relative flex min-h-[calc(100dvh-3rem)] flex-col items-center justify-center gap-6 overflow-hidden px-6 text-center">
         <SewerPipeBackground />
         <h1
-          className="text-5xl font-bold tracking-tight md:text-6xl opacity-0"
+          className="text-5xl font-normal uppercase tracking-[0.18em] md:text-6xl opacity-0"
           style={{
-            fontFamily: "var(--font-baskerville)",
             animation: "fade-up 600ms var(--ease-out-strong) forwards",
           }}
         >
@@ -166,7 +165,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="mt-auto border-t px-6 py-8">
         <div className="mx-auto flex max-w-4xl items-center justify-between text-xs text-muted-foreground">
-          <span style={{ fontFamily: "var(--font-baskerville)" }}>Urbanus</span>
+          <span className="font-normal uppercase tracking-[0.18em]">Urbanus</span>
           <nav className="flex gap-4">
             <Link
               href="/map"
