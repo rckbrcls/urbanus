@@ -20,9 +20,8 @@ from urbanus_api.core.graph.classification import (
     enforce_direction_changes,
 )
 from urbanus_api.core.graph.sanitization import (
+    collapse_degree2_nodes_by_distance,
     detect_grade_breaks,
-    enforce_min_pv_spacing,
-    remove_redundant_nodes,
 )
 from urbanus_api.core.graph.accessories import assign_accessory_types
 from urbanus_api.core.graph.coverage import ensure_full_coverage
@@ -32,7 +31,7 @@ from urbanus_api.core.routing.rsph import rsph_sewer_routing
 from urbanus_api.data.database import get_db
 from urbanus_api.data.repositories import ProjectRepository, save_sewer_network_to_postgis
 from urbanus_geo.calculations import haversine
-from urbanus_geo.constants import MIN_PV_SPACING
+from urbanus_geo.constants import LONG_EDGE_MAX_DISTANCE, MIN_PV_SPACING, REDUNDANT_NODE_MIN_DISTANCE
 from urbanus_geo.types import NodeType, normalize_node_type
 
 app = FastAPI()
@@ -304,11 +303,27 @@ async def process_sewer_network(
     # Etapa 2: Enforce direction changes > 45° → PV obrigatório
     enforce_direction_changes(G)
 
-    # Etapa 3: Remove redundant nodes
-    G = remove_redundant_nodes(G)
+    # Etapa 3: Collapse short pass-through nodes by distance.
+    G = collapse_degree2_nodes_by_distance(
+        G,
+        should_collapse=lambda graph, node, neighbors, d1, d2: (
+            not graph.nodes[node].get("pv_obrigatorio", False)
+            and d1 < REDUNDANT_NODE_MIN_DISTANCE
+            and d2 < REDUNDANT_NODE_MIN_DISTANCE
+            and (d1 + d2) <= LONG_EDGE_MAX_DISTANCE
+        ),
+    )
 
-    # Etapa 5: Enforce minimum PV spacing (80m)
-    G = enforce_min_pv_spacing(G)
+    # Etapa 4.5: Collapse PV nodes that are too close to each other.
+    G = collapse_degree2_nodes_by_distance(
+        G,
+        should_collapse=lambda graph, node, neighbors, d1, d2: (
+            graph.nodes[node].get("pv_obrigatorio", False)
+            and not graph.nodes[node].get("is_collection_point", False)
+            and any(graph.nodes[nb].get("pv_obrigatorio", False) for nb in neighbors)
+            and min(d1, d2) < MIN_PV_SPACING
+        ),
+    )
 
     # Etapa 6: Detect elevation extrema
     G = detect_extrema(G)
