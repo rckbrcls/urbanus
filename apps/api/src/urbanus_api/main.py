@@ -308,9 +308,6 @@ async def process_sewer_network(
     # Etapa 3: Remove redundant nodes
     G = remove_redundant_nodes(G)
 
-    # Etapa 4: Resolve curve clusters
-    G = resolve_curve_clusters(G)
-
     # Etapa 5: Enforce minimum PV spacing (80m)
     G = enforce_min_pv_spacing(G)
 
