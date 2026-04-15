@@ -21,47 +21,47 @@ export const en: Dictionary = {
   },
   landing: {
     tagline:
-      'Automated sanitary sewer network design — from map selection to gravity-based network generation, powered by open data and engineering checks.',
-    startDesigning: 'Start Designing',
-    howItWorks: 'How it works',
-    features: 'Features',
+      'Plan sanitary sewer networks faster, directly on the map.',
+    startDesigning: 'Start',
+    howItWorks: 'What it is for',
+    features: 'Why use it',
     steps: {
       drawArea: {
-        title: 'Draw your area',
+        title: 'Study an area',
         description:
-          'Select a region on the map. Streets and elevation data are fetched automatically from OpenStreetMap and satellite sources.',
+          'Outline a region and inspect streets, terrain, and nodes in one place.',
       },
       autoProcess: {
-        title: 'Auto-process',
+        title: 'Generate a proposal',
         description:
-          'Our processing pipeline classifies nodes, routes sewage gravitationally, and builds the network automatically.',
+          'Create an initial network to assess feasibility without starting from scratch.',
       },
       editExport: {
-        title: 'Edit & export',
+        title: 'Refine on the map',
         description:
-          'Fine-tune the generated network in the interactive graph editor, then export the results for your project.',
+          'Review critical segments visually before moving forward with the project.',
       },
     },
     featureCards: {
       pipeline: {
-        title: '8-Step Pipeline',
+        title: 'Less manual work',
         description:
-          'From node classification to gravity routing — a complete sewer design workflow automated end to end.',
+          'Get to a first network proposal faster with less repetitive setup.',
       },
       standards: {
-        title: 'Engineering Checks',
+        title: 'More technical confidence',
         description:
-          'Slope validation, elevation-aware routing, and network coverage checks are applied automatically throughout the workflow.',
+          'Slope, terrain, and network consistency checks stay part of the workflow.',
       },
       openData: {
         title: 'Open Data',
         description:
-          'Street geometry from OpenStreetMap and elevation from OpenTopography — no proprietary datasets required.',
+          'Start with street and elevation data without relying on proprietary datasets.',
       },
       interactiveEditing: {
-        title: 'Interactive Editing',
+        title: 'Visual editing',
         description:
-          'A graph editor built on the map lets you add, move, and connect sewer nodes with real-time visual feedback.',
+          'Adjust the network directly on the map with full spatial context.',
       },
     },
     step: 'Step',

@@ -1,13 +1,11 @@
-'use client';
+"use client";
 
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
-  ChevronRight,
   GitBranch,
   Layers,
   MapPin,
-  SquareMousePointer,
   PencilRuler,
   ShieldCheck,
   Zap,
@@ -18,19 +16,18 @@ import { SewerPipeBackground } from "@/components/landing/SewerPipeBackground";
 import { useInView } from "@/hooks/use-in-view";
 
 export default function LandingPage() {
-  const tl = useTranslation('landing');
-  const tc = useTranslation('common');
+  const tl = useTranslation("landing");
+  const tc = useTranslation("common");
 
   const steps = [
-    { icon: SquareMousePointer, ...tl.steps.drawArea },
+    { icon: MapPin, ...tl.steps.drawArea },
     { icon: Zap, ...tl.steps.autoProcess },
     { icon: PencilRuler, ...tl.steps.editExport },
   ];
 
   const features = [
-    { icon: GitBranch, ...tl.featureCards.pipeline },
     { icon: ShieldCheck, ...tl.featureCards.standards },
-    { icon: MapPin, ...tl.featureCards.openData },
+    { icon: GitBranch, ...tl.featureCards.pipeline },
     { icon: Layers, ...tl.featureCards.interactiveEditing },
   ];
 
@@ -65,7 +62,11 @@ export default function LandingPage() {
             animation: "fade-up 600ms var(--ease-out-strong) 160ms forwards",
           }}
         >
-          <Button asChild size="lg" className="mt-2 gap-2 active:scale-[0.97] transition-transform duration-150">
+          <Button
+            asChild
+            size="lg"
+            className="mt-2 gap-2 active:scale-[0.97] transition-transform duration-150"
+          >
             <Link href="/map">
               {tl.startDesigning}
               <ArrowRight className="size-4" />
@@ -74,53 +75,43 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section
-        ref={stepsRef}
-        className="flex min-h-[calc(100dvh-3rem)] flex-col justify-center border-t px-6 py-20"
-      >
+      {/* What it's for */}
+      <section ref={stepsRef} className="border-t px-6 py-20">
         <div className="mx-auto max-w-4xl">
           <h2
             className="mb-12 text-center text-sm font-medium uppercase tracking-widest text-muted-foreground"
-            style={stepsInView ? {
-              animation: "reveal-up 500ms var(--ease-out-strong) forwards",
-            } : { opacity: 0 }}
+            style={
+              stepsInView
+                ? {
+                    animation:
+                      "reveal-up 500ms var(--ease-out-strong) forwards",
+                  }
+                : { opacity: 0 }
+            }
           >
             {tl.howItWorks}
           </h2>
-          <div className="grid gap-10 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-start">
+          <div className="grid gap-6 md:grid-cols-3">
             {steps.map((step, i) => (
-              <div key={step.title} className="contents">
-                <div
-                  className="flex flex-col items-center text-center"
-                  style={stepsInView ? {
-                    opacity: 0,
-                    animation: `reveal-up 500ms var(--ease-out-strong) ${i * 100}ms forwards`,
-                  } : { opacity: 0 }}
-                >
-                  <div className="mb-3 flex size-6 items-center justify-center rounded-full bg-foreground text-background text-xs font-mono font-semibold">
-                    {i + 1}
-                  </div>
-                  <div className="mb-4 flex size-12 items-center justify-center rounded-lg border bg-card text-foreground">
-                    <step.icon className="size-5" />
-                  </div>
-                  <h3 className="mb-2 text-base font-semibold">{step.title}</h3>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {step.description}
-                  </p>
+              <div
+                key={step.title}
+                className="rounded-lg border bg-card p-6 text-center"
+                style={
+                  stepsInView
+                    ? {
+                        opacity: 0,
+                        animation: `reveal-up 500ms var(--ease-out-strong) ${i * 100}ms forwards`,
+                      }
+                    : { opacity: 0 }
+                }
+              >
+                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-lg border bg-background text-foreground">
+                  <step.icon className="size-5" />
                 </div>
-                {/* Connector between steps — desktop only */}
-                {i < steps.length - 1 && (
-                  <div
-                    className="hidden md:flex items-center justify-center pt-10 text-muted-foreground/40"
-                    style={stepsInView ? {
-                      opacity: 0,
-                      animation: `reveal-up 500ms var(--ease-out-strong) ${i * 100 + 50}ms forwards`,
-                    } : { opacity: 0 }}
-                  >
-                    <ChevronRight className="size-5" />
-                  </div>
-                )}
+                <h3 className="mb-2 text-base font-semibold">{step.title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {step.description}
+                </p>
               </div>
             ))}
           </div>
@@ -128,16 +119,18 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section
-        ref={featuresRef}
-        className="flex min-h-[calc(100dvh-3rem)] flex-col justify-center border-t px-6 py-20"
-      >
+      <section ref={featuresRef} className="border-t px-6 py-20">
         <div className="mx-auto max-w-4xl">
           <h2
             className="mb-12 text-center text-sm font-medium uppercase tracking-widest text-muted-foreground"
-            style={featuresInView ? {
-              animation: "reveal-up 500ms var(--ease-out-strong) forwards",
-            } : { opacity: 0 }}
+            style={
+              featuresInView
+                ? {
+                    animation:
+                      "reveal-up 500ms var(--ease-out-strong) forwards",
+                  }
+                : { opacity: 0 }
+            }
           >
             {tl.features}
           </h2>
@@ -145,11 +138,17 @@ export default function LandingPage() {
             {features.map((feature, i) => (
               <div
                 key={feature.title}
-                className="card-hover rounded-lg border bg-card p-6 transition-[transform,box-shadow] duration-200 ease-out"
-                style={featuresInView ? {
-                  opacity: 0,
-                  animation: `reveal-up 500ms var(--ease-out-strong) ${i * 80}ms forwards`,
-                } : { opacity: 0 }}
+                className={`card-hover rounded-lg border bg-card p-6 transition-[transform,box-shadow] duration-200 ease-out ${
+                  i === features.length - 1 ? "sm:col-span-2" : ""
+                }`}
+                style={
+                  featuresInView
+                    ? {
+                        opacity: 0,
+                        animation: `reveal-up 500ms var(--ease-out-strong) ${i * 80}ms forwards`,
+                      }
+                    : { opacity: 0 }
+                }
               >
                 <div className="mb-3 flex size-9 items-center justify-center rounded-md border bg-background text-foreground">
                   <feature.icon className="size-4" />
@@ -167,14 +166,18 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="mt-auto border-t px-6 py-8">
         <div className="mx-auto flex max-w-4xl items-center justify-between text-xs text-muted-foreground">
-          <span style={{ fontFamily: "var(--font-baskerville)" }}>
-            Urbanus
-          </span>
+          <span style={{ fontFamily: "var(--font-baskerville)" }}>Urbanus</span>
           <nav className="flex gap-4">
-            <Link href="/map" className="transition-colors hover:text-foreground">
+            <Link
+              href="/map"
+              className="transition-colors hover:text-foreground"
+            >
               {tc.map}
             </Link>
-            <Link href="/projects" className="transition-colors hover:text-foreground">
+            <Link
+              href="/projects"
+              className="transition-colors hover:text-foreground"
+            >
               {tc.projects}
             </Link>
           </nav>

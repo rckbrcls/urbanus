@@ -21,47 +21,47 @@ export const ptBR: Dictionary = {
   },
   landing: {
     tagline:
-      'Automated sanitary sewer network design — from map selection to gravity-based network generation, powered by open data and engineering checks.',
+      'Projete redes de esgoto sanitário com mais agilidade, direto no mapa.',
     startDesigning: 'Começar',
-    howItWorks: 'Como funciona',
-    features: 'Funcionalidades',
+    howItWorks: 'Para que serve',
+    features: 'Por que usar',
     steps: {
       drawArea: {
-        title: 'Desenhe sua área',
+        title: 'Estudar uma área',
         description:
-          'Selecione uma região no mapa. Ruas e dados de elevação são obtidos automaticamente do OpenStreetMap e fontes de satélite.',
+          'Delimite uma região e veja ruas, relevo e nós em um único fluxo.',
       },
       autoProcess: {
-        title: 'Processamento automático',
+        title: 'Gerar uma proposta',
         description:
-          'Nosso pipeline de processamento classifica nós, roteia o esgoto gravitacionalmente e monta a rede automaticamente.',
+          'Monte uma rede inicial para avaliar viabilidade sem começar do zero.',
       },
       editExport: {
-        title: 'Edite e exporte',
+        title: 'Refinar no mapa',
         description:
-          'Ajuste a rede gerada no editor de grafos interativo e exporte os resultados para o seu projeto.',
+          'Ajuste trechos críticos visualmente antes de avançar para o projeto.',
       },
     },
     featureCards: {
       pipeline: {
-        title: '8-Step Pipeline',
+        title: 'Menos trabalho manual',
         description:
-          'From node classification to gravity routing — a complete sewer design workflow automated end to end.',
+          'A primeira proposta de rede sai mais rápido, com menos esforço repetitivo.',
       },
       standards: {
-        title: 'Engineering Checks',
+        title: 'Mais segurança técnica',
         description:
-          'Slope validation, elevation-aware routing, and network coverage checks are applied automatically throughout the workflow.',
+          'Verificações de declividade, relevo e coerência da rede acontecem ao longo do fluxo.',
       },
       openData: {
-        title: 'Dados Abertos',
+        title: 'Dados abertos',
         description:
-          'Geometria de ruas do OpenStreetMap e elevação do OpenTopography — sem necessidade de bases proprietárias.',
+          'Use ruas e elevação sem depender de bases proprietárias para começar.',
       },
       interactiveEditing: {
-        title: 'Edição Interativa',
+        title: 'Edição visual',
         description:
-          'Um editor de grafos sobre o mapa permite adicionar, mover e conectar nós de esgoto com feedback visual em tempo real.',
+          'Revise e ajuste a rede direto no mapa, com contexto espacial o tempo todo.',
       },
     },
     step: 'Etapa',
