@@ -9,8 +9,6 @@ These helpers simplify the undirected street graph before gravity routing:
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import networkx as nx
 
 from urbanus_geo.constants import (
@@ -20,52 +18,6 @@ from urbanus_geo.constants import (
     REDUNDANT_NODE_MIN_DISTANCE,
 )
 from urbanus_geo.types import NodeType
-
-
-def collapse_degree2_nodes_by_distance(
-    G: nx.Graph,
-    *,
-    should_collapse: Callable[[nx.Graph, str, tuple[str, str], float, float], bool],
-) -> nx.Graph:
-    """Collapse degree-2 nodes when a caller-defined distance rule matches.
-
-    The function is intentionally generic so the pipeline can reuse the same
-    merge mechanics for different business rules. Callers decide which nodes
-    should be collapsed; this helper only performs the physical graph merge.
-    """
-    changed = True
-    while changed:
-        changed = False
-        for node in list(G.nodes):
-            if node not in G:
-                continue
-            if G.degree(node) != 2:
-                continue
-
-            neighbors = list(G.neighbors(node))
-            if len(neighbors) != 2:
-                continue
-            n1, n2 = neighbors
-
-            d1 = G.edges[node, n1].get("length_m", float("inf"))
-            d2 = G.edges[node, n2].get("length_m", float("inf"))
-
-            if not should_collapse(G, node, (n1, n2), d1, d2):
-                continue
-
-            e1_data = dict(G.edges[node, n1])
-            e2_data = dict(G.edges[node, n2])
-            merged_data = {**e1_data, **e2_data, "length_m": d1 + d2}
-
-            G.remove_node(node)
-            if not G.has_edge(n1, n2):
-                G.add_edge(n1, n2, **merged_data)
-            changed = True
-            break
-
-    return G
-
-
 def remove_redundant_nodes(
     G: nx.Graph,
     dist_min: float = REDUNDANT_NODE_MIN_DISTANCE,
@@ -78,15 +30,44 @@ def remove_redundant_nodes(
     the merged edge would not exceed ``dist_max``. The two adjacent edges are
     replaced by one edge whose ``length_m`` is their sum.
     """
-    return collapse_degree2_nodes_by_distance(
-        G,
-        should_collapse=lambda graph, node, neighbors, d1, d2: (
-            not graph.nodes[node].get("pv_obrigatorio", False)
-            and d1 < dist_min
-            and d2 < dist_min
-            and (d1 + d2) <= dist_max
-        ),
-    )
+    changed = True
+    while changed:
+        changed = False
+        for node in list(G.nodes):
+            if node not in G:
+                continue
+            ndata = G.nodes[node]
+            if ndata.get("pv_obrigatorio", False):
+                continue
+            if G.degree(node) != 2:
+                continue
+
+            neighbors = list(G.neighbors(node))
+            if len(neighbors) != 2:
+                continue
+            n1, n2 = neighbors
+
+            d1 = G.edges[node, n1].get("length_m", float("inf"))
+            d2 = G.edges[node, n2].get("length_m", float("inf"))
+
+            if d1 >= dist_min or d2 >= dist_min:
+                continue
+
+            merged_length = d1 + d2
+            if merged_length > dist_max:
+                continue
+
+            e1_data = dict(G.edges[node, n1])
+            e2_data = dict(G.edges[node, n2])
+            merged_data = {**e1_data, **e2_data, "length_m": merged_length}
+
+            G.nodes[node]["node_type"] = NodeType.REDUNDANT.value
+            G.remove_node(node)
+            G.add_edge(n1, n2, **merged_data)
+            changed = True
+            break
+
+    return G
 
 
 def enforce_min_pv_spacing(
@@ -98,15 +79,47 @@ def enforce_min_pv_spacing(
     This collapses degree-2 PVs that are too close to another mandatory PV,
     but it preserves explicit collection points so sinks are not removed.
     """
-    return collapse_degree2_nodes_by_distance(
-        G,
-        should_collapse=lambda graph, node, neighbors, d1, d2: (
-            graph.nodes[node].get("pv_obrigatorio", False)
-            and not graph.nodes[node].get("is_collection_point", False)
-            and any(graph.nodes[nb].get("pv_obrigatorio", False) for nb in neighbors)
-            and min(d1, d2) < min_spacing
-        ),
-    )
+    merged = True
+    while merged:
+        merged = False
+        for node in list(G.nodes):
+            if node not in G:
+                continue
+            ndata = G.nodes[node]
+            if not ndata.get("pv_obrigatorio"):
+                continue
+            if G.degree(node) != 2:
+                continue
+
+            neighbors = list(G.neighbors(node))
+            if len(neighbors) != 2:
+                continue
+
+            for nb in neighbors:
+                if not G.nodes[nb].get("pv_obrigatorio"):
+                    continue
+                edge_len = G.edges[node, nb].get("length_m", float("inf"))
+                if edge_len >= min_spacing:
+                    continue
+
+                n1, n2 = neighbors
+                d1 = G.edges[node, n1].get("length_m", 0)
+                d2 = G.edges[node, n2].get("length_m", 0)
+
+                e1_data = dict(G.edges[node, n1])
+                e2_data = dict(G.edges[node, n2])
+                merged_data = {**e1_data, **e2_data, "length_m": d1 + d2}
+
+                G.remove_node(node)
+                if not G.has_edge(n1, n2):
+                    G.add_edge(n1, n2, **merged_data)
+                merged = True
+                break
+
+            if merged:
+                break
+
+    return G
 
 
 def detect_grade_breaks(
