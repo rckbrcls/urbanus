@@ -221,6 +221,21 @@ export const EDGES_LAYOUT: LineLayerSpecification['layout'] = {
   'line-join': 'round',
 };
 
+export const EDGE_LENGTH_LABEL_LAYOUT: SymbolLayerSpecification['layout'] = {
+  'symbol-placement': 'line-center',
+  'text-field': ['get', 'lengthLabel'] as unknown as string,
+  'text-size': 10,
+  'text-allow-overlap': true,
+  'text-ignore-placement': true,
+  'text-optional': true,
+};
+
+export const EDGE_LENGTH_LABEL_PAINT: SymbolLayerSpecification['paint'] = {
+  'text-color': '#1e293b',
+  'text-halo-color': 'rgba(255, 255, 255, 0.95)',
+  'text-halo-width': 1.5,
+};
+
 // ============ GHOST EDGE (add-edge preview) ============
 
 export const GHOST_EDGE_PAINT: LineLayerSpecification['paint'] = {

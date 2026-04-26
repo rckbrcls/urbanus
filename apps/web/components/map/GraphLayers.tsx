@@ -2,10 +2,12 @@
 
 import { useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
+import { GeoCalculations } from '@urbanus/geo';
 import {
   NODES_PAINT, EDGES_DEFAULT_PAINT, EDGES_STREETS_PAINT, EDGES_LAYOUT,
   NODES_ELEVATION_PAINT, EDGES_ELEVATION_PAINT,
   ELEVATION_LABEL_LAYOUT, ELEVATION_LABEL_PAINT,
+  EDGE_LENGTH_LABEL_LAYOUT, EDGE_LENGTH_LABEL_PAINT,
   getElevationColor, getElevationLabel,
 } from '@/lib/map/layers';
 import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
@@ -31,6 +33,53 @@ function normalizeElevation(
 ): number {
   if (elevation == null || isNaN(elevation)) return -1;
   return range === 0 ? 0 : (elevation - min) / range;
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function calculateLineStringLengthMeters(geometry: GeoJSON.Geometry | null | undefined): number | null {
+  if (!geometry || geometry.type !== 'LineString') {
+    return null;
+  }
+
+  const coordinates = geometry.coordinates as number[][];
+  if (coordinates.length < 2) {
+    return null;
+  }
+
+  let totalLength = 0;
+
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const previous = coordinates[index - 1];
+    const current = coordinates[index];
+
+    if (
+      !Array.isArray(previous) ||
+      !Array.isArray(current) ||
+      previous.length < 2 ||
+      current.length < 2
+    ) {
+      continue;
+    }
+
+    totalLength += GeoCalculations.calculateDistance(
+      { lat: previous[1], lng: previous[0] },
+      { lat: current[1], lng: current[0] },
+    );
+  }
+
+  return Number.isFinite(totalLength) && totalLength > 0 ? totalLength : null;
 }
 
 /**
@@ -91,9 +140,29 @@ export default function GraphLayers({
   }, [filteredNodesGeoJSON, isElevation, min, range]);
 
   const enrichedEdgesGeoJSON = useMemo(() => {
-    if (!isElevation) return edgesGeoJSON;
-    // Compute average elevation from slope + length (approximate)
-    // We need node elevations — build a lookup from the nodes GeoJSON
+    const edgesWithLengths = edgesGeoJSON.features.map((feature) => {
+      const lengthFromGeometry = calculateLineStringLengthMeters(feature.geometry);
+      const fallbackLength = toNumber(feature.properties?.length);
+      const lengthMeters = lengthFromGeometry ?? fallbackLength ?? 0;
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          lengthMeters,
+          lengthLabel: `${Math.round(lengthMeters)} m`,
+        },
+      };
+    });
+
+    if (!isElevation) {
+      return {
+        ...edgesGeoJSON,
+        features: edgesWithLengths,
+      };
+    }
+
+    // Compute average elevation for color mapping using node elevations.
     const nodeLookup = new Map<string, number>();
     for (const f of nodesGeoJSON.features) {
       const elev = f.properties?.elevation as number | null;
@@ -104,7 +173,7 @@ export default function GraphLayers({
 
     return {
       ...edgesGeoJSON,
-      features: edgesGeoJSON.features.map((f) => {
+      features: edgesWithLengths.map((f) => {
         const srcId = f.properties?.sourceId ?? f.properties?.id?.split('->')[0];
         const tgtId = f.properties?.targetId ?? f.properties?.id?.split('->')[1];
         const srcElev = nodeLookup.get(String(srcId));
@@ -135,7 +204,7 @@ export default function GraphLayers({
       <Source
         id="graph-edges"
         type="geojson"
-        data={isElevation ? enrichedEdgesGeoJSON : edgesGeoJSON}
+        data={enrichedEdgesGeoJSON}
         promoteId="id"
       >
         <Layer
@@ -143,6 +212,12 @@ export default function GraphLayers({
           type="line"
           paint={edgesPaint}
           layout={EDGES_LAYOUT}
+        />
+        <Layer
+          id="graph-edge-length-labels"
+          type="symbol"
+          layout={EDGE_LENGTH_LABEL_LAYOUT}
+          paint={EDGE_LENGTH_LABEL_PAINT}
         />
       </Source>
 
