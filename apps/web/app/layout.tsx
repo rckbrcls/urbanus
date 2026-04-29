@@ -26,6 +26,9 @@ const libreBaskerville = Libre_Baskerville({
 export const metadata: Metadata = {
   title: "Urbanus",
   description: "",
+  other: {
+    google: "notranslate",
+  },
 };
 
 export default function RootLayout({
@@ -37,6 +40,7 @@ export default function RootLayout({
     <html lang="pt-BR" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${libreBaskerville.variable} antialiased`}
+        translate="no"
         suppressHydrationWarning
       >
         <ThemeProvider
