@@ -1,261 +1,81 @@
-# Módulo Map
+# URBANUS Map Feature
 
-Este módulo contém toda a lógica relacionada ao mapa do URBANUS, incluindo:
+> **Status:** Active
+> Feature folder for URBANUS map-specific services, validators, hooks, types, and serialization tests.
 
-- Seleção de área (bounding box)
-- Processamento de ruas e elevação
-- Edição de nós
-- Visualização de dados
+## Summary
 
-## Estrutura
+- Contains the browser-side map domain layer used by the URBANUS web app.
+- Solves the problem of keeping map services, node validation, elevation sync, and graph serialization separate from page-level React code.
+- Main features include street/elevation services, node services, bounding-box validation, node validation, history/selection hooks, and serialization tests.
+- Main stack: TypeScript, React hooks, Vitest, and workspace imports from the URBANUS web app.
+- Current status: active, but the visible map UI now lives mostly in `apps/web/components/map` and product panels; this folder is the map support layer.
 
+## Overview
+
+`features/map` is not a standalone app. It is a feature module imported by the URBANUS web app to keep map-related domain behavior colocated. The folder owns services and types for street data, nodes, elevation, bounding boxes, validation, and editor serialization.
+
+## Features
+
+- `NodesApiService`, `NodesService`, `StreetsService`, `ElevationService`, and `BoundingBoxService`.
+- Node and bounding-box validators with colocated Vitest tests.
+- Hooks for node selection, node history, elevation synchronization, and node state.
+- Map and graph-facing TypeScript types.
+- Utility helpers for retry, rate limiting, throttling, and colocated geometry behavior.
+- `serialization.test.ts` for checking map state serialization behavior.
+
+## Tech Stack
+
+- TypeScript
+- React hooks
+- Vitest
+- URBANUS shared packages and app-local map helpers
+
+## Usage
+
+Import through the feature barrel when possible:
+
+```ts
+import { NodesService, BboxValidator } from "@/features/map";
 ```
+
+The feature should stay UI-light. Page and panel composition belongs in `apps/web/app`, `apps/web/components/map`, and `apps/web/components/panels`.
+
+## Project Structure
+
+```text
 features/map/
-├── index.ts              # Exports públicos
-├── context/              # Context e Provider
-│   ├── MapContext.tsx
-│   └── MapContext.types.ts
-├── components/           # Componentes React
-│   ├── NodesLayer.tsx
-│   ├── NodeEditor.tsx
-│   ├── MapControls.tsx
-│   ├── MapInfoPanel.tsx
-│   ├── CropConfirmDialog.tsx
-│   ├── MapErrorBoundary.tsx
-│   ├── MapLoading.tsx
-│   ├── MapStatusBar.tsx
-│   └── ElevationLegend.tsx
-├── hooks/                # Hooks React
-│   ├── useNodes.ts
-│   ├── useNodeSelection.ts
-│   ├── useNodeHistory.ts
-│   ├── useNodeDrag.ts
-│   ├── useElevation.ts
-│   ├── useBoundingBox.ts
-│   └── useMapKeyboard.ts
-├── services/             # Serviços (singletons)
-│   ├── NodesService.ts
-│   ├── ElevationService.ts
-│   ├── StreetsService.ts
-│   └── BoundingBoxService.ts
-├── validators/           # Validadores
-│   ├── NodeValidator.ts
-│   └── BboxValidator.ts
-├── types/                # Types TypeScript
-│   ├── map.types.ts
-│   ├── bbox.types.ts
-│   ├── node.types.ts
-│   └── elevation.types.ts
-├── constants/            # Constantes
-│   └── map.constants.ts
-└── utils/                # Utilitários
-    ├── rateLimiter.ts
-    └── retry.ts
+├── components/       # Small map-specific UI helpers still colocated here
+├── constants/        # Map constants
+├── hooks/            # Node, selection, history, and elevation hooks
+├── services/         # Node, street, elevation, API, and bbox services
+├── types/            # Map, bbox, node, and elevation types
+├── utils/            # Retry, rate-limit, throttle, and colocated helpers
+├── validators/       # Node and bbox validators plus tests
+├── index.ts          # Public feature exports
+└── serialization.test.ts
 ```
 
-## Uso Básico
+## Architecture
 
-### 1. Provider
+### Main Components
 
-Envolva sua aplicação com o `MapProvider`:
+- `services/`: performs map-domain operations and API-oriented transformations.
+- `validators/`: keeps node and bbox rules testable outside React components.
+- `hooks/`: wraps client-side map state behavior for consuming components.
+- `types/`: centralizes TypeScript contracts used by map services and UI.
 
-```tsx
-import { MapProvider } from "@/features/map";
+### Data Flow
 
-function App() {
-  return (
-    <MapProvider
-      initialCenter={[-23.5505, -46.6333]}
-      initialZoom={13}
-      onBboxChange={(bbox) => console.log("Bbox:", bbox)}
-      onError={(error) => console.error(error)}
-    >
-      <MapContent />
-    </MapProvider>
-  );
-}
-```
+Map components call hooks and services from this folder, services normalize or validate map data, and higher-level app routes/components decide when to persist or process project state through the web/API layers.
 
-### 2. Context
+### Key Design Choices
 
-Use o hook `useMapContext` para acessar o estado e ações:
+- Keep service logic testable without rendering the full map.
+- Keep reusable map contracts in feature-local types.
+- Keep this folder as a support layer, not a second routing or page system.
 
-```tsx
-import { useMapContext } from '@/features/map';
+## Known Limitations
 
-function MapContent() {
-  const {
-    // Estado
-    viewMode,
-    nodes,
-    stages,
-
-    // Ações
-    startProcessing,
-    selectNode,
-    undo,
-    redo,
-  } = useMapContext();
-
-  return (
-    // ...
-  );
-}
-```
-
-### 3. Componentes
-
-Use os componentes prontos:
-
-```tsx
-import {
-  MapControls,
-  MapInfoPanel,
-  NodesLayer,
-  NodeEditor,
-  CropConfirmDialog,
-  MapErrorBoundary,
-  MapLoading,
-} from "@/features/map";
-
-function MapUI() {
-  const { isReady } = useMapContext();
-
-  if (!isReady) {
-    return <MapLoading />;
-  }
-
-  return (
-    <MapErrorBoundary>
-      <div className="relative h-full">
-        <MapControls position="top-right" />
-        <MapInfoPanel position="bottom-left" />
-        <CropConfirmDialog />
-      </div>
-    </MapErrorBoundary>
-  );
-}
-```
-
-## Hooks Disponíveis
-
-### useMapContext
-
-Acesso completo ao contexto.
-
-### useMapState
-
-Apenas estado (sem ações).
-
-### useBboxActions
-
-Apenas ações de bounding box.
-
-### useNodeActions
-
-Apenas ações de nós.
-
-### useProcessingActions
-
-Apenas ações de processamento.
-
-### useMapKeyboard
-
-Atalhos de teclado globais.
-
-### useNodes
-
-Gerenciamento completo de nós (standalone).
-
-### useElevation
-
-Busca e processamento de elevação.
-
-## Atalhos de Teclado
-
-| Atalho         | Ação                    |
-| -------------- | ----------------------- |
-| `Ctrl+Z`       | Desfazer                |
-| `Ctrl+Shift+Z` | Refazer                 |
-| `Delete`       | Deletar selecionados    |
-| `Esc`          | Limpar seleção / Voltar |
-| `V`            | Modo selecionar         |
-| `M`            | Modo mover              |
-| `D`            | Modo deletar            |
-| `N`            | Modo adicionar          |
-
-## Rate Limiting
-
-O módulo inclui rate limiting automático para APIs:
-
-- **Streets**: 10 req/min
-- **Topography**: 5 req/min
-- **Node Operations**: 100 ops/min
-
-## Error Handling
-
-Use o `MapErrorBoundary` para capturar erros:
-
-```tsx
-<MapErrorBoundary
-  onError={(error, info) => {
-    // Log para analytics
-  }}
-  onReset={() => {
-    // Limpar estado se necessário
-  }}
->
-  <MapContent />
-</MapErrorBoundary>
-```
-
-## Retry Logic
-
-Requests com falha são automaticamente retentados com backoff exponencial:
-
-```tsx
-import { withRetry, fetchWithRetry } from "@/features/map";
-
-// Uso manual
-const result = await withRetry(() => riskyOperation(), {
-  maxRetries: 3,
-  initialDelay: 1000,
-});
-```
-
-## Tipos Principais
-
-### MapNode
-
-```typescript
-interface MapNode {
-  id: string;
-  position: { lat: number; lng: number };
-  elevation: number | null;
-  streetId: string;
-  isEndpoint: boolean;
-  isSelected: boolean;
-  isLocked?: boolean;
-}
-```
-
-### BoundingBox
-
-```typescript
-interface BoundingBox {
-  southWest: { lat: number; lng: number };
-  northEast: { lat: number; lng: number };
-}
-```
-
-### ViewMode
-
-```typescript
-type ViewMode = "explore" | "select" | "edit" | "cropped";
-```
-
-### NodeEditMode
-
-```typescript
-type NodeEditMode = "none" | "select" | "move" | "delete" | "add";
-```
+- This README documents the current file layout, not every consuming component.
+- Some map UI components live outside this folder, so check `apps/web/components/map` and `apps/web/components/panels` before assuming ownership.
