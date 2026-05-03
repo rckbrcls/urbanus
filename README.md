@@ -1,5 +1,8 @@
 # URBANUS - Plataforma de Análise de Infraestrutura Urbana
 
+> **Status:** Active
+> This project is currently maintained.
+
 Sistema para análise de redes viárias urbanas com processamento de grafos, enriquecimento de elevação e edição interativa de nós.
 
 ---
