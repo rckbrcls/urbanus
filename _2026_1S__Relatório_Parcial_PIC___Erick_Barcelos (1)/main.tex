@@ -151,7 +151,7 @@
 
 \section*{Resumo}
 \addcontentsline{toc}{section}{Resumo}
-O planejamento de redes de esgotamento sanitário no Brasil enfrenta barreiras de custo, tempo e complexidade técnica, dificultando a universalização de um serviço essencial. Este relatório parcial apresenta o desenvolvimento do sistema URBANUS, uma plataforma computacional para apoiar a concepção, edição e processamento de redes coletoras de esgoto a partir de dados geoespaciais. A pesquisa parte de um protótipo previamente validado em estudo de caso, no qual a automação reduziu uma tarefa de semanas para poucos minutos e demonstrou alta precisão geométrica. No período relatado, o trabalho evoluiu para uma aplicação web organizada em monorepo, com frontend em Next.js, backend em FastAPI, persistência em PostgreSQL/PostGIS, enriquecimento altimétrico por OpenTopography, extração de vias por OpenStreetMap/Overpass e algoritmos baseados em grafos para seleção, roteamento e simplificação da rede. Como resultados parciais, foram implementados o fluxo de criação e persistência de projetos, o editor interativo de grafo, o contrato de processamento a partir do grafo editado, o pipeline gravitacional com Repeated Shortest Path Heuristic (RSPH), mecanismos de preservação de cobertura viária e otimização de nós, além de testes automatizados para componentes centrais. As próximas etapas concentram-se na validação experimental com estudo de caso, na comparação com projetos manuais e na consolidação técnica necessária para divulgação científica e futura proteção intelectual.
+O planejamento de redes de esgotamento sanitário no Brasil enfrenta barreiras de custo, tempo e complexidade técnica, dificultando a universalização de um serviço essencial. Este relatório parcial apresenta o desenvolvimento do sistema URBANUS, uma plataforma computacional para apoiar a concepção, edição e processamento de redes coletoras de esgoto a partir de dados geoespaciais. A pesquisa parte de um protótipo previamente validado em estudo de caso, no qual a automação reduziu uma tarefa de semanas para poucos minutos e demonstrou alta precisão geométrica. No período relatado, o trabalho evoluiu para uma aplicação web organizada em monorepo, com frontend em Next.js, backend em FastAPI, persistência em PostgreSQL/PostGIS, enriquecimento altimétrico por OpenTopography, extração de vias por OpenStreetMap/Overpass e algoritmos baseados em grafos para seleção, roteamento e simplificação da rede. Como resultados parciais, foram implementados o fluxo de criação e persistência de projetos, o editor interativo de grafo, o contrato de processamento a partir do grafo editado, o pipeline gravitacional com Repeated Shortest Path Heuristic (RSPH), mecanismos de preservação de cobertura viária e otimização de nós, além de testes automatizados para componentes centrais. As próximas etapas concentram-se na validação experimental com estudos de caso, no refinamento das métricas de avaliação e na consolidação técnica necessária para divulgação científica e futura proteção intelectual.
 
 \noindent\textbf{Palavras-chave:} Grafos; desenvolvimento web; saneamento básico; automação.
 
@@ -160,121 +160,167 @@ O planejamento de redes de esgotamento sanitário no Brasil enfrenta barreiras d
 % --------------------------------------------------
 % Seções principais
 % --------------------------------------------------
-\section{Introdução e Revisão Bibliográfica}
+\section{Introdução}
+
 O saneamento básico constitui uma infraestrutura essencial para a saúde pública, para a proteção ambiental e para o desenvolvimento socioeconômico. Apesar disso, a implantação de redes de esgotamento sanitário ainda é desigual no Brasil, sobretudo em municípios pequenos, periféricos ou com baixa capacidade técnica e orçamentária. Nesses contextos, a fase inicial de planejamento costuma funcionar como um gargalo: antes da obra, é necessário levantar dados, interpretar a topografia, definir traçados preliminares, estimar estruturas de inspeção e avaliar alternativas de implantação.
 
 O método tradicional de concepção preliminar depende de conhecimento especializado, de softwares de engenharia e de intensa intervenção manual. Essa combinação torna o processo caro e lento, dificultando a preparação de estudos de viabilidade e retardando a expansão de infraestrutura em áreas vulneráveis. Trabalhos sobre otimização de redes de esgoto, gestão urbana e modelagem computacional indicam que técnicas de grafos, algoritmos de busca e integração com dados geoespaciais podem reduzir esse esforço inicial, desde que sejam incorporadas em ferramentas utilizáveis por especialistas de domínio \cite{weng2014, haghighi2012, melo2019, rodrigues2020}.
 
-O URBANUS nasce nesse cenário como uma plataforma para automatizar etapas do planejamento preliminar de redes coletoras. O projeto original, desenvolvido a partir de um protótipo validado em estudo de caso, demonstrou a viabilidade da abordagem ao comparar resultados automatizados com um planejamento manual. A presente iniciação científica tem como foco transformar esse método em um sistema web funcional, com arquitetura mais robusta, editor interativo e pipeline algorítmico capaz de processar a rede de ruas enriquecida com elevação.
+O URBANUS nasce nesse cenário como uma plataforma para automatizar etapas do planejamento preliminar de redes coletoras. O projeto original, desenvolvido a partir de um protótipo validado em estudo de caso, demonstrou a viabilidade da abordagem em uma aplicação prática. A presente iniciação científica tem como foco transformar esse método em um sistema web funcional, com arquitetura mais robusta, editor interativo e pipeline algorítmico capaz de processar a rede de ruas enriquecida com elevação.
+
 
 \subsection{Contextualização do tema}
+
 A universalização do esgotamento sanitário exige não apenas recursos para execução de obras, mas também capacidade de produzir bons estudos preliminares. Municípios com equipes reduzidas frequentemente dependem de consultorias externas para levantar alternativas, modelar a rede e produzir informações suficientes para contratação e licitação. Quando essa etapa é lenta ou imprecisa, aumenta-se o risco de atrasos, custos adicionais e projetos mal fundamentados.
 
 O problema é especialmente sensível em centros de baixa renda. A ausência de rede coletora adequada perpetua impactos sanitários e ambientais, enquanto a dificuldade de planejar novas redes impede que gestores públicos avancem com rapidez. Dessa forma, uma ferramenta que reduza a barreira técnica de entrada, automatize parte da análise e permita interação humana sobre o resultado preliminar pode ampliar a capacidade local de planejamento.
 
 No estado atual do projeto, o URBANUS trabalha com um fluxo orientado a mapa: o usuário seleciona uma área urbana, o sistema obtém vias públicas, enriquece os vértices com dados de elevação, constrói um grafo editável e executa um pipeline de processamento para gerar uma rede direcionada de esgoto. A proposta não substitui o projeto executivo de engenharia, mas oferece uma base computacional para acelerar a concepção e a análise inicial.
 
-\subsection{Fundamentação teórica}
-A modelagem adotada no URBANUS utiliza teoria dos grafos para representar a malha viária e a rede de esgotamento sanitário. Vértices representam pontos relevantes da malha, como extremidades, cruzamentos, curvas, pontos de coleta ou pontos topográficos de interesse. Arestas representam trechos de rua ou segmentos de coletor, com atributos como comprimento, nome da via, tipo viário, geometria e elevação associada aos nós.
+
+\section{Fundamentação teórica e trabalhos relacionados}
+
+A modelagem adotada no URBANUS utiliza a teoria dos grafos para representar a malha viária e a rede de esgotamento sanitário. Vértices representam pontos relevantes da malha, como extremidades, cruzamentos, curvas, pontos de coleta ou pontos topográficos de interesse. Arestas representam trechos de rua ou segmentos de coletor, com atributos como comprimento, nome da via, tipo de viário, geometria e elevação associados aos nós.
 
 A gravidade é um critério central em redes de esgoto. Por isso, a direção de fluxo é definida preferencialmente de cotas mais altas para cotas mais baixas, penalizando ou rejeitando caminhos incompatíveis com o escoamento natural. O pipeline atual utiliza uma variação heurística de caminhos mínimos, denominada Repeated Shortest Path Heuristic (RSPH), para conectar nós obrigatórios e pontos de coleta a um ponto de descarga ou a coletores locais. O custo de uma aresta combina comprimento, inclinação e penalidades para trechos pouco favoráveis, permitindo que o algoritmo privilegie caminhos curtos, reutilize troncos já formados e respeite a topografia disponível.
 
 Além do roteamento, o sistema aplica regras de simplificação e preservação geométrica. Nós redundantes podem ser removidos quando formam trechos quase retilíneos e curtos, enquanto curvas acentuadas, quebras de greide, pontos altos, pontos baixos e espaçamentos máximos entre poços de visita influenciam quais vértices devem permanecer. Essa combinação aproxima a implementação de uma ferramenta de apoio à concepção, pois equilibra automação com restrições técnicas mínimas para manter a rede interpretável.
 
-\subsection{Trabalhos relacionados}
+
 Entre as soluções comerciais relacionadas, destacam-se Bentley OpenFlows Sewer, Urbano Hydra e GeoSan. O Bentley OpenFlows Sewer é uma suíte consolidada para modelagem e gestão de sistemas de esgotamento sanitário, com integração a dados geoespaciais e ferramentas de simulação hidráulica \cite{bentley2024}. Embora seja robusto, seu foco está em ambientes profissionais completos, enquanto o URBANUS busca atacar a etapa preliminar de concepção de forma mais leve e acessível.
 
-O Urbano Hydra oferece recursos de produtividade para projetos de redes, com sincronização entre planta, perfis e tabelas de dados \cite{peterschinegg}. Essa ideia de consistência entre representação espacial e dados tabulares inspira o URBANUS na busca por uma interface em que alterações no grafo possam repercutir diretamente na rede processada. No entanto, o projeto aqui relatado prioriza a geração e otimização inicial do traçado a partir de dados públicos e topografia, em vez de partir de um desenho técnico já estabelecido.
+O Urbano Hydra oferece recursos de produtividade para projetos de redes, com sincronização entre planta, perfis e tabelas de dados \cite{peterschinegg}. Essa ideia de consistência entre a representação espacial e os dados tabulares inspira o URBANUS na busca por uma interface em que alterações no grafo repercutam diretamente na rede processada. No entanto, o projeto aqui relatado prioriza a geração e otimização iniciais do traçado a partir de dados públicos e topografia, em vez de partir de um desenho técnico já estabelecido.
 
 No contexto brasileiro, o GeoSan é uma referência em gestão e cadastro técnico de redes de água e esgoto \cite{nexusgeosan}. A relação com o URBANUS é complementar: enquanto sistemas cadastrais se concentram na operação e registro de redes existentes, o URBANUS atua antes, na análise de viabilidade e planejamento de novas expansões. Também são relevantes trabalhos acadêmicos que aplicam algoritmos genéticos e modelos de otimização ao traçado de redes coletoras \cite{haghighi2012, rodrigues2020}; diferentemente desses trabalhos, o sistema em desenvolvimento enfatiza a integração entre algoritmo, edição interativa e fluxo web de uso.
 
+
 \section{Objetivos}
+
 O projeto tem como objetivo transformar o método URBANUS em uma plataforma funcional de apoio ao planejamento preliminar de redes de esgotamento sanitário. No período relatado, a ênfase foi a construção da base computacional do sistema: arquitetura web, persistência dos projetos, editor de grafo, enriquecimento de dados e pipeline de processamento da rede. Essa base é necessária para que a etapa seguinte, de validação experimental com estudos de caso, seja realizada de forma reprodutível.
 
-\subsection{Objetivo geral}
-Implementar e evoluir o sistema URBANUS como uma aplicação web capaz de importar ou obter dados geoespaciais, construir um grafo urbano editável, processar uma rede preliminar de esgotamento sanitário por meio de algoritmos de grafos e oferecer visualização interativa dos resultados para análise técnica.
+O objetivo geral do projeto é implementar e evoluir o sistema URBANUS como uma aplicação web capaz de importar ou obter dados geoespaciais, construir um grafo urbano editável, processar uma rede preliminar de esgotamento sanitário por meio de algoritmos de grafos e oferecer visualização interativa dos resultados para análise técnica.
 
-\subsection{Objetivos específicos}
+Já os objetivos específicos são os seguintes:
+
 \begin{itemize}[leftmargin=1.5cm]
     \item Desenvolver uma arquitetura web integrada, com frontend em Next.js, backend em FastAPI, pacotes compartilhados e persistência geoespacial em PostgreSQL/PostGIS.
     \item Implementar o fluxo de obtenção, enriquecimento e representação dos dados de entrada, incluindo ruas do OpenStreetMap, elevação do OpenTopography e construção de grafo editável.
     \item Implementar e testar o pipeline de processamento da rede, contemplando classificação de nós, identificação de restrições geométricas e topográficas, roteamento gravitacional, preservação de cobertura e otimização da quantidade de nós.
-    \item Construir uma interface interativa que permita visualizar, editar, salvar, processar e comparar o grafo original e a rede processada.
-    \item Preparar a base técnica para validação experimental com estudos de caso e comparação com resultados produzidos manualmente por especialista de domínio.
+    \item Construir uma interface interativa que permita visualizar, editar, salvar, processar e inspecionar o grafo original e a rede processada.
+    \item Preparar a base técnica para validação experimental com estudos de caso e análise do comportamento do sistema em diferentes contextos urbanos.
 \end{itemize}
 
-\section{Materiais e Métodos}
-A metodologia adotada é incremental e orientada por prototipação. O desenvolvimento parte do método previamente proposto para o URBANUS e reorganiza a solução em uma aplicação web com separação clara entre interface, API, modelos de domínio, algoritmos e persistência. A cada incremento, o comportamento do pipeline é verificado por inspeção do código, testes automatizados e uso do editor sobre projetos salvos.
 
-O fluxo geral do sistema inicia-se com a seleção de uma área no mapa. A aplicação consulta dados viários, recorta e organiza as geometrias, solicita enriquecimento altimétrico no backend e extrai nós para o editor. O usuário pode então modificar a rede, salvar o projeto e executar o processamento. O backend recebe o grafo editado como fonte de verdade, reconstrói uma estrutura NetworkX, aplica o pipeline de esgoto e devolve uma rede serializada para visualização e persistência.
+\section{Atividades realizadas}
 
-\subsection{Base de dados / materiais utilizados}
-Os dados de entrada utilizados pelo sistema são principalmente geoespaciais. As vias urbanas são obtidas a partir do OpenStreetMap, por meio de consultas à Overpass API, e representadas como GeoJSON. A topografia é obtida por meio da API do OpenTopography, que retorna modelos digitais de elevação em GeoTIFF. O sistema amostra os valores altimétricos nos vértices das vias, trata valores ausentes ou artefatos de borda e armazena estatísticas de elevação por trecho.
+A metodologia adotada foi incremental e orientada à prototipação.
+O desenvolvimento partiu do método previamente proposto para o URBANUS e reorganizou a solução em uma aplicação web com separação clara entre interface, API, modelos de domínio, algoritmos e persistência.
+A cada incremento, o comportamento do pipeline foi verificado por inspeção do código, testes automatizados e uso do editor sobre projetos salvos.
 
-O projeto inicial tomou como referência o estudo de caso de Verdelândia, MG, já utilizado na validação do protótipo anterior. Esse estudo continua sendo a base prevista para a validação experimental do sistema web, pois permite comparação com resultados elaborados manualmente por especialista de domínio. Além disso, a arquitetura atual permite criar projetos para outras áreas urbanas, o que será útil para testar escalabilidade e robustez em diferentes tamanhos de malha viária.
+O fluxo geral do sistema em implementação inicia-se com a seleção de uma área no mapa.
+A aplicação consulta dados viários, recorta e organiza as geometrias, solicita enriquecimento altimétrico no backend e extrai nós para o editor.
+O usuário pode então modificar a rede, salvar o projeto e executar o processamento.
+O backend recebe o grafo editado como fonte de verdade, reconstrói uma estrutura do NetworkX, aplica o pipeline de esgoto e devolve uma rede serializada para visualização e persistência.
 
-Os projetos são persistidos em PostgreSQL com extensão PostGIS. A tabela de projetos mantém metadados, área selecionada, centro do mapa, estatísticas e GeoJSON de ruas. As tabelas de nós e arestas armazenam a rede processada com geometrias espaciais, atributos de elevação, tipo de nó, comprimento, inclinação e propriedades auxiliares.
+\subsection{Base de dados e materiais utilizados}
 
-\subsection{Ferramentas e ambiente computacional}
-O sistema foi organizado como um monorepo poliglota. A parte JavaScript/TypeScript utiliza pnpm workspace, enquanto a parte Python utiliza uv workspace. O frontend foi desenvolvido com Next.js, React, TypeScript, Tailwind CSS, MapLibre, React Map GL, Zustand e React Query. A interface inclui edição interativa do grafo, controles de visualização, persistência de estado e painéis de resultados.
+Os dados de entrada utilizados pelo sistema são principalmente geoespaciais. As vias urbanas são obtidas a partir do OpenStreetMap, por meio de consultas à Overpass API, e representadas como GeoJSON. A topografia é obtida por meio da API do OpenTopography, que retorna modelos digitais de elevação em GeoTIFF.
+O sistema amostra os valores altimétricos nos vértices das vias, trata valores ausentes ou artefatos de borda e armazena estatísticas de elevação por trecho.
 
-O backend foi desenvolvido em Python com FastAPI, Pydantic, SQLAlchemy, GeoAlchemy2, Shapely, Rasterio, NumPy, httpx e NetworkX. O FastAPI expõe rotas para CRUD de projetos, extração de nós, enriquecimento de elevação e processamento da rede. O NetworkX é usado como estrutura de grafo para as etapas algorítmicas, enquanto o PostGIS fornece persistência geoespacial.
+O projeto inicial tomou como referência um estudo de caso já utilizado na validação do protótipo anterior.
+Esse histórico ajuda a contextualizar a evolução do sistema e a continuidade da pesquisa.
+Além disso, a arquitetura atual permite criar projetos para outras áreas urbanas, o que será útil para testar a escalabilidade e a qualidade em diferentes tamanhos de malha viária.
 
-Também foram criados pacotes compartilhados em TypeScript para tipos geográficos, constantes e utilitários, além de um pacote Python com tipos Pydantic e cálculos geográficos. Essa divisão segue o princípio de compartilhar contrato, não implementação: cada ecossistema mantém sua própria implementação, mas os conceitos centrais permanecem alinhados.
+Os projetos são persistidos em PostgreSQL com a extensão PostGIS.
+A tabela de projetos mantém metadados, a área selecionada, o centro do mapa, estatísticas e o GeoJSON de ruas.
+As tabelas de nós e arestas armazenam a rede processada com geometrias espaciais, atributos de elevação, tipo de nó, comprimento, inclinação e propriedades auxiliares.
+
+\subsection{Resultados Parciais}
+
+O sistema foi organizado como um monorepo poliglota.
+A parte JavaScript/TypeScript utiliza pnpm workspace, enquanto a parte Python utiliza uv workspace. O frontend foi desenvolvido com Next.js, React, TypeScript, Tailwind CSS, MapLibre, React Map GL, Zustand e React Query. A interface inclui edição interativa do grafo, controles de visualização, persistência de estado e painéis de resultados.
+
+O backend foi desenvolvido em Python com FastAPI, Pydantic, SQLAlchemy, GeoAlchemy2, Shapely, Rasterio, NumPy, httpx e NetworkX. O FastAPI expõe rotas para CRUD de projetos, extração de nós, enriquecimento de elevação e processamento da rede.
+O NetworkX é usado como estrutura de grafo para as etapas algorítmicas, enquanto o PostGIS fornece persistência geoespacial.
+
+Também foram criados pacotes compartilhados em TypeScript para tipos geográficos, constantes e utilitários, além de um pacote Python com tipos Pydantic e cálculos geográficos.
+Essa divisão segue o princípio de compartilhar contrato, não implementação: cada ecossistema mantém sua própria implementação, mas os conceitos centrais permanecem alinhados.
 
 \subsection{Metodologia experimental}
-A validação experimental planejada será conduzida em duas frentes. A primeira é funcional e computacional, verificando se cada etapa do sistema produz estruturas coerentes: extração de vias, enriquecimento de elevação, construção do grafo, edição, persistência, roteamento, cobertura e visualização da rede processada. Essa validação já conta com testes automatizados para cálculos geográficos, validações de bounding box, regras de nós, paridade entre implementações, classificação, sanitização, detecção de extremos, roteamento, custo de arestas, reparo de ciclos e otimização de nós.
 
-A segunda frente será comparativa, utilizando o estudo de caso de Verdelândia e pelo menos uma região adicional. Os resultados do URBANUS deverão ser comparados com o planejamento manual produzido por especialista de domínio. A comparação deve considerar precisão geométrica, coerência do traçado, posicionamento de poços de visita, identificação de pontos de coleta, cobertura da malha viária, redução de nós redundantes e tempo de geração da solução preliminar.
+A validação experimental planejada está sendo conduzida em duas frentes.
+A primeira é funcional e computacional, verificando se cada etapa do sistema produz estruturas coerentes: extração de vias, enriquecimento de elevação, construção do grafo, edição, persistência, roteamento, cobertura e visualização da rede processada.
+Essa validação já conta com testes automatizados para cálculos geográficos, validações de bounding box, regras de nós, paridade entre implementações, classificação, sanitização, detecção de extremos, roteamento, custo de arestas, reparo de ciclos e otimização de nós.
 
-Durante o desenvolvimento, decisões técnicas são avaliadas contra o comportamento observado no sistema. Nesse sentido, o contrato atual de processamento utiliza exclusivamente o grafo editado no frontend, evitando divergência entre o que o usuário vê e o que o backend processa. De modo semelhante, a rede processada é persistida junto ao projeto e reidratada no editor, permitindo salvar, recarregar, desfazer e refazer alterações de forma consistente.
+A segunda frente considerará a aplicação do sistema em diferentes áreas urbanas, buscando observar seu comportamento em malhas viárias e condições topográficas distintas.
+Nessa etapa, serão observados aspectos como coerência do traçado, posicionamento de poços de visita, identificação de pontos de coleta, cobertura da malha viária, redução de nós redundantes e tempo de geração da solução preliminar.
 
-\section{Resultados Parciais}
-Até o momento, foi implementada a base funcional do sistema URBANUS em sua versão web. O resultado parcial mais relevante é a consolidação de um fluxo completo, ainda em validação, que vai da criação de um projeto geográfico até a geração de uma rede preliminar de esgoto processada por algoritmos de grafos. A versão atual já permite criar e listar projetos, abrir o editor, visualizar ruas e nós, editar o grafo, executar o pipeline, salvar a rede processada e recarregar o estado persistido.
+Durante o desenvolvimento, decisões técnicas são avaliadas contra o comportamento observado no sistema.
+Nesse sentido, o contrato atual de processamento utiliza exclusivamente o grafo editado no frontend, evitando divergência entre o que o usuário vê e o que o backend processa.
+De modo semelhante, a rede processada é persistida junto ao projeto e reidratada no editor, permitindo salvar, recarregar, desfazer e refazer alterações de forma consistente.
 
-\subsection{Resultados obtidos}
+\section{Estado atual do protótipo}
+
+Até o momento, foi implementada a base funcional do sistema URBANUS em sua versão web.
+O resultado parcial mais relevante é a consolidação de um fluxo completo, ainda em validação, que vai da criação de um projeto geográfico até a geração de uma rede preliminar de esgoto processada por algoritmos de grafos.
+A versão atual já permite criar e listar projetos, abrir o editor, visualizar ruas e nós, editar o grafo, executar o pipeline, salvar a rede processada e recarregar o estado persistido.
+
 No backend, foram implementadas rotas FastAPI para criação, listagem, leitura e exclusão de projetos, além de rotas para extração de nós, enriquecimento de elevação e processamento da rede. A persistência foi migrada para PostgreSQL/PostGIS, armazenando tanto o GeoJSON do projeto quanto as geometrias processadas de nós e arestas. O processamento salva o resultado como uma estrutura serializada de rede de esgoto e também em tabelas geoespaciais.
 
-O pipeline atual recebe como entrada o grafo editado pelo usuário. Essa decisão eliminou dependência de reconstruções implícitas a partir do GeoJSON original e torna o editor a fonte de verdade. O backend reconstrói o grafo em NetworkX, trata artefatos de elevação, identifica nós obrigatórios, marca mudanças de direção, remove nós redundantes, aplica espaçamento mínimo entre poços de visita, detecta máximos e mínimos locais, identifica quebras de greide, seleciona pontos de coleta, executa o RSPH, repara cobertura de arestas faltantes, remove ciclos quando necessário, otimiza a posição e quantidade de nós e atribui o tipo de acessório PV aos nós restantes.
+O pipeline atual recebe como entrada o grafo editado pelo usuário. Essa decisão eliminou a dependência de reconstruções implícitas a partir do GeoJSON original e tornou o editor a fonte de verdade.
+O backend reconstrói o grafo em NetworkX, trata artefatos de elevação, identifica nós obrigatórios, marca mudanças de direção, remove nós redundantes, aplica espaçamento mínimo entre poços de visita, detecta máximos e mínimos locais, identifica quebras de greide, seleciona pontos de coleta, executa o RSPH, repara cobertura de arestas faltantes, remove ciclos quando necessário, otimiza a posição e quantidade de nós e atribui o tipo de acessório PV aos nós restantes.
 
-No frontend, foi desenvolvido um editor de grafo sobre mapa com suporte a seleção, movimentação, criação, conexão, divisão e remoção de nós. O editor possui integração com undo/redo, hidratação a partir de projetos salvos, alternância entre grafo original e rede processada, visualização por elevação e ruas, setas de fluxo, filtros de categorias de nós e rótulos de distância nas arestas. A interface usa MapLibre para renderização geográfica e Zustand para gerenciamento de estado local do grafo e do pipeline.
+No frontend, foi desenvolvido um editor de grafo sobre mapa com suporte à seleção, movimentação, criação, conexão, divisão e remoção de nós. O editor possui integração com undo/redo, hidratação a partir de projetos salvos, alternância entre grafo original e rede processada, visualização por elevação e ruas, setas de fluxo, filtros de categorias de nós e rótulos de distância nas arestas. A interface usa MapLibre para renderização geográfica e Zustand para o gerenciamento do estado local do grafo e do pipeline.
 
 Também foram adicionados testes automatizados em múltiplas camadas do repositório. Há testes para constantes e cálculos geográficos nos pacotes compartilhados, validações de mapa no frontend e testes Python para classificação, sanitização, custo de roteamento, RSPH, detecção de extremos, reparo de cobertura, prevenção de ciclos, tratamento de elevação e redução de nós.
 
-\subsection{Discussão dos resultados}
-Os resultados parciais indicam avanço substancial em relação ao plano inicial. A solução deixou de ser apenas uma ideia de migração de protótipo e passou a ter uma arquitetura operacional, com separação entre frontend, backend, contratos compartilhados, persistência e algoritmos. Essa organização permite evoluir a plataforma de forma mais controlada e reduz o risco de inconsistência entre o estado visual do editor e o processamento executado no servidor.
+\subsection{Discussão}
 
-Algumas decisões de implementação foram particularmente importantes. A primeira foi tratar o grafo editado como entrada obrigatória do processamento, pois isso torna o comportamento do sistema previsível para o usuário. A segunda foi persistir a rede processada junto ao projeto, permitindo que o resultado sobreviva ao recarregamento da página e continue disponível para edição posterior. A terceira foi simplificar o modelo de acessórios, representando os nós físicos atuais como PV e mantendo o papel de ponto de coleta como uma propriedade separada.
+Os resultados parciais indicam avanço em relação ao plano inicial do projeto de IC.
+A solução deixou de ser apenas uma ideia de migração de protótipo e passou a ter uma arquitetura operacional, com separação entre frontend, backend, contratos compartilhados, persistência e algoritmos.
+Essa organização permite evoluir a plataforma de forma mais controlada e reduz o risco de inconsistência entre o estado visual do editor e o processamento executado no servidor.
 
-Apesar dos avanços, a etapa de validação experimental ainda precisa ser concluída. Os testes automatizados aumentam a confiança nas partes internas do sistema, mas não substituem a comparação com projetos reais ou com a avaliação de especialista. Também ainda é necessário refinar métricas de qualidade, documentar critérios de aceitação e avaliar o comportamento do pipeline em áreas urbanas maiores ou com topografia mais complexa.
+Algumas decisões de implementação foram particularmente importantes.
+A primeira foi tratar o grafo editado como entrada obrigatória do processamento, pois isso torna o comportamento do sistema previsível para o usuário.
+A segunda foi persistir a rede processada junto ao projeto, permitindo que o resultado sobreviva ao recarregamento da página e continue disponível para edição posterior.
+A terceira foi simplificar o modelo de acessórios, representando os nós físicos atuais como PV e mantendo o papel de ponto de coleta como uma propriedade separada.
 
-\section{Atividades Desenvolvidas}
-As atividades desenvolvidas no período envolveram estudo do método original, definição de arquitetura, implementação incremental do sistema e correções baseadas no comportamento observado durante o uso do editor. O trabalho combinou atividades de pesquisa aplicada, engenharia de software e modelagem algorítmica.
+Apesar dos avanços, a etapa de validação experimental ainda precisa ser concluída.
+Os testes automatizados aumentam a confiança nas partes internas do sistema, mas não substituem a aplicação em estudos de caso reais e a análise qualitativa por especialista.
+Também ainda é necessário refinar métricas de qualidade, documentar critérios de aceitação e avaliar o comportamento do pipeline em áreas urbanas maiores ou com topografia mais complexa.
+
+\section{Andamento do projeto}
+
+As atividades desenvolvidas no período envolveram estudo do método original e conceitos da teoria dos grafos, definição de arquitetura, implementação incremental do sistema e correções baseadas no comportamento observado durante o uso do editor.
+O trabalho combinou atividades de pesquisa aplicada, engenharia de software e modelagem algorítmica.
 
 \subsection{Atividades executadas no período}
+
 Inicialmente, foi realizada a leitura do projeto original e do protótipo associado ao URBANUS, com foco em compreender a motivação, os requisitos de domínio e os resultados já alcançados. Em seguida, foram estudadas bibliotecas e tecnologias adequadas para a versão web, incluindo ferramentas de mapa, manipulação de GeoJSON, APIs externas de dados geográficos, backend Python e persistência geoespacial.
 
 Na camada de dados, foi definida a persistência dos projetos e da rede processada em PostgreSQL/PostGIS. Na camada de backend, foram implementadas rotas de API, modelos Pydantic, repositórios SQLAlchemy, enriquecimento altimétrico com GeoTIFF e o pipeline de processamento em NetworkX. Na camada de frontend, foram desenvolvidas telas de listagem de projetos, editor de mapa, toolbar de edição, painéis laterais, visualização de resultados e integração com as rotas do backend.
 
-Também foram executadas atividades de depuração e refinamento do pipeline. Entre elas destacam-se o tratamento de elevações espúrias iguais a zero nas bordas da área selecionada, a preservação da geometria correta no primeiro processamento, a correção de setas de fluxo, a deduplicação de pontos de coleta, a persistência do snapshot processado e a integração do processamento ao histórico de undo/redo do editor.
+Também foram executadas atividades de depuração e refinamento do pipeline. Entre elas, destacam-se o tratamento de elevações espúrias iguais a zero nas bordas da área selecionada, a preservação da geometria correta no primeiro processamento, a correção de setas de fluxo, a deduplicação de pontos de coleta, a persistência do snapshot processado e a integração do processamento ao histórico de undo/redo do editor.
 
 \subsection{Dificuldades encontradas}
+
 Uma dificuldade recorrente foi manter coerência entre o grafo exibido no frontend e a estrutura processada no backend. Em versões intermediárias, existiam caminhos alternativos de reconstrução a partir do GeoJSON original, o que podia gerar divergência entre o que o usuário editava e o que o algoritmo recebia. A solução foi simplificar o contrato e exigir que o processamento utilize explicitamente os nós e arestas do editor.
 
 Outra dificuldade esteve relacionada à qualidade dos dados altimétricos. Em alguns casos, vértices próximos à borda da bounding box recebiam elevação zero por artefatos de amostragem do DEM, afetando a escolha de pontos baixos e a orientação do fluxo. Foram implementadas rotinas de sanitização e interpolação para reduzir esse problema, tanto no enriquecimento quanto como salvaguarda antes do processamento.
 
 Também houve desafios de modelagem do domínio. O sistema precisa equilibrar a redução de nós redundantes com a preservação de elementos tecnicamente relevantes, como curvas acentuadas, quebras de greide, pontos de coleta e espaçamento entre poços de visita. Como o objetivo ainda é planejamento preliminar, algumas decisões foram mantidas simples e verificáveis, deixando refinamentos hidráulicos e quantitativos detalhados para etapas posteriores.
 
-\section{Cronograma e Próximos Passos}
-O cronograma foi reorganizado para refletir o andamento real do projeto. As etapas iniciais de estudo, escolha tecnológica, estruturação do monorepo, implementação da base web e construção do pipeline foram priorizadas no período parcial. As próximas etapas concentram-se na validação experimental, na consolidação das métricas e na preparação dos resultados para divulgação científica.
+\subsection{Cronograma e Próximos Passos}
 
-\subsection{Cronograma}
-A Tabela 1 apresenta um cronograma sintético para o período considerado no relatório e para as atividades restantes. Os bimestres iniciais concentram as tarefas já realizadas de fundamentação e implementação. Os bimestres finais concentram a validação com estudo de caso, refinamento da ferramenta e escrita dos materiais científicos.
+O cronograma foi reorganizado para refletir o andamento real do projeto. As etapas iniciais de estudo, escolha tecnológica, estruturação do monorepo, implementação da base web e construção do pipeline foram priorizadas no período parcial.
+As próximas etapas concentram-se na validação experimental, na consolidação das métricas e na preparação dos resultados para divulgação científica.
+
+A Tabela \ref{sec:cronograma} apresenta um cronograma sintético para o período considerado no relatório e para as atividades restantes. Os bimestres iniciais concentram as tarefas já realizadas de fundamentação e implementação. Os bimestres finais concentram a validação com estudo de caso, refinamento da ferramenta e escrita dos materiais científicos.
 
 \begin{table}[H]
     \centering
-    \caption{Cronograma resumido de atividades do projeto.}
-    \begin{tabular}{lcccccc}
+    \caption{Cronograma resumido de atividades do projeto. A linha vertical indica o momento atual do andamento do projeto.}\label{sec:cronograma}
+    \begin{tabular}{lccc|ccc}
         \toprule
         Atividade & B1 & B2 & B3 & B4 & B5 & B6 \\
         \midrule
@@ -288,17 +334,17 @@ A Tabela 1 apresenta um cronograma sintético para o período considerado no rel
     \end{tabular}
 \end{table}
 
-\subsection{Próximos passos}
-Os próximos passos imediatos são consolidar um conjunto de estudos de caso, preparar os dados de comparação e executar a avaliação experimental do URBANUS. O estudo de Verdelândia deve ser usado como referência principal, por já possuir histórico de validação do protótipo e comparação com planejamento manual. Uma segunda área deverá ser escolhida para verificar se o comportamento do sistema se mantém em outro contexto urbano.
+Os próximos passos imediatos são consolidar um conjunto de estudos de caso, organizar os dados de entrada e executar a avaliação experimental do URBANUS. Também será importante selecionar áreas urbanas com características distintas para verificar se o comportamento do sistema se mantém em outros contextos.
 
-Também será necessário refinar as métricas de avaliação. Além de medir tempo de processamento, pretende-se comparar comprimento total da rede, número de nós, posicionamento dos PVs, cobertura das vias, coerência do direcionamento gravitacional, quantidade de trechos sem caminho viável e qualidade geométrica do traçado resultante. A análise qualitativa da especialista de domínio será fundamental para interpretar casos em que a métrica numérica não captura adequadamente a utilidade do resultado.
+Também será necessário refinar as métricas de avaliação. Além de medir o tempo de processamento, pretende-se analisar o comprimento total da rede, o número de nós, o posicionamento dos PVs, a cobertura das vias, a coerência do direcionamento gravitacional, a quantidade de trechos sem caminho viável e a qualidade geométrica do traçado resultante. A análise qualitativa da especialista de domínio será fundamental para interpretar casos em que a métrica numérica não captura adequadamente a utilidade do resultado.
 
 Por fim, serão organizadas a documentação técnica do sistema, a preparação de material para o SIICUSP e a consolidação dos elementos necessários para futura proteção intelectual. Essas atividades devem registrar a metodologia, a arquitetura, os algoritmos implementados e os resultados experimentais obtidos.
 
 \section{Conclusão}
+
 O desenvolvimento parcial do URBANUS avançou de forma consistente em direção ao objetivo de criar uma plataforma computacional para planejamento preliminar de redes de esgotamento sanitário. A versão atual já possui uma base web funcional, persistência geoespacial, editor interativo, integração com dados públicos de vias e elevação, além de um pipeline de grafos capaz de gerar uma rede direcionada e simplificada.
 
-Os resultados obtidos mostram que a proposta é tecnicamente viável e que a arquitetura escolhida oferece condições para continuidade da pesquisa. A principal contribuição parcial é a transformação do método em um sistema operável, no qual especialistas podem criar projetos, visualizar dados, editar a malha e acionar o processamento. A principal limitação restante é a necessidade de validação experimental sistemática com estudos de caso reais e comparação com resultados manuais.
+Os resultados obtidos mostram que a proposta é tecnicamente viável e que a arquitetura escolhida oferece condições para a continuidade da pesquisa. A principal contribuição parcial é a transformação do método em um sistema operável, no qual especialistas podem criar projetos, visualizar dados, editar a malha e acionar o processamento. A principal limitação restante é a necessidade de validação experimental sistemática com estudos de caso reais e análise qualitativa dos resultados gerados.
 
 Assim, a próxima fase do projeto deverá concentrar-se menos na infraestrutura básica do sistema e mais na avaliação da qualidade da solução gerada. Com essa validação, espera-se demonstrar de forma mais objetiva o potencial do URBANUS para reduzir tempo, custo e barreiras técnicas na concepção inicial de redes de esgotamento sanitário.
 
@@ -320,7 +366,7 @@ HAGHIGHI, A.; BAKHSHIPOUR, A. E. Optimization of sewer networks using an adaptiv
 MELO, H. C.; TOMÉ, S. M. G.; SILVA, M. H.; GONZALES, M. M.; GOMES, D. B. O. Implementation of city information modeling (CIM) concepts in the process of management of the sewage system in Piumhi, Brazil. \textit{IOP Conference Series: Earth and Environmental Science}, v.~225, 012076, 2019.
 
 \bibitem{nexusgeosan}
-NEXUS GEOENGENHARIA / NEXUSBR. \textit{GeoSan: sistema GIS para cadastro e gestão de redes de água e esgoto}. Disponível em: \url{https://www.nexusbr.com/pt_br/sobre-geosan}. Acesso em: 8 dez. 2025.
+NEXUS GEOENGENHARIA / NEXUSBR. \textit{GeoSan: sistema GIS para cadastro e gestão de redes de água e esgoto}. Disponível em: \url{https://www.nexusbr.com/pt_br/sobre-geosan}. Acesso em: 5 maio 2026.
 
 \bibitem{peterschinegg}
 PETERSCHINEGG. \textit{Urbano Hydra - documentação técnica}. Disponível em: \url{https://peterschinegg.at/applikationen/pdf/urbano_9.pdf}. Acesso em: 8 dez. 2025.
