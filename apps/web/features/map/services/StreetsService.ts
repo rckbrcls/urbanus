@@ -1,8 +1,8 @@
 /**
- * Serviço de Ruas
+ * Streets Service
  *
- * Gerencia busca de dados de ruas da API Overpass
- * Inclui rate limiting e retry automático
+ * Manages street data requests through the Overpass API.
+ * Includes rate limiting and automatic retries.
  */
 
 import type { BoundingBox } from "../types";
@@ -37,9 +37,6 @@ export class StreetsService {
     return this.instance;
   }
 
-  /**
-   * Busca ruas para um bounding box
-   */
   async fetchStreets(
     bbox: BoundingBox,
     options: FetchStreetsOptions = {},
@@ -55,7 +52,7 @@ export class StreetsService {
       const limitCheck = this.rateLimiter.acquire("streets");
       if (!limitCheck.allowed) {
         throw new StreetsError(
-          `Limite de requisições excedido. Tente novamente em ${Math.ceil((limitCheck.retryAfter || 5000) / 1000)}s`,
+          `Request limit exceeded. Try again in ${Math.ceil((limitCheck.retryAfter || 5000) / 1000)}s`,
           "RATE_LIMITED",
         );
       }
@@ -74,7 +71,7 @@ export class StreetsService {
       });
 
       if (!response.ok) {
-        let errorMessage = "Erro ao buscar ruas";
+        let errorMessage = "Unable to fetch streets";
         try {
           const error = await response.json();
           errorMessage = error.error || errorMessage;
@@ -84,7 +81,7 @@ export class StreetsService {
 
         if (response.status === 429) {
           throw new StreetsError(
-            "Limite de requisições excedido",
+            "Request limit exceeded",
             "RATE_LIMITED",
             response.status,
           );
@@ -115,8 +112,8 @@ export class StreetsService {
           retryCondition: isRetryableError,
           onRetry: (attempt, error, delay) => {
             console.log(
-              `[StreetsService] Retry ${attempt}/${maxRetries} após erro. ` +
-                `Próxima tentativa em ${delay}ms`,
+              `[StreetsService] Retry ${attempt}/${maxRetries} after error. ` +
+                `Next attempt in ${delay}ms`,
               error,
             );
           },
@@ -126,7 +123,7 @@ export class StreetsService {
     } catch (error) {
       if (error instanceof StreetsError) throw error;
       throw new StreetsError(
-        `Erro ao buscar ruas: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+        `Unable to fetch streets: ${error instanceof Error ? error.message : "Unknown error"}`,
         "UNKNOWN_ERROR",
       );
     }

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clipFeatureCollectionToBbox } from "@urbanus/geo";
 
-const OVERPASS_API_URL = "https://overpass-api.de/api/interpreter";
+const DEFAULT_OVERPASS_API_URLS = [
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
+];
+
+const OVERPASS_ERROR_MESSAGE = "Unable to fetch street data from OpenStreetMap";
 
 interface StreetsRequest {
   south: number;
@@ -11,7 +16,6 @@ interface StreetsRequest {
   types?: string[];
 }
 
-// Tipos de vias disponíveis
 const DEFAULT_HIGHWAY_TYPES = [
   "motorway",
   "trunk",
@@ -22,20 +26,106 @@ const DEFAULT_HIGHWAY_TYPES = [
   "unclassified",
 ];
 
+interface OverpassElement {
+  type: string;
+  id: number;
+  nodes?: number[];
+  lat?: number;
+  lon?: number;
+  tags?: Record<string, string>;
+}
+
+interface OverpassData {
+  elements: OverpassElement[];
+}
+
+function getOverpassApiUrls() {
+  const urlsFromList = parseOverpassApiUrls(process.env.OVERPASS_API_URLS);
+  if (urlsFromList.length > 0) {
+    return urlsFromList;
+  }
+
+  const urlFromSingleValue = parseOverpassApiUrls(process.env.OVERPASS_API_URL);
+  if (urlFromSingleValue.length > 0) {
+    return urlFromSingleValue;
+  }
+
+  return DEFAULT_OVERPASS_API_URLS;
+}
+
+function parseOverpassApiUrls(value: string | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
+async function fetchOverpassData(query: string): Promise<OverpassData> {
+  const errors: string[] = [];
+
+  for (const url of getOverpassApiUrls()) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 35_000);
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ data: query }),
+        signal: controller.signal,
+      });
+
+      const responseText = await response.text();
+      const isHtml = response.headers.get("content-type")?.includes("text/html")
+        || responseText.trimStart().startsWith("<");
+
+      if (!response.ok || isHtml) {
+        const summary = extractOverpassError(responseText) || responseText.slice(0, 500);
+        errors.push(`${url}: HTTP ${response.status} ${summary}`);
+        console.error("Overpass endpoint error:", url, summary);
+        continue;
+      }
+
+      try {
+        return JSON.parse(responseText) as OverpassData;
+      } catch {
+        errors.push(`${url}: invalid JSON response`);
+        console.error("Overpass endpoint returned invalid JSON:", url, responseText.slice(0, 500));
+      }
+    } catch (error) {
+      const message = error instanceof Error && error.name === "AbortError"
+        ? "request timed out"
+        : String(error);
+      errors.push(`${url}: ${message}`);
+      console.error("Overpass endpoint request failed:", url, message);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw new Error(errors.join(" | "));
+}
+
+function extractOverpassError(responseText: string) {
+  const overpassRegex = new RegExp('<p[^>]*>.*?<strong[^>]*>Error</strong>:\\s*(.*?)</p>', "s");
+  return overpassRegex.exec(responseText)?.[1]?.replace(/<[^>]+>/g, "").trim();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: StreetsRequest = await request.json();
     const { south, north, west, east, types = DEFAULT_HIGHWAY_TYPES } = body;
 
-    // Validação dos parâmetros
     if (south == null || north == null || west == null || east == null) {
       return NextResponse.json(
-        { error: "Parâmetros de bounding box são obrigatórios (south, north, west, east)" },
+        { error: "Bounding box parameters are required (south, north, west, east)" },
         { status: 400 }
       );
     }
 
-    // Calcular área aproximada em km²
     const latDiff = north - south;
     const lonDiff = east - west;
     const avgLat = (north + south) / 2;
@@ -43,19 +133,17 @@ export async function POST(request: NextRequest) {
     const kmPerDegreeLon = 111.32 * Math.cos((avgLat * Math.PI) / 180);
     const areaKm2 = latDiff * kmPerDegreeLat * lonDiff * kmPerDegreeLon;
 
-    // Limite de área para evitar sobrecarga
     const maxAreaKm2 = 100;
     if (areaKm2 > maxAreaKm2) {
       return NextResponse.json(
         {
-          error: `Área muito grande (${areaKm2.toFixed(1)} km²). Máximo: ${maxAreaKm2} km²`,
+          error: `Selected area is too large (${areaKm2.toFixed(1)} km²). Maximum: ${maxAreaKm2} km²`,
           areaKm2,
         },
         { status: 400 }
       );
     }
 
-    // Query Overpass para buscar ruas
     const query = `
       [out:json][timeout:30];
       (
@@ -66,64 +154,17 @@ export async function POST(request: NextRequest) {
       out skel qt;
     `;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 35_000);
-
-    let response: Response;
+    let data: OverpassData;
     try {
-      response = await fetch(OVERPASS_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal,
-      });
-    } catch (fetchError) {
-      clearTimeout(timeout);
-      const msg = fetchError instanceof Error && fetchError.name === "AbortError"
-        ? "Timeout: servidor Overpass não respondeu em 35s"
-        : "Falha de conexão com o servidor Overpass";
-      return NextResponse.json({ error: msg }, { status: 504 });
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    const responseText = await response.text();
-
-    // Overpass can return 200 with HTML error body — detect it
-    const isHtml = response.headers.get("content-type")?.includes("text/html")
-      || responseText.trimStart().startsWith("<");
-
-    if (!response.ok || isHtml) {
-      // Try to extract a human-readable message from Overpass HTML
-      const overpassRegex = new RegExp('<p[^>]*>.*?<strong[^>]*>Error</strong>:\\s*(.*?)</p>', 's');
-      const overpassMsg = overpassRegex.exec(responseText)?.[1]
-        ?.replace(/<[^>]+>/g, "").trim();
-
-      const userMessage = overpassMsg
-        ? `Overpass: ${overpassMsg}`
-        : "Erro ao buscar dados do OpenStreetMap";
-
-      console.error("Overpass API error:", overpassMsg || responseText.slice(0, 500));
+      data = await fetchOverpassData(query);
+    } catch (error) {
+      console.error("All Overpass endpoints failed:", error);
       return NextResponse.json(
-        { error: userMessage },
-        { status: response.ok ? 502 : response.status }
-      );
-    }
-
-    let data: { elements: Array<{ type: string; id: number; nodes?: number[]; lat?: number; lon?: number; tags?: Record<string, string> }> };
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      console.error("Overpass returned invalid JSON:", responseText.slice(0, 500));
-      return NextResponse.json(
-        { error: "Resposta inválida do servidor Overpass" },
+        { error: OVERPASS_ERROR_MESSAGE },
         { status: 502 }
       );
     }
 
-    // Converter para GeoJSON e clipar ao bounding box
     const geojson = convertToGeoJSON(data);
     const clipped = clipFeatureCollectionToBbox(geojson as GeoJSON.FeatureCollection, {
       southWest: { lat: south, lng: west },
@@ -142,23 +183,13 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error in streets API:", error);
     return NextResponse.json(
-      { error: "Erro interno do servidor", details: String(error) },
+      { error: "Internal server error", details: String(error) },
       { status: 500 }
     );
   }
 }
 
-// Converter dados do Overpass para GeoJSON
-function convertToGeoJSON(data: {
-  elements: Array<{
-    type: string;
-    id: number;
-    nodes?: number[];
-    lat?: number;
-    lon?: number;
-    tags?: Record<string, string>;
-  }>;
-}) {
+function convertToGeoJSON(data: OverpassData) {
   const nodes: Record<number, [number, number]> = {};
   const ways: Array<{
     id: number;
@@ -166,7 +197,6 @@ function convertToGeoJSON(data: {
     tags: Record<string, string>;
   }> = [];
 
-  // Separar nodes e ways
   for (const element of data.elements) {
     if (element.type === "node" && element.lat != null && element.lon != null) {
       nodes[element.id] = [element.lon, element.lat];
@@ -179,7 +209,6 @@ function convertToGeoJSON(data: {
     }
   }
 
-  // Converter ways para features GeoJSON
   const features = ways
     .map((way) => {
       const coordinates = way.nodes
@@ -210,20 +239,19 @@ function convertToGeoJSON(data: {
   return { type: "FeatureCollection" as const, features };
 }
 
-// GET para informações da API
 export async function GET() {
   return NextResponse.json({
     message: "Streets API - OpenStreetMap Overpass",
     endpoint: "POST /api/streets",
     requiredParams: {
-      south: "Latitude sul do bounding box",
-      north: "Latitude norte do bounding box",
-      west: "Longitude oeste do bounding box",
-      east: "Longitude leste do bounding box",
+      south: "South latitude of the bounding box",
+      north: "North latitude of the bounding box",
+      west: "West longitude of the bounding box",
+      east: "East longitude of the bounding box",
     },
     optionalParams: {
-      types: `Tipos de via (padrão: ${DEFAULT_HIGHWAY_TYPES.join(", ")})`,
+      types: `Highway types (default: ${DEFAULT_HIGHWAY_TYPES.join(", ")})`,
     },
-    maxArea: "25 km²",
+    maxArea: "100 km²",
   });
 }
