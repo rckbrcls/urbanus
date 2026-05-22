@@ -18,6 +18,8 @@ export const en: Dictionary = {
     processing: 'Processing...',
     processed: 'Processed',
     language: 'Language',
+    undo: 'Undo',
+    redo: 'Redo',
   },
   landing: {
     tagline:
@@ -133,6 +135,16 @@ export const en: Dictionary = {
     deleteProject: 'Delete project',
     runPipeline: 'Run pipeline',
     elevationView: 'Elevation',
+    viewModeTooltip: 'View mode',
+    viewModes: {
+      default: 'Default',
+      elevation: 'Elevation',
+      streets: 'Streets',
+    },
+    showOriginalGraph: 'Show original graph',
+    showProcessedNetwork: 'Show processed network',
+    closePanel: 'Close panel',
+    selectedNodeElevation: 'Elevation',
   },
   pipeline: {
     networkSummary: 'Network Summary',
@@ -152,6 +164,10 @@ export const en: Dictionary = {
     projectPlaceholder: 'My Awesome Project',
     nodesPreview: 'nodes (preview)',
     editInProjectPage: 'Edit in project page',
+    streets: 'Streets',
+    topography: 'Topography',
+    nodes: 'Nodes',
+    areaExceeded: 'Area exceeds',
     streetsFailed: 'Failed',
     topographyFailed: 'Failed',
     nodesFailed: 'Failed',

@@ -65,6 +65,18 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
   const { mutateAsync: updateProject } = useUpdateProject();
   const te = useTranslation('editor');
   const tc = useTranslation('common');
+  const undoLabel = tc.undo ?? 'Undo';
+  const redoLabel = tc.redo ?? 'Redo';
+  const viewModeLabels = {
+    default: te.viewModes?.default ?? 'Default',
+    elevation: te.viewModes?.elevation ?? te.elevationView,
+    streets: te.viewModes?.streets ?? te.streets,
+  };
+  const viewModeTooltip = te.viewModeTooltip ?? 'View mode';
+  const showOriginalGraphTitle = te.showOriginalGraph ?? 'Show original graph';
+  const showProcessedNetworkTitle = te.showProcessedNetwork ?? 'Show processed network';
+  const closePanelTitle = te.closePanel ?? 'Close panel';
+  const selectedNodeElevationLabel = te.selectedNodeElevation ?? te.elevationView;
 
   const [activeTab, setActiveTab] = useState<'overview' | 'streets' | 'pipeline'>('overview');
   const [isMounted, setIsMounted] = useState(false);
@@ -122,7 +134,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     { mode: 'select', label: te.modes.select, icon: <MousePointer className="h-4 w-4" />, shortcut: 'V' },
     { mode: 'move', label: te.modes.move, icon: <Move className="h-4 w-4" />, shortcut: 'M' },
     { mode: 'add-node', label: te.modes.addNode, icon: <Plus className="h-4 w-4" />, shortcut: 'A' },
-    { mode: 'add-edge', label: te.modes.addEdge ?? 'Edge', icon: <Cable className="h-4 w-4" />, shortcut: 'E' },
+    { mode: 'add-edge', label: te.modes.addEdge, icon: <Cable className="h-4 w-4" />, shortcut: 'E' },
     { mode: 'delete', label: te.modes.delete, icon: <X className="h-4 w-4" />, shortcut: 'D' },
     { mode: 'split-edge', label: te.modes.split, icon: <Scissors className="h-4 w-4" />, shortcut: 'S' },
   ], [te.modes]);
@@ -536,7 +548,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                 <Undo2 className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom"><span className="flex items-center gap-2">Undo <Kbd>Ctrl+Z</Kbd></span></TooltipContent>
+            <TooltipContent side="bottom"><span className="flex items-center gap-2">{undoLabel} <Kbd>Ctrl+Z</Kbd></span></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -548,7 +560,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                 <Redo2 className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom"><span className="flex items-center gap-2">Redo <Kbd>Ctrl+Shift+Z</Kbd></span></TooltipContent>
+            <TooltipContent side="bottom"><span className="flex items-center gap-2">{redoLabel} <Kbd>Ctrl+Shift+Z</Kbd></span></TooltipContent>
           </Tooltip>
           <div className="mx-1 h-4 w-px bg-border" />
           <Tooltip>
@@ -560,13 +572,13 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                   onChange={(e) => setSewerViewMode(e.target.value as SewerViewMode)}
                   className="bg-transparent text-xs font-medium text-foreground outline-none cursor-pointer"
                 >
-                  <option value="default">Padrão</option>
-                  <option value="elevation">Elevação</option>
-                  <option value="streets">Ruas</option>
+                  <option value="default">{viewModeLabels.default}</option>
+                  <option value="elevation">{viewModeLabels.elevation}</option>
+                  <option value="streets">{viewModeLabels.streets}</option>
                 </select>
               </div>
             </TooltipTrigger>
-            <TooltipContent side="bottom">Modo de visualização</TooltipContent>
+            <TooltipContent side="bottom">{viewModeTooltip}</TooltipContent>
           </Tooltip>
         </div>
         </TooltipProvider>
@@ -590,7 +602,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             <button
               onClick={handleToggleView}
               className="rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-              title={pipelineResult ? "Ver grafo original" : "Ver rede processada"}
+              title={pipelineResult ? showOriginalGraphTitle : showProcessedNetworkTitle}
             >
               {pipelineResult ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -632,7 +644,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
           <button
             onClick={() => setSidebarOpen(false)}
             className="ml-auto rounded-xl p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-            title="Fechar painel"
+            title={closePanelTitle}
           >
             <PanelRightClose className="h-4 w-4" />
           </button>
@@ -743,7 +755,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                             {node.properties.streetName || te.unnamed}
                           </p>
                           <p className="text-muted-foreground">
-                            Elev: {node.properties.elevation?.toFixed(1) ?? 'N/A'}m
+                            {selectedNodeElevationLabel}: {node.properties.elevation?.toFixed(1) ?? 'N/A'}m
                           </p>
                         </div>
                       );

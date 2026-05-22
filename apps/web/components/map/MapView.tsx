@@ -55,6 +55,11 @@ export default function MapView() {
   // i18n
   const tm = useTranslation('mapPage');
   const tc = useTranslation('common');
+  const mapLabels = {
+    streets: tm.streets ?? 'Streets',
+    topography: tm.topography ?? 'Topography',
+    nodes: tm.nodes ?? 'Nodes',
+  };
 
   // Local UI state
   const [projectName, setProjectName] = useState('');
@@ -307,17 +312,17 @@ export default function MapView() {
               <div className="absolute left-3 top-14 flex flex-col gap-2" style={{ pointerEvents: 'auto' }}>
                 {stages.streets === 'error' && (
                   <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                    Streets: {errors.streets || tm.streetsFailed}
+                    {mapLabels.streets}: {errors.streets || tm.streetsFailed}
                   </span>
                 )}
                 {stages.topography === 'error' && (
                   <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                    Topography: {errors.topography || tm.topographyFailed}
+                    {mapLabels.topography}: {errors.topography || tm.topographyFailed}
                   </span>
                 )}
                 {stages.nodes === 'error' && (
                   <span className="rounded-lg bg-red-500/95 px-3 py-1.5 text-sm font-medium text-white shadow-md backdrop-blur-sm">
-                    Nodes: {errors.nodes || tm.nodesFailed}
+                    {mapLabels.nodes}: {errors.nodes || tm.nodesFailed}
                   </span>
                 )}
               </div>
@@ -368,7 +373,7 @@ export default function MapView() {
                 style={{ pointerEvents: 'auto' }}
               >
                 <p className="mb-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  {streetCount} streets
+                  {streetCount} {mapLabels.streets.toLowerCase()}
                 </p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
                   {Object.entries(HIGHWAY_COLORS).map(([type, color]) => (

@@ -7,6 +7,7 @@ import type { LngLat, MapMouseEvent } from 'maplibre-gl';
 import { GeoCalculations } from '@urbanus/geo';
 import { AREA_LIMITS } from '@urbanus/constants';
 import { useAreaSelectionStore } from '@/stores/areaSelectionStore';
+import { useTranslation } from '@/i18n';
 
 function lngLatToBbox(start: LngLat, end: LngLat) {
   return {
@@ -33,6 +34,8 @@ function bboxToPolygon(sw: { lat: number; lng: number }, ne: { lat: number; lng:
 }
 
 export default function BboxDrawControl() {
+  const tm = useTranslation('mapPage');
+  const areaExceededLabel = tm.areaExceeded ?? 'Area exceeds';
   const { current: mapRef } = useMap();
   const startRef = useRef<LngLat | null>(null);
   const isDrawingRef = useRef(false);
@@ -78,7 +81,7 @@ export default function BboxDrawControl() {
       const area = GeoCalculations.calculateArea(bbox);
 
       if (area > AREA_LIMITS.MAX_BBOX_AREA_KM2) {
-        setValidationError(`Área excede ${AREA_LIMITS.MAX_BBOX_AREA_KM2} km²`);
+        setValidationError(`${areaExceededLabel} ${AREA_LIMITS.MAX_BBOX_AREA_KM2} km²`);
         setIsInvalid(true);
       } else if (area < 0.001) {
         setRectGeoJSON(null);
@@ -100,7 +103,7 @@ export default function BboxDrawControl() {
       map.off('mousemove', handleMouseMove);
       map.off('mouseup', handleMouseUp);
     };
-  }, [mapRef, viewMode, setPendingBbox, setValidationError]);
+  }, [areaExceededLabel, mapRef, viewMode, setPendingBbox, setValidationError]);
 
   if (!rectGeoJSON) return null;
 

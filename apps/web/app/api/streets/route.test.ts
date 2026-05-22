@@ -3,6 +3,7 @@ import { POST } from "./route";
 
 const originalOverpassUrls = process.env.OVERPASS_API_URLS;
 const originalOverpassUrl = process.env.OVERPASS_API_URL;
+const originalOverpassUserAgent = process.env.OVERPASS_USER_AGENT;
 
 function streetsRequest() {
   return new Request("http://localhost/api/streets", {
@@ -38,6 +39,7 @@ describe("POST /api/streets", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.OVERPASS_API_URLS = "https://first.test/api, https://second.test/api";
     delete process.env.OVERPASS_API_URL;
+    delete process.env.OVERPASS_USER_AGENT;
   });
 
   afterEach(() => {
@@ -52,6 +54,12 @@ describe("POST /api/streets", () => {
       delete process.env.OVERPASS_API_URL;
     } else {
       process.env.OVERPASS_API_URL = originalOverpassUrl;
+    }
+
+    if (originalOverpassUserAgent === undefined) {
+      delete process.env.OVERPASS_USER_AGENT;
+    } else {
+      process.env.OVERPASS_USER_AGENT = originalOverpassUserAgent;
     }
   });
 
@@ -78,6 +86,9 @@ describe("POST /api/streets", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toBe("https://first.test/api");
     expect(fetchMock.mock.calls[1][0]).toBe("https://second.test/api");
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
+      "User-Agent": "Urbanus/0.1 (+https://github.com/rckbrcls/urbanus)",
+    });
     expect(fetchMock.mock.calls[1][1]?.body).toBeInstanceOf(URLSearchParams);
     expect(body.features).toHaveLength(1);
     expect(body.features[0].properties.name).toBe("Test Street");

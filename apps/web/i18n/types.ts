@@ -18,6 +18,8 @@ export interface Dictionary {
     processing: string;
     processed: string;
     language: string;
+    undo: string;
+    redo: string;
   };
   landing: {
     tagline: string;
@@ -103,6 +105,16 @@ export interface Dictionary {
     deleteProject: string;
     runPipeline: string;
     elevationView: string;
+    viewModeTooltip: string;
+    viewModes: {
+      default: string;
+      elevation: string;
+      streets: string;
+    };
+    showOriginalGraph: string;
+    showProcessedNetwork: string;
+    closePanel: string;
+    selectedNodeElevation: string;
   };
   pipeline: {
     networkSummary: string;
@@ -122,6 +134,10 @@ export interface Dictionary {
     projectPlaceholder: string;
     nodesPreview: string;
     editInProjectPage: string;
+    streets: string;
+    topography: string;
+    nodes: string;
+    areaExceeded: string;
     streetsFailed: string;
     topographyFailed: string;
     nodesFailed: string;

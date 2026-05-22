@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { clipFeatureCollectionToBbox } from "@urbanus/geo";
 
 const DEFAULT_OVERPASS_API_URLS = [
-  "https://overpass.kumi.systems/api/interpreter",
   "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
 ];
 
 const OVERPASS_ERROR_MESSAGE = "Unable to fetch street data from OpenStreetMap";
+const DEFAULT_OVERPASS_USER_AGENT = "Urbanus/0.1 (+https://github.com/rckbrcls/urbanus)";
 
 interface StreetsRequest {
   south: number;
@@ -60,6 +61,10 @@ function parseOverpassApiUrls(value: string | undefined) {
     .filter(Boolean);
 }
 
+function getOverpassUserAgent() {
+  return process.env.OVERPASS_USER_AGENT?.trim() || DEFAULT_OVERPASS_USER_AGENT;
+}
+
 async function fetchOverpassData(query: string): Promise<OverpassData> {
   const errors: string[] = [];
 
@@ -73,6 +78,7 @@ async function fetchOverpassData(query: string): Promise<OverpassData> {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": getOverpassUserAgent(),
         },
         body: new URLSearchParams({ data: query }),
         signal: controller.signal,

@@ -48,7 +48,7 @@ export class NodesApiService {
         error?: string;
         details?: string;
       };
-      throw new Error(err.error ?? err.details ?? "Falha ao extrair nós");
+      throw new Error(err.error ?? err.details ?? "Failed to extract nodes");
     }
 
     const data: NodesExtractResponse = await res.json();

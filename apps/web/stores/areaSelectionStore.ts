@@ -145,7 +145,7 @@ export const useAreaSelectionStore = create<AreaSelectionState & AreaSelectionAc
           stages: { ...get().stages, nodes: 'success' },
         });
       } catch (error) {
-        const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+        const msg = error instanceof Error ? error.message : 'Unknown error';
         const { stages } = get();
 
         if (stages.streets !== 'success') {

@@ -18,6 +18,8 @@ export const ptBR: Dictionary = {
     processing: 'Processando...',
     processed: 'Processado',
     language: 'Idioma',
+    undo: 'Desfazer',
+    redo: 'Refazer',
   },
   landing: {
     tagline:
@@ -133,6 +135,16 @@ export const ptBR: Dictionary = {
     deleteProject: 'Excluir projeto',
     runPipeline: 'Executar pipeline',
     elevationView: 'Elevação',
+    viewModeTooltip: 'Modo de visualização',
+    viewModes: {
+      default: 'Padrão',
+      elevation: 'Elevação',
+      streets: 'Ruas',
+    },
+    showOriginalGraph: 'Ver grafo original',
+    showProcessedNetwork: 'Ver rede processada',
+    closePanel: 'Fechar painel',
+    selectedNodeElevation: 'Elevação',
   },
   pipeline: {
     networkSummary: 'Resumo da Rede',
@@ -152,6 +164,10 @@ export const ptBR: Dictionary = {
     projectPlaceholder: 'Meu Projeto Incrível',
     nodesPreview: 'nós (pré-visualização)',
     editInProjectPage: 'Edite na página do projeto',
+    streets: 'Ruas',
+    topography: 'Topografia',
+    nodes: 'Nós',
+    areaExceeded: 'Área excede',
     streetsFailed: 'Falhou',
     topographyFailed: 'Falhou',
     nodesFailed: 'Falhou',
