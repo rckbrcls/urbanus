@@ -1,0 +1,20 @@
+\section{Background}\label{sec:background}
+
+\method uses graph theory to represent both the street network and the sewer network.
+In computational terms, the urban mesh can be modeled as a graph $G=(V,E)$, in which the set $V$ represents relevant points in urban space and the set $E$ represents connections between those points.
+In the project domain, vertices correspond to intersections, endpoints, curves, intermediate points, collection points, or topographic points of interest.
+Edges correspond to street segments or sewer collector segments, with attributes such as length, geometry, road type, and elevation.
+
+This representation enables the use of classical graph properties to interpret the urban mesh.
+The degree of a vertex indicates how many connections reach a point and helps identify crossings or bifurcations.
+Paths represent possible sequences for flow conduction, while connectivity indicates whether regions of the mesh remain reachable from a discharge or collection point.
+In sewer networks, these concepts help preserve coverage, avoid disconnected segments, and identify points where direction changes or maintenance requirements imply physical structures.
+
+The input street network can initially be interpreted as an undirected graph, because streets provide geometric connections between adjacent points without defining the direction of sewage flow.
+After topographic analysis, the resulting sewer network is represented as a directed graph.
+In this case, each arc indicates a preferred flow direction, ideally from higher elevations to lower elevations.
+
+Gravity is an important physical criterion in sanitary sewer systems.
+Therefore, topography directly influences path selection, edge orientation, and the interpretation of high points, low points, and grade breaks.
+Since automatically extracted street data may contain redundant intermediate points, the model also requires graph simplification.
+The challenge is to reduce redundancy without removing technically relevant elements, such as corners, sharp curves, collection points, and spacing constraints between manholes.
