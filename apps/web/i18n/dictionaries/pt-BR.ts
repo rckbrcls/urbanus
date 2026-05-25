@@ -145,6 +145,10 @@ export const ptBR: Dictionary = {
     showProcessedNetwork: 'Ver rede processada',
     closePanel: 'Fechar painel',
     selectedNodeElevation: 'Elevação',
+    showEdgeLengths: 'Show edge lengths',
+    showNodeElevations: 'Show node elevations',
+    edgeLengthLabels: 'Edge length labels',
+    nodeElevationLabels: 'Node elevation labels',
   },
   pipeline: {
     networkSummary: 'Resumo da Rede',

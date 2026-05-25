@@ -47,6 +47,57 @@ Then, the system applies safeguards over elevation data, identifies mandatory no
 It then detects local maxima and minima, identifies grade breaks, and selects collection points.
 These steps prepare the graph for routing by preserving relevant elements of the mesh and reducing points that do not contribute to network interpretation.
 
+The graph-processing rules can be summarized by the quantities used by the routing and simplification stages.
+For a directed candidate edge $(u,v)$, the terrain slope is computed as:
+
+\begin{equation}
+s_{uv} = \frac{z_u - z_v}{\ell_{uv}},
+\label{eq:slope}
+\end{equation}
+
+where $z_u$ and $z_v$ are the endpoint elevations and $\ell_{uv}$ is the edge length, measured in meters along the corresponding street or collector segment in the graph.
+Before scoring, candidate edges with $\ell_{uv} \le 0$ are discarded.
+If both endpoint elevations are known, candidates with $s_{uv} \le 0$ are also discarded because they do not descend in the evaluated direction.
+The remaining edges receive the routing score:
+
+\begin{equation}
+c(u,v)=\rho_{uv}\ell_{uv}(1+p_{uv}).
+\label{eq:routing-cost}
+\end{equation}
+
+The penalty term $p_{uv}$ is zero when the slope is sufficient:
+
+\begin{equation}
+p_{uv}=0.
+\end{equation}
+
+When one endpoint elevation is missing, the penalty is conservative:
+
+\begin{equation}
+p_{uv}=\frac{\lambda}{2}.
+\end{equation}
+
+When the edge descends but remains below the shallow-slope threshold $s_{\min}$, the penalty grows as the slope moves away from that threshold:
+
+\begin{equation}
+p_{uv}=\lambda\frac{s_{\min}-s_{uv}}{s_{\min}}.
+\end{equation}
+
+The reuse factor $\rho_{uv}$ is $1$ for new edges and receives a smaller reuse value when the edge already belongs to the partial routed network.
+Thus, the cost is a routing score rather than a construction-cost estimate: invalid or non-gravity edges are rejected, uncertain or very shallow downhill edges are penalized, and reused trunks are favored.
+
+Node removal follows the same conservative principle.
+A pass-through node $v$ between an upstream node $p$ and a downstream node $q$ may be contracted only when:
+
+\begin{equation}
+\deg(v)=2,\quad v \notin V_m,\quad d_{pv}+d_{vq} \le d_{\max},\quad
+\Delta\theta_v < \theta_{\max},\quad \Delta s_v < \tau.
+\label{eq:node-contraction}
+\end{equation}
+
+In this condition, $V_m$ is the set of mandatory nodes, $d_{\max}$ is the maximum allowed spacing after contraction, $\Delta\theta_v$ is the direction deflection at $v$, and $\Delta s_v$ is the grade-break difference around $v$.
+Therefore, redundant nodes are removed only when the contraction preserves spacing, geometric continuity, and terrain-grade continuity.
+
 Gravitational routing uses the Repeated Shortest Path Heuristic (RSPH) to connect mandatory nodes and collection points to an outlet or to local collectors.
 The heuristic performs successive least-cost path searches, updates the network under construction, and favors the reuse of trunks.
 After routing, the pipeline repairs missing edge coverage, removes cycles when necessary, optimizes the position and quantity of nodes, and assigns inspection accessories to the remaining physical nodes.

@@ -3,11 +3,6 @@ type PipeStroke = {
   width: number;
 };
 
-const pipePalette = {
-  shell: "#242424",
-  core: "#0c0c0c",
-};
-
 const pipeStrokes: PipeStroke[] = [
   {
     d: "M-140 520 H240 Q340 520 340 620 V900",
@@ -60,13 +55,13 @@ export function SewerPipeBackground() {
       aria-hidden="true"
     >
       <g fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <g stroke={pipePalette.shell}>
+        <g className="stroke-[#f1f1f1] transition-colors duration-300 dark:stroke-[#242424]">
           {pipeStrokes.map((pipe) => (
             <path key={`${pipe.d}-body`} d={pipe.d} strokeWidth={pipe.width + 8} />
           ))}
         </g>
 
-        <g stroke={pipePalette.core}>
+        <g className="stroke-[#e8e8e8] transition-colors duration-300 dark:stroke-[#0c0c0c]">
           {pipeStrokes.map((pipe) => (
             <path key={`${pipe.d}-core`} d={pipe.d} strokeWidth={pipe.width} />
           ))}
