@@ -5,7 +5,7 @@ import { MAP_STYLES } from '@/lib/map/styles'
 /**
  * Returns the appropriate map style URL based on the current theme.
  *
- * @param variant - 'labels' for the explore map (liberty), 'minimal' for editor/thumbnails (positron)
+ * @param variant - 'labels' for label-heavy maps (liberty), 'minimal' for creation previews, editor, and thumbnails (positron)
  * @returns OpenFreeMap style URL matching the active theme
  */
 export function useMapStyle(variant: 'labels' | 'minimal' = 'labels') {

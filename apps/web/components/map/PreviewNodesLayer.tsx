@@ -2,9 +2,8 @@
 
 import { useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
-import type { CircleLayerSpecification } from 'maplibre-gl';
 import type { MapNode } from '@/features/map/types/node.types';
-import { DEFAULT_NODE_RADIUS_EXPRESSION } from '@/lib/map/layers';
+import { NODES_PAINT } from '@/lib/map/layers';
 
 interface PreviewNodesLayerProps {
   nodes: MapNode[];
@@ -30,19 +29,11 @@ export default function PreviewNodesLayer({ nodes }: PreviewNodesLayerProps) {
     })),
   }), [nodes]);
 
-  const paintStyle: CircleLayerSpecification['paint'] = {
-    'circle-radius': DEFAULT_NODE_RADIUS_EXPRESSION,
-    'circle-color': '#6b7280',
-    'circle-opacity': 1,
-    'circle-stroke-width': 1,
-    'circle-stroke-color': '#ffffff',
-  };
-
   if (nodes.length === 0) return null;
 
   return (
     <Source id="preview-nodes" type="geojson" data={geojson}>
-      <Layer id="preview-nodes-layer" type="circle" paint={paintStyle} />
+      <Layer id="preview-nodes-layer" type="circle" paint={NODES_PAINT} />
     </Source>
   );
 }

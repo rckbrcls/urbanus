@@ -74,6 +74,7 @@ Map components call hooks and services from this folder, services normalize or v
 - Keep service logic testable without rendering the full map.
 - Keep reusable map contracts in feature-local types.
 - Keep this folder as a support layer, not a second routing or page system.
+- Keep creation previews, project editor maps, and thumbnails on the shared minimal MapLibre style and graph paint constants so light/dark styling does not drift between project setup and editing.
 
 ## Known Limitations
 

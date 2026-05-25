@@ -12,7 +12,6 @@ import { useAreaSelectionStore } from '@/stores/areaSelectionStore';
 import { useCreateProject } from '@/stores/useProjectStore';
 import { useMapStyle } from '@/hooks/useMapStyle';
 import { AREA_LIMITS } from '@urbanus/constants';
-import { HIGHWAY_COLORS } from '@/features/map/constants';
 
 import BboxDrawControl from './BboxDrawControl';
 import StreetsLayer from './StreetsLayer';
@@ -65,7 +64,7 @@ export default function MapView() {
   const [projectName, setProjectName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const mapStyle = useMapStyle('labels');
+  const mapStyle = useMapStyle('minimal');
   const isCropped = viewMode === 'cropped';
 
   // ============ MAP CALLBACKS ============
@@ -366,25 +365,6 @@ export default function MapView() {
               </div>
             )}
 
-            {/* Streets legend */}
-            {streetCount > 0 && (
-              <div
-                className="absolute bottom-3 left-3 rounded-lg bg-white/95 p-2.5 shadow-md backdrop-blur-sm dark:bg-zinc-800/95"
-                style={{ pointerEvents: 'auto' }}
-              >
-                <p className="mb-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  {streetCount} {mapLabels.streets.toLowerCase()}
-                </p>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
-                  {Object.entries(HIGHWAY_COLORS).map(([type, color]) => (
-                    <div key={type} className="flex items-center gap-1">
-                      <div className="h-1.5 w-3 rounded-sm" style={{ backgroundColor: color }} />
-                      <span className="text-zinc-600 dark:text-zinc-400">{type}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
