@@ -532,7 +532,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
       {/* Editing rail — stays clear of the right panel when it is open */}
       <TooltipProvider>
-        <div className={`absolute z-10 flex flex-col items-center gap-1 rounded-2xl border border-border bg-background/90 p-1 backdrop-blur-sm transition-all duration-300 ease-in-out ${sidebarOpen ? 'top-4 right-[22rem]' : 'top-16 right-4'}`}>
+        <div className="absolute left-4 top-16 z-10 flex flex-col items-center gap-1 rounded-2xl border border-border bg-background/90 p-1 backdrop-blur-sm">
           {MODES.map(({ mode, label, icon, shortcut }) => (
             <Tooltip key={mode}>
               <TooltipTrigger asChild>
@@ -549,7 +549,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                   {icon}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="left">
+              <TooltipContent side="right">
                 <span className="flex items-center gap-2">{label}{shortcut && <Kbd>{shortcut}</Kbd>}</span>
               </TooltipContent>
             </Tooltip>
@@ -568,7 +568,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                 <Undo2 className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left"><span className="flex items-center gap-2">{undoLabel} <Kbd>Ctrl+Z</Kbd></span></TooltipContent>
+            <TooltipContent side="right"><span className="flex items-center gap-2">{undoLabel} <Kbd>Ctrl+Z</Kbd></span></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -581,7 +581,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                 <Redo2 className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left"><span className="flex items-center gap-2">{redoLabel} <Kbd>Ctrl+Shift+Z</Kbd></span></TooltipContent>
+            <TooltipContent side="right"><span className="flex items-center gap-2">{redoLabel} <Kbd>Ctrl+Shift+Z</Kbd></span></TooltipContent>
           </Tooltip>
 
           <div className="my-1 h-px w-6 bg-border" />
@@ -602,7 +602,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                   {icon}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="left">{label}</TooltipContent>
+              <TooltipContent side="right">{label}</TooltipContent>
             </Tooltip>
           ))}
 
@@ -623,7 +623,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                 <Ruler className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left">
+            <TooltipContent side="right">
               <span className="flex flex-col">
                 <span>{showEdgeLengthsLabel}</span>
                 <span className="text-[10px] text-muted-foreground">{edgeLengthLabelsTitle}</span>
@@ -645,7 +645,7 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                 <MapPin className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left">
+            <TooltipContent side="right">
               <span className="flex flex-col">
                 <span>{showNodeElevationsLabel}</span>
                 <span className="text-[10px] text-muted-foreground">{nodeElevationLabelsTitle}</span>
