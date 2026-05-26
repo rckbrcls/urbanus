@@ -1,0 +1,14 @@
+\section{Conclusions}\label{sec:conclusions}
+
+This paper presented \method, an open-source web platform for preliminary planning of sanitary sewer collection networks in low-income urban areas.
+\method combines graph-based modeling of street and collector network, automatic topographic enrichment from public elevation data, interactive graph editing, and a DL module for building detection from satellite imagery.
+
+The system is under active development.
+On the algorithmic side, the manhole clustering and alignment refinement steps will be extended to handle denser and more irregular street configurations.
+The building detection module will be more tightly integrated into the main pipeline, enabling sewage contribution estimates to be computed automatically, avoiding manual lot-by-lot input.
+Future work includes per-lot instance counting and classification of individual buildings, which will enable sewage contribution estimates at finer granularity.
+Hybrid CNN-Transformer architectures and multimodal fusion strategies with digital surface models (DSM) will also be investigated to improve accuracy in high-density urban scenarios~\cite{zhou2024hierarchical}.
+
+On the validation side, the system will be evaluated on other municipalities with distinct topographic and urban  morphology profiles.
+We aim to have a more comprehensive assessment of generalization across different urban contexts.
+By lowering the technical and financial barriers to sanitation planning, \method aims to support engineers, municipalities, and policymakers in expanding sewer coverage to the communities that need it most.
