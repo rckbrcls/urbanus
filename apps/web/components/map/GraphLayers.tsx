@@ -8,7 +8,7 @@ import {
   NODES_ELEVATION_PAINT, EDGES_ELEVATION_PAINT,
   ELEVATION_LABEL_LAYOUT, ELEVATION_LABEL_PAINT,
   EDGE_LENGTH_LABEL_LAYOUT, EDGE_LENGTH_LABEL_PAINT,
-  getElevationColor, getElevationLabel,
+  formatEdgeLengthLabel, getElevationColor, getElevationLabel,
 } from '@/lib/map/layers';
 import type { SewerViewMode } from '@/components/map/SewerNetworkLayers';
 import {
@@ -23,6 +23,8 @@ interface GraphLayersProps {
   viewMode?: SewerViewMode;
   elevationRange?: { min: number; max: number } | null;
   visibleNodeCategories?: VisibleRenderedNodeCategories;
+  showEdgeLengthLabels?: boolean;
+  showNodeElevationLabels?: boolean;
 }
 
 /** Normalize elevation to 0-1 range. Returns -1 for null/missing. */
@@ -94,8 +96,12 @@ export default function GraphLayers({
   viewMode,
   elevationRange,
   visibleNodeCategories,
+  showEdgeLengthLabels = false,
+  showNodeElevationLabels = false,
 }: GraphLayersProps) {
-  const isElevation = viewMode === 'elevation' && elevationRange;
+  const hasElevationRange = Boolean(elevationRange);
+  const isElevation = viewMode === 'elevation' && hasElevationRange;
+  const shouldEnrichElevation = isElevation || (showNodeElevationLabels && hasElevationRange);
   const edgesPaint = isElevation ? EDGES_ELEVATION_PAINT
     : viewMode === 'streets' ? EDGES_STREETS_PAINT
     : EDGES_DEFAULT_PAINT;
@@ -119,7 +125,7 @@ export default function GraphLayers({
 
   // Precompute elevation-derived properties to keep MapLibre layers on simple `get` expressions.
   const enrichedNodesGeoJSON = useMemo(() => {
-    if (!isElevation) return filteredNodesGeoJSON;
+    if (!shouldEnrichElevation) return filteredNodesGeoJSON;
     return {
       ...filteredNodesGeoJSON,
       features: filteredNodesGeoJSON.features.map((f) => {
@@ -137,20 +143,20 @@ export default function GraphLayers({
         };
       }),
     };
-  }, [filteredNodesGeoJSON, isElevation, min, range]);
+  }, [filteredNodesGeoJSON, min, range, shouldEnrichElevation]);
 
   const enrichedEdgesGeoJSON = useMemo(() => {
     const edgesWithLengths = edgesGeoJSON.features.map((feature) => {
       const lengthFromGeometry = calculateLineStringLengthMeters(feature.geometry);
       const fallbackLength = toNumber(feature.properties?.length);
-      const lengthMeters = lengthFromGeometry ?? fallbackLength ?? 0;
+      const lengthMeters = lengthFromGeometry ?? fallbackLength;
 
       return {
         ...feature,
         properties: {
           ...feature.properties,
           lengthMeters,
-          lengthLabel: `${Math.round(lengthMeters)} m`,
+          lengthLabel: formatEdgeLengthLabel(lengthMeters),
         },
       };
     });
@@ -213,19 +219,21 @@ export default function GraphLayers({
           paint={edgesPaint}
           layout={EDGES_LAYOUT}
         />
-        <Layer
-          id="graph-edge-length-labels"
-          type="symbol"
-          layout={EDGE_LENGTH_LABEL_LAYOUT}
-          paint={EDGE_LENGTH_LABEL_PAINT}
-        />
+        {showEdgeLengthLabels && (
+          <Layer
+            id="graph-edge-length-labels"
+            type="symbol"
+            layout={EDGE_LENGTH_LABEL_LAYOUT}
+            paint={EDGE_LENGTH_LABEL_PAINT}
+          />
+        )}
       </Source>
 
       {/* Nodes */}
       <Source
         id="graph-nodes"
         type="geojson"
-        data={isElevation ? enrichedNodesGeoJSON : filteredNodesGeoJSON}
+        data={shouldEnrichElevation ? enrichedNodesGeoJSON : filteredNodesGeoJSON}
         promoteId="id"
       >
         <Layer
@@ -233,7 +241,7 @@ export default function GraphLayers({
           type="circle"
           paint={isElevation ? NODES_ELEVATION_PAINT : NODES_PAINT}
         />
-        {isElevation && (
+        {showNodeElevationLabels && hasElevationRange && (
           <Layer
             id="graph-elevation-labels"
             type="symbol"

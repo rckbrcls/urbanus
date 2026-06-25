@@ -5,7 +5,7 @@ import type { Project } from '../../../stores/useProjectStore';
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2, Mountain, Eye, EyeOff, Cable, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { ArrowLeft, Trash2, Download, Save, Undo2, Redo2, Network, MousePointer, Plus, Move, X, Scissors, Loader2, Mountain, Eye, EyeOff, Cable, PanelRightOpen, PanelRightClose, Map as MapIcon, MapPin, Ruler } from 'lucide-react';
 import { graphToSewerNetwork, sewerNetworkToGraph } from '@/lib/graph/sewerConversion';
 
 import {
@@ -73,6 +73,10 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     streets: te.viewModes?.streets ?? te.streets,
   };
   const viewModeTooltip = te.viewModeTooltip ?? 'View mode';
+  const showEdgeLengthsLabel = te.showEdgeLengths ?? 'Show edge lengths';
+  const showNodeElevationsLabel = te.showNodeElevations ?? 'Show node elevations';
+  const edgeLengthLabelsTitle = te.edgeLengthLabels ?? 'Edge length labels';
+  const nodeElevationLabelsTitle = te.nodeElevationLabels ?? 'Node elevation labels';
   const showOriginalGraphTitle = te.showOriginalGraph ?? 'Show original graph';
   const showProcessedNetworkTitle = te.showProcessedNetwork ?? 'Show processed network';
   const closePanelTitle = te.closePanel ?? 'Close panel';
@@ -123,6 +127,8 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
 
   // Sewer view mode
   const [sewerViewMode, setSewerViewMode] = useState<SewerViewMode>('default');
+  const [showEdgeLengthLabels, setShowEdgeLengthLabels] = useState(false);
+  const [showNodeElevationLabels, setShowNodeElevationLabels] = useState(false);
   const [visibleNodeCategories, setVisibleNodeCategories] = useState<VisibleRenderedNodeCategories>(RENDERED_NODE_ORDER);
 
   const nodesApiService = useRef(NodesApiService.getInstance()).current;
@@ -138,6 +144,12 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
     { mode: 'delete', label: te.modes.delete, icon: <X className="h-4 w-4" />, shortcut: 'D' },
     { mode: 'split-edge', label: te.modes.split, icon: <Scissors className="h-4 w-4" />, shortcut: 'S' },
   ], [te.modes]);
+
+  const VIEW_MODES: { mode: SewerViewMode; label: string; icon: React.ReactNode }[] = useMemo(() => [
+    { mode: 'default', label: viewModeLabels.default, icon: <MapIcon className="h-4 w-4" /> },
+    { mode: 'elevation', label: viewModeLabels.elevation, icon: <Mountain className="h-4 w-4" /> },
+    { mode: 'streets', label: viewModeLabels.streets, icon: <Cable className="h-4 w-4" /> },
+  ], [viewModeLabels.default, viewModeLabels.elevation, viewModeLabels.streets]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -493,12 +505,13 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
           sewerViewMode={sewerViewMode}
           sewerElevationRange={sewerElevationRange}
           visibleNodeCategories={pipelineResult ? visibleNodeCategories : undefined}
+          showEdgeLengthLabels={showEdgeLengthLabels}
+          showNodeElevationLabels={showNodeElevationLabels}
         />
       </div>
 
-      {/* Top bar — nav card + toolbar card, same row */}
+      {/* Top bar — project navigation */}
       <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-        {/* Nav card */}
         <div className="flex items-center gap-2 rounded-2xl border border-border bg-background/90 px-3 py-2 backdrop-blur-sm">
           <button
             onClick={() => router.push('/projects')}
@@ -515,14 +528,18 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
             {selectedNodeIds.length > 0 && ` \u00b7 ${selectedNodeIds.length} ${te.selected}`}
           </span>
         </div>
-        {/* Toolbar card */}
-        <TooltipProvider>
-        <div className="flex items-center gap-1 rounded-2xl border border-border bg-background/90 p-1 backdrop-blur-sm">
+      </div>
+
+      {/* Editing rail — stays clear of the right panel when it is open */}
+      <TooltipProvider>
+        <div className="absolute left-4 top-16 z-10 flex flex-col items-center gap-1 rounded-2xl border border-border bg-background/90 p-1 backdrop-blur-sm">
           {MODES.map(({ mode, label, icon, shortcut }) => (
             <Tooltip key={mode}>
               <TooltipTrigger asChild>
                 <button
                   onClick={() => setMode(mode)}
+                  aria-label={label}
+                  aria-pressed={editingMode === mode}
                   className={`rounded-xl p-2 transition-colors ${
                     editingMode === mode
                       ? 'bg-foreground/10 text-foreground'
@@ -532,57 +549,111 @@ export function ProjectEditor({ project, isLoading }: ProjectEditorProps) {
                   {icon}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">
+              <TooltipContent side="right">
                 <span className="flex items-center gap-2">{label}{shortcut && <Kbd>{shortcut}</Kbd>}</span>
               </TooltipContent>
             </Tooltip>
           ))}
-          <div className="mx-1 h-4 w-px bg-border" />
+
+          <div className="my-1 h-px w-6 bg-border" />
+
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 onClick={commandUndo}
                 disabled={!canUndo}
+                aria-label={undoLabel}
                 className="rounded-xl p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
               >
                 <Undo2 className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom"><span className="flex items-center gap-2">{undoLabel} <Kbd>Ctrl+Z</Kbd></span></TooltipContent>
+            <TooltipContent side="right"><span className="flex items-center gap-2">{undoLabel} <Kbd>Ctrl+Z</Kbd></span></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 onClick={commandRedo}
                 disabled={!canRedo}
+                aria-label={redoLabel}
                 className="rounded-xl p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
               >
                 <Redo2 className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom"><span className="flex items-center gap-2">{redoLabel} <Kbd>Ctrl+Shift+Z</Kbd></span></TooltipContent>
+            <TooltipContent side="right"><span className="flex items-center gap-2">{redoLabel} <Kbd>Ctrl+Shift+Z</Kbd></span></TooltipContent>
           </Tooltip>
-          <div className="mx-1 h-4 w-px bg-border" />
+
+          <div className="my-1 h-px w-6 bg-border" />
+
+          {VIEW_MODES.map(({ mode, label, icon }) => (
+            <Tooltip key={mode}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setSewerViewMode(mode)}
+                  aria-label={`${viewModeTooltip}: ${label}`}
+                  aria-pressed={sewerViewMode === mode}
+                  className={`rounded-xl p-2 transition-colors ${
+                    sewerViewMode === mode
+                      ? 'bg-foreground/10 text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {icon}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{label}</TooltipContent>
+            </Tooltip>
+          ))}
+
+          <div className="my-1 h-px w-6 bg-border" />
+
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex items-center gap-1.5 rounded-xl px-2 py-1.5">
-                <Mountain className="h-4 w-4 text-muted-foreground" />
-                <select
-                  value={sewerViewMode}
-                  onChange={(e) => setSewerViewMode(e.target.value as SewerViewMode)}
-                  className="bg-transparent text-xs font-medium text-foreground outline-none cursor-pointer"
-                >
-                  <option value="default">{viewModeLabels.default}</option>
-                  <option value="elevation">{viewModeLabels.elevation}</option>
-                  <option value="streets">{viewModeLabels.streets}</option>
-                </select>
-              </div>
+              <button
+                onClick={() => setShowEdgeLengthLabels((current) => !current)}
+                aria-label={showEdgeLengthsLabel}
+                aria-pressed={showEdgeLengthLabels}
+                className={`rounded-xl p-2 transition-colors ${
+                  showEdgeLengthLabels
+                    ? 'bg-blue-500/15 text-blue-600 dark:text-blue-300'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Ruler className="h-4 w-4" />
+              </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">{viewModeTooltip}</TooltipContent>
+            <TooltipContent side="right">
+              <span className="flex flex-col">
+                <span>{showEdgeLengthsLabel}</span>
+                <span className="text-[10px] text-muted-foreground">{edgeLengthLabelsTitle}</span>
+              </span>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setShowNodeElevationLabels((current) => !current)}
+                aria-label={showNodeElevationsLabel}
+                aria-pressed={showNodeElevationLabels}
+                className={`rounded-xl p-2 transition-colors ${
+                  showNodeElevationLabels
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <MapPin className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <span className="flex flex-col">
+                <span>{showNodeElevationsLabel}</span>
+                <span className="text-[10px] text-muted-foreground">{nodeElevationLabelsTitle}</span>
+              </span>
+            </TooltipContent>
           </Tooltip>
         </div>
-        </TooltipProvider>
-      </div>
+      </TooltipProvider>
 
       {/* Sidebar open button — fixed at right edge when sidebar is hidden */}
       {!sidebarOpen && (

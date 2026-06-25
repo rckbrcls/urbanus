@@ -28,6 +28,8 @@ interface GraphMapViewProps {
   sewerViewMode?: SewerViewMode;
   sewerElevationRange?: { min: number; max: number } | null;
   visibleNodeCategories?: VisibleRenderedNodeCategories;
+  showEdgeLengthLabels?: boolean;
+  showNodeElevationLabels?: boolean;
 }
 
 /**
@@ -43,6 +45,8 @@ export default function GraphMapView({
   sewerViewMode,
   sewerElevationRange,
   visibleNodeCategories,
+  showEdgeLengthLabels = false,
+  showNodeElevationLabels = false,
 }: GraphMapViewProps) {
   const mapRef = useRef<MapRef>(null);
   const editingMode = useGraphStore((s) => s.editingMode);
@@ -113,6 +117,8 @@ export default function GraphMapView({
         viewMode={sewerViewMode}
         elevationRange={sewerElevationRange}
         visibleNodeCategories={visibleNodeCategories}
+        showEdgeLengthLabels={showEdgeLengthLabels}
+        showNodeElevationLabels={showNodeElevationLabels}
       />
 
       {/* Flow arrows overlay when processed network exists */}

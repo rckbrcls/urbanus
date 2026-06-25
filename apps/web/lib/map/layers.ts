@@ -73,7 +73,15 @@ export function getElevationLabel(elevation: number | null | undefined): string 
     return '';
   }
 
-  return `${Math.round(elevation)}m`;
+  return `Elev ${Math.round(elevation)} m`;
+}
+
+export function formatEdgeLengthLabel(lengthMeters: number | null | undefined): string {
+  if (lengthMeters == null || !Number.isFinite(lengthMeters) || lengthMeters <= 0) {
+    return '';
+  }
+
+  return `Len ${Math.round(lengthMeters)} m`;
 }
 
 function createZoomInterpolatedRadiusExpression(

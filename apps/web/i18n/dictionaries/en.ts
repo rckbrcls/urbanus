@@ -145,6 +145,10 @@ export const en: Dictionary = {
     showProcessedNetwork: 'Show processed network',
     closePanel: 'Close panel',
     selectedNodeElevation: 'Elevation',
+    showEdgeLengths: 'Show edge lengths',
+    showNodeElevations: 'Show node elevations',
+    edgeLengthLabels: 'Edge length labels',
+    nodeElevationLabels: 'Node elevation labels',
   },
   pipeline: {
     networkSummary: 'Network Summary',

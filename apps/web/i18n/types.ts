@@ -115,6 +115,10 @@ export interface Dictionary {
     showProcessedNetwork: string;
     closePanel: string;
     selectedNodeElevation: string;
+    showEdgeLengths: string;
+    showNodeElevations: string;
+    edgeLengthLabels: string;
+    nodeElevationLabels: string;
   };
   pipeline: {
     networkSummary: string;
